@@ -36,6 +36,7 @@
         <flyway-core.version>11.17.0</flyway-core.version>
         <maven-dependency-plugin.version>3.9.0</maven-dependency-plugin.version>
         <jooq-codegen-maven.version>3.19.27</jooq-codegen-maven.version>
+        <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
     </properties>
     <dependencies>
         <dependency>
@@ -223,42 +224,88 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.jooq</groupId>
-                <artifactId>jooq-codegen-maven</artifactId>
-                <version>${jooq-codegen-maven.version}</version>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>${build-helper-maven-plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>account</id>
+                        <id>add-jooq-generated</id>
                         <phase>generate-sources</phase>
                         <goals>
-                            <goal>generate</goal>
+                            <goal>add-source</goal>
                         </goals>
                         <configuration>
-                            <jdbc>
-                                <driver>org.postgresql.Driver</driver>
-                                <url>jdbc:postgresql://localhost:5432/wealthpay</url>
-                                <user>user</user>
-                                <password>password</password>
-                            </jdbc>
-                            <generator>
-                                <name>org.jooq.codegen.JavaGenerator</name>
-                                <database>
-                                    <name>org.jooq.meta.postgres.PostgresDatabase</name>
-                                    <inputSchema>account</inputSchema>
-                                </database>
-                                <generate>
-                                    <daos>false</daos>
-                                    <pojos>true</pojos>
-                                </generate>
-                                <target>
-                                    <packageName>org.girardsimon.wealthpay.account.jooq</packageName>
-                                    <directory>target/generated-sources/jooq</directory>
-                                </target>
-                            </generator>
+                            <sources>
+                                <source>src/main/generated-jooq</source>
+                            </sources>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>jooq-codegen-local</id>
+            <build>
+                <plugins>
+                    <!--
+                        ====================================================================================
+                        JOOQ CODE GENERATION STRATEGY
+
+                        With the open-source edition of jOOQ, code generation requires a live PostgreSQL
+                        database for schema introspection. It cannot use Flyway migrations directly.
+
+                        To keep CI/CD builds independent of any local database, we do NOT run jOOQ
+                        code generation in the default Maven lifecycle.
+
+                        Instead:
+                          - jOOQ code is generated locally using the "jooq-codegen-local" profile.
+                          - The generated sources are committed under src/main/generated-jooq.
+                          - CI simply compiles those sources without needing a running database.
+
+                        This is a common setup for jOOQ OSS projects without the commercial DDLDatabase.
+                        ====================================================================================
+                     -->
+                    <plugin>
+                        <groupId>org.jooq</groupId>
+                        <artifactId>jooq-codegen-maven</artifactId>
+                        <version>${jooq-codegen-maven.version}</version>
+                        <executions>
+                            <execution>
+                                <id>account</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                                <configuration>
+                                    <jdbc>
+                                        <driver>org.postgresql.Driver</driver>
+                                        <url>jdbc:postgresql://localhost:5432/wealthpay</url>
+                                        <user>user</user>
+                                        <password>password</password>
+                                    </jdbc>
+                                    <generator>
+                                        <name>org.jooq.codegen.JavaGenerator</name>
+                                        <database>
+                                            <name>org.jooq.meta.postgres.PostgresDatabase</name>
+                                            <inputSchema>account</inputSchema>
+                                        </database>
+                                        <generate>
+                                            <daos>false</daos>
+                                            <pojos>true</pojos>
+                                        </generate>
+                                        <target>
+                                            <packageName>org.girardsimon.wealthpay.account.jooq</packageName>
+                                            <directory>src/main/generated-jooq</directory>
+                                        </target>
+                                    </generator>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
