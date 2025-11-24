@@ -1,6 +1,5 @@
 package org.girardsimon.wealthpay.account.infrastructure.db.repository;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.girardsimon.wealthpay.account.application.AccountEventStore;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
@@ -13,9 +12,10 @@ import org.jooq.DSLContext;
 import org.jooq.JSONB;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jooq.JooqTest;
+import org.springframework.boot.jooq.test.autoconfigure.JooqTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.OptimisticLockingFailureException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;

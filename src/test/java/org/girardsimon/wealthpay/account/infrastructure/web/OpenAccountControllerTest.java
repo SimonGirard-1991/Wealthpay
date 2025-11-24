@@ -1,6 +1,5 @@
 package org.girardsimon.wealthpay.account.infrastructure.web;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.girardsimon.wealthpay.account.api.generated.model.AccountResponseDto;
 import org.girardsimon.wealthpay.account.api.generated.model.AccountStatusDto;
 import org.girardsimon.wealthpay.account.api.generated.model.OpenAccountRequestDto;
@@ -14,11 +13,12 @@ import org.girardsimon.wealthpay.account.infrastructure.web.mapper.OpenAccountDt
 import org.girardsimon.wealthpay.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

@@ -1,17 +1,14 @@
 package org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.jooq.tables.pojos.EventStore;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -19,8 +16,6 @@ import java.util.function.Function;
 
 @Component
 public class EventStoreEntryToAccountEventMapper implements Function<EventStore, AccountEvent> {
-
-    private static final Logger log = LoggerFactory.getLogger(EventStoreEntryToAccountEventMapper.class);
 
     private final ObjectMapper objectMapper;
 
@@ -39,22 +34,18 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
     }
 
     private AccountOpened mapAccountOpened(EventStore eventStore) {
-        try {
-            JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
+        JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
-            SupportedCurrency currency = SupportedCurrency.valueOf(root.get("currency").asText());
-            BigDecimal amount = root.get("initialBalance").decimalValue();
+        SupportedCurrency currency = SupportedCurrency.valueOf(root.get("currency").asString());
+        BigDecimal amount = root.get("initialBalance").decimalValue();
 
-            return new AccountOpened(
-                    AccountId.of(eventStore.getAccountId()),
-                    Instant.parse(root.get("occurredAt").asText()),
-                    eventStore.getVersion(),
-                    currency,
-                    Money.of(amount, currency)
-            );
-        } catch (JsonProcessingException e) {
-            log.error("Error while parsing event payload", e);
-            throw new IllegalStateException("Error while parsing event payload");
-        }
+        return new AccountOpened(
+                AccountId.of(eventStore.getAccountId()),
+                Instant.parse(root.get("occurredAt").asString()),
+                eventStore.getVersion(),
+                currency,
+                Money.of(amount, currency)
+        );
+
     }
 }

@@ -73,11 +73,11 @@ public class AccountExceptionHandler {
     })
     public ResponseEntity<ApiErrorDto> handleUnprocessableEntityException(Exception e) {
         ApiErrorDto apiErrorDto = new ApiErrorDto()
-                .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
+                .status(HttpStatus.UNPROCESSABLE_CONTENT.value())
                 .message(e.getMessage());
 
         return ResponseEntity
-                .unprocessableEntity()
+                .unprocessableContent()
                 .body(apiErrorDto);
     }
 
