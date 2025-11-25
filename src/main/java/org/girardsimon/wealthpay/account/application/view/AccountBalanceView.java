@@ -1,13 +1,13 @@
 package org.girardsimon.wealthpay.account.application.view;
 
-import java.math.BigDecimal;
+import org.girardsimon.wealthpay.account.domain.model.Money;
+
 import java.util.UUID;
 
 public record AccountBalanceView(
         UUID accountId,
-        BigDecimal balance,
-        BigDecimal reservedFunds,
-        String currency,
+        Money balance,
+        Money reservedFunds,
         String status,
         long version
 ) {

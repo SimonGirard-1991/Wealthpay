@@ -1,6 +1,7 @@
 package org.girardsimon.wealthpay.account.domain.model;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 public record Money(BigDecimal amount, SupportedCurrency currency) {
     public Money {
@@ -10,7 +11,12 @@ public record Money(BigDecimal amount, SupportedCurrency currency) {
     }
 
     public static Money of(BigDecimal amount, SupportedCurrency currency) {
-        return new Money(amount, currency);
+        if(amount == null || currency == null) {
+            throw new IllegalArgumentException("amount and currency must not be null");
+        }
+        int defaultFractionDigits = currency.toJavaCurrency()
+                .getDefaultFractionDigits();
+        return new Money(amount.setScale(defaultFractionDigits, RoundingMode.HALF_EVEN), currency);
     }
 
     public static Money zero(SupportedCurrency currency) {

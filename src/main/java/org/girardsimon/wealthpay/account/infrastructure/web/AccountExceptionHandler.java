@@ -13,6 +13,7 @@ import org.girardsimon.wealthpay.account.domain.exception.InvalidAccountEventStr
 import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyExistsException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
+import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.shared.api.generated.model.ApiErrorDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -69,7 +70,8 @@ public class AccountExceptionHandler {
             AmountMustBePositiveException.class,
             InsufficientFundsException.class,
             ReservationAlreadyExistsException.class,
-            AccountNotEmptyException.class
+            AccountNotEmptyException.class,
+            UnsupportedCurrencyException.class
     })
     public ResponseEntity<ApiErrorDto> handleUnprocessableEntityException(Exception e) {
         ApiErrorDto apiErrorDto = new ApiErrorDto()

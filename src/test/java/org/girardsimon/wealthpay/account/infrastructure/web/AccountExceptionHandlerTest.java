@@ -13,6 +13,7 @@ import org.girardsimon.wealthpay.account.domain.exception.InvalidAccountEventStr
 import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyExistsException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
+import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
@@ -113,22 +114,23 @@ class AccountExceptionHandlerTest {
                 .andExpect(jsonPath("$.message").value(expectedMessage));
     }
 
-    private static Stream<Arguments> allUnprocessableEntityExceptions() {
+    private static Stream<Arguments> allUnprocessableContentExceptions() {
         Money negativeAmount = Money.of(BigDecimal.valueOf(-100L), SupportedCurrency.USD);
         ReservationId reservationId = ReservationId.newId();
         return Stream.of(
-                Arguments.of(new InvalidInitialBalanceException(negativeAmount), "Initial balance must be strictly positive, got Money[amount=-100, currency=USD]"),
+                Arguments.of(new InvalidInitialBalanceException(negativeAmount), "Initial balance must be strictly positive, got Money[amount=-100.00, currency=USD]"),
                 Arguments.of(new AccountCurrencyMismatchException("USD", "EUR"), "Account currency USD does not match initial balance currency EUR"),
-                Arguments.of(new AmountMustBePositiveException(negativeAmount), "Amount must be strictly positive, got Money[amount=-100, currency=USD]"),
+                Arguments.of(new AmountMustBePositiveException(negativeAmount), "Amount must be strictly positive, got Money[amount=-100.00, currency=USD]"),
                 Arguments.of(new InsufficientFundsException(), "Insufficient funds to complete the operation"),
                 Arguments.of(new ReservationAlreadyExistsException(reservationId), "Reservation already exists: " + reservationId),
-                Arguments.of(new AccountNotEmptyException(), "Account is not empty")
+                Arguments.of(new AccountNotEmptyException(), "Account is not empty"),
+                Arguments.of(new UnsupportedCurrencyException("BTC"), "Currency BTC is not supported")
         );
     }
 
     @ParameterizedTest
-    @MethodSource("allUnprocessableEntityExceptions")
-    void all_unprocessable_entity_exceptions(Throwable throwable, String expectedMessage) throws Exception {
+    @MethodSource("allUnprocessableContentExceptions")
+    void all_unprocessable_content_exceptions(Throwable throwable, String expectedMessage) throws Exception {
         // Arrange
         when(fakeService.fakeMethod()).thenThrow(throwable);
 

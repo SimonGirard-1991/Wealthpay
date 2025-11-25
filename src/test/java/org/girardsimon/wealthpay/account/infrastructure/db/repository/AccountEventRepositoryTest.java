@@ -18,6 +18,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -82,7 +83,7 @@ class AccountEventRepositoryTest extends AbstractContainerTest {
                 () -> assertThat(accountOpened.occurredAt()).isEqualTo(Instant.parse("2025-11-16T15:00:00Z")),
                 () -> assertThat(accountOpened.version()).isEqualTo(1L),
                 () -> assertThat(accountOpened.currency()).isEqualTo(SupportedCurrency.USD),
-                () -> assertThat(accountOpened.initialBalance().amount()).isEqualTo(BigDecimal.valueOf(10L)),
+                () -> assertThat(accountOpened.initialBalance().amount()).isEqualTo(BigDecimal.valueOf(10L).setScale(2, RoundingMode.HALF_EVEN)),
                 () -> assertThat(accountOpened.initialBalance().currency()).isEqualTo(SupportedCurrency.USD)
         );
     }
@@ -117,7 +118,7 @@ class AccountEventRepositoryTest extends AbstractContainerTest {
                 () -> assertThat(accountOpened.occurredAt()).isEqualTo(Instant.parse("2025-11-16T15:00:00Z")),
                 () -> assertThat(accountOpened.version()).isEqualTo(1L),
                 () -> assertThat(accountOpened.currency()).isEqualTo(SupportedCurrency.USD),
-                () -> assertThat(accountOpened.initialBalance().amount()).isEqualTo(BigDecimal.valueOf(10L)),
+                () -> assertThat(accountOpened.initialBalance().amount()).isEqualTo(BigDecimal.valueOf(10L).setScale(2, RoundingMode.HALF_EVEN)),
                 () -> assertThat(accountOpened.initialBalance().currency()).isEqualTo(SupportedCurrency.USD)
         );
     }

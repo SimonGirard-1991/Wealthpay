@@ -101,7 +101,7 @@ class OpenAccountControllerTest {
         when(accountApplicationService.getAccountBalance(accountId)).thenReturn(accountBalanceView);
         when(accountBalanceViewDomainToDtoMapper.apply(accountBalanceView)).thenReturn(new AccountResponseDto()
                 .id(accountId)
-                .balance(BigDecimal.valueOf(100.50))
+                .balanceAmount(BigDecimal.valueOf(100.50).setScale(2, RoundingMode.HALF_EVEN))
                 .currency(SupportedCurrencyDto.USD)
                 .status(AccountStatusDto.OPENED));
 
@@ -110,7 +110,7 @@ class OpenAccountControllerTest {
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(accountId.toString()))
-                .andExpect(jsonPath("$.balance").value("100.5"))
+                .andExpect(jsonPath("$.balanceAmount").value("100.5"))
                 .andExpect(jsonPath("$.currency").value("USD"))
                 .andExpect(jsonPath("$.status").value("OPENED"));
 

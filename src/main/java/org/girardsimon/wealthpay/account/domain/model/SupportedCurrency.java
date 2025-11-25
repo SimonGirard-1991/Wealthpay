@@ -1,5 +1,9 @@
 package org.girardsimon.wealthpay.account.domain.model;
 
+import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
+
+import java.util.Currency;
+
 public enum SupportedCurrency {
     USD,
     AED,
@@ -26,5 +30,17 @@ public enum SupportedCurrency {
     SGD,
     TRY,
     TWD,
-    ZAR
+    ZAR;
+
+    public Currency toJavaCurrency() {
+        return Currency.getInstance(name());
+    }
+
+    public static SupportedCurrency fromValue(String currency) {
+        try {
+            return SupportedCurrency.valueOf(currency);
+        } catch (IllegalArgumentException _) {
+            throw new UnsupportedCurrencyException(currency);
+        }
+    }
 }

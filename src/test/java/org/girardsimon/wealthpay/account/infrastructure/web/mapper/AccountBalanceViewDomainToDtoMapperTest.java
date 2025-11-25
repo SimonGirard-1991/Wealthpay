@@ -4,6 +4,8 @@ import org.girardsimon.wealthpay.account.api.generated.model.AccountStatusDto;
 import org.girardsimon.wealthpay.account.api.generated.model.AccountResponseDto;
 import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDto;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
+import org.girardsimon.wealthpay.account.domain.model.Money;
+import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -20,13 +22,12 @@ class AccountBalanceViewDomainToDtoMapperTest {
     void map_account_balance_view_to_dto() {
         // Arrange
         UUID accountId = UUID.randomUUID();
-        BigDecimal balance = BigDecimal.valueOf(100L);
-        BigDecimal reserved = BigDecimal.valueOf(50L);
+        Money balance = Money.of(BigDecimal.valueOf(100L), SupportedCurrency.USD);
+        Money reserved =  Money.of(BigDecimal.valueOf(50L), SupportedCurrency.USD);
         AccountBalanceView accountBalanceView = new AccountBalanceView(
                 accountId,
                 balance,
                 reserved,
-                "USD",
                 "OPENED",
                 5L
         );
@@ -37,8 +38,8 @@ class AccountBalanceViewDomainToDtoMapperTest {
         // Assert
         assertAll(
                 () -> assertThat(accountResponseDto.getId()).isEqualTo(accountId),
-                () -> assertThat(accountResponseDto.getBalance()).isEqualTo(balance),
-                () -> assertThat(accountResponseDto.getReservedAmount()).isEqualTo(reserved),
+                () -> assertThat(accountResponseDto.getBalanceAmount()).isEqualTo(balance.amount()),
+                () -> assertThat(accountResponseDto.getReservedAmount()).isEqualTo(reserved.amount()),
                 () -> assertThat(accountResponseDto.getCurrency()).isEqualTo(SupportedCurrencyDto.USD),
                 () -> assertThat(accountResponseDto.getStatus()).isEqualTo(AccountStatusDto.OPENED)
         );

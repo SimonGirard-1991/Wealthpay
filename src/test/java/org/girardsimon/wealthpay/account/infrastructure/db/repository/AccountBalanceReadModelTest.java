@@ -68,11 +68,14 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
         // Assert
         assertAll(
                 () -> assertThat(accountBalance.accountId()).isEqualTo(accountId),
-                () -> assertThat(accountBalance.currency()).isEqualTo(currency),
-                () -> assertThat(accountBalance.balance()).isEqualTo(balance),
-                () -> assertThat(accountBalance.reservedFunds()).isEqualTo(reserved),
+                () -> assertThat(accountBalance.balance().amount()).isEqualTo(BigDecimal.valueOf(100.50)
+                        .setScale(2, RoundingMode.HALF_EVEN)),
+                () -> assertThat(accountBalance.balance().currency()).isEqualTo(SupportedCurrency.USD),
+                () -> assertThat(accountBalance.reservedFunds().amount()).isEqualTo(BigDecimal.valueOf(0.00)
+                        .setScale(2, RoundingMode.HALF_EVEN)),
+                () -> assertThat(accountBalance.reservedFunds().currency()).isEqualTo(SupportedCurrency.USD),
                 () -> assertThat(accountBalance.status()).isEqualTo(status),
-                () -> assertThat(accountBalance.version()).isEqualTo(version )
+                () -> assertThat(accountBalance.version()).isEqualTo(version)
         );
     }
 
@@ -129,9 +132,12 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
         AccountBalanceView accountBalance = accountBalanceReadModel.getAccountBalance(accountId.id());
         assertAll(
                 () -> assertThat(accountBalance.accountId()).isEqualTo(accountId.id()),
-                () -> assertThat(accountBalance.currency()).isEqualTo("USD"),
-                () -> assertThat(accountBalance.balance()).isEqualByComparingTo(BigDecimal.ZERO),
-                () -> assertThat(accountBalance.reservedFunds()).isEqualByComparingTo(BigDecimal.ZERO),
+                () -> assertThat(accountBalance.balance().amount()).isEqualTo(BigDecimal.valueOf(0.00)
+                        .setScale(2, RoundingMode.HALF_EVEN)),
+                () -> assertThat(accountBalance.balance().currency()).isEqualTo(SupportedCurrency.USD),
+                () -> assertThat(accountBalance.reservedFunds().amount()).isEqualTo(BigDecimal.valueOf(0.00)
+                        .setScale(2, RoundingMode.HALF_EVEN)),
+                () -> assertThat(accountBalance.reservedFunds().currency()).isEqualTo(SupportedCurrency.USD),
                 () -> assertThat(accountBalance.status()).isEqualTo("CLOSED"),
                 () -> assertThat(accountBalance.version()).isEqualTo(6L)
         );

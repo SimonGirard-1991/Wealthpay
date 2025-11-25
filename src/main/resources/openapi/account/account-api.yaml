@@ -90,12 +90,12 @@ components:
         id:
           type: string
           format: uuid
+        balanceAmount:
+          type: number
+          description: Current balance of the account
         currency:
           $ref: '#/components/schemas/SupportedCurrency'
           description: Currency of the account
-        balance:
-          type: number
-          description: Current balance of the account
         reservedAmount:
           type: number
           description: Amount reserved for future operations

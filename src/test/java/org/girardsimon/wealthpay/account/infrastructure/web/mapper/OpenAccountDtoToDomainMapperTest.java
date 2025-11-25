@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.girardsimon.wealthpay.account.api.generated.model.OpenAccountRequestDto;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,7 +33,7 @@ class OpenAccountDtoToDomainMapperTest {
         SupportedCurrency chf = SupportedCurrency.CHF;
         assertAll(
                 () -> assertThat(openAccount.accountCurrency()).isEqualTo(chf),
-                () -> assertThat(openAccount.initialBalance().amount()).isEqualTo(initialAmount),
+                () -> assertThat(openAccount.initialBalance().amount()).isEqualTo(initialAmount.setScale(2, RoundingMode.HALF_EVEN)),
                 () -> assertThat(openAccount.initialBalance().currency()).isEqualTo(chf)
         );
     }
