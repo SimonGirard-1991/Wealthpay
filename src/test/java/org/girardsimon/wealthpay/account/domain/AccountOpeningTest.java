@@ -76,16 +76,20 @@ class AccountOpeningTest {
     }
 
     @Test
-    void openAccountCommand_does_not_permit_zero_initial_balance() {
+    void openAccountCommand_permits_zero_initial_balance() {
         // Arrange
         AccountId accountId = AccountId.newId();
         SupportedCurrency currency = SupportedCurrency.USD;
         Money initialBalance = Money.of(BigDecimal.ZERO, currency);
         OpenAccount openAccount = new OpenAccount(currency, initialBalance);
-
-        // Act ... Assert
         Instant occurredAt = Instant.now();
-        assertThatExceptionOfType(InvalidInitialBalanceException.class)
-                .isThrownBy(() -> Account.handle(openAccount, accountId, 1L, occurredAt));
+
+        // Act
+        List<AccountEvent> accountEvents = Account.handle(openAccount, accountId, 1L, occurredAt);
+
+        // Assert
+        assertThat(accountEvents).hasSize(1);
+        Account account = Account.rehydrate(accountEvents);
+        assertThat(account.getBalance()).isEqualTo(initialBalance);
     }
 }

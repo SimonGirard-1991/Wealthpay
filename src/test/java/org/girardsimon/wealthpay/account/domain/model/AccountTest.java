@@ -22,6 +22,7 @@ class AccountTest {
         SupportedCurrency currency = SupportedCurrency.USD;
         Money credit = Money.of(BigDecimal.valueOf(10L), currency);
         AccountEvent fakeEvent = new FundsCredited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 1L,

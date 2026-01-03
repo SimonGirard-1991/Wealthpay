@@ -15,6 +15,7 @@ import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -137,6 +138,7 @@ class CaptureReservationTest {
                 initialBalance
         );
         FundsDebited debited = new FundsDebited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 2L,

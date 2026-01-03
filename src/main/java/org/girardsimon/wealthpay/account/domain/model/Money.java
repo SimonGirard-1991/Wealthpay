@@ -27,6 +27,10 @@ public record Money(BigDecimal amount, SupportedCurrency currency) {
         return amount.signum() <= 0;
     }
 
+    public boolean isStrictlyNegative() {
+        return amount.signum() < 0;
+    }
+
     public Money add(Money money) {
         ensureSameCurrency(money);
         return Money.of(this.amount.add(money.amount), this.currency);

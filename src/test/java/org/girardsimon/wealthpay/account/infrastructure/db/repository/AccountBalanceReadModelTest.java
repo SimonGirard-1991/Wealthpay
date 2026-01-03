@@ -13,6 +13,7 @@ import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountBalanceViewEntryToDomainMapper;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;
@@ -92,6 +93,7 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
                 Money.of(BigDecimal.valueOf(1000L), SupportedCurrency.USD)
         );
         FundsCredited fundsCredited = new FundsCredited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 2L,
@@ -114,6 +116,7 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
                 moneyReserved
         );
         FundsDebited fundsDebited = new FundsDebited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 5L,
@@ -211,6 +214,7 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
                 .execute();
 
         FundsCredited fundsCredited = new FundsCredited(
+                TransactionId.newId(),
                 AccountId.of(accountId),
                 Instant.now(),
                 version-1,

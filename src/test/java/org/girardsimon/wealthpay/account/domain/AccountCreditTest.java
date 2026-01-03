@@ -16,6 +16,7 @@ import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -32,12 +33,13 @@ class AccountCreditTest {
     @Test
     void creditAccount_emits_FundsCredited_event_and_updates_account_balance() {
         // Arrange
+        TransactionId transactionId = TransactionId.newId();
         AccountId accountId = AccountId.newId();
         SupportedCurrency currency = SupportedCurrency.USD;
         Money initialBalance = Money.of(BigDecimal.valueOf(10L), currency);
         OpenAccount openAccount = new OpenAccount(currency, initialBalance);
         Money creditAmount = Money.of(BigDecimal.valueOf(5L), currency);
-        CreditAccount creditAccount = new CreditAccount(accountId, creditAmount);
+        CreditAccount creditAccount = new CreditAccount(transactionId, accountId, creditAmount);
 
         // Act
         List<AccountEvent> openingEvents = Account.handle(openAccount, accountId, 1L, Instant.now());
@@ -48,10 +50,14 @@ class AccountCreditTest {
 
         // Assert
         Money expectedBalance = Money.of(BigDecimal.valueOf(15L), currency);
+        AccountEvent lastEvent = allEvents.getLast();
+        assertThat(lastEvent).isInstanceOf(FundsCredited.class);
+        FundsCredited fundsCredited = (FundsCredited) lastEvent;
+
         assertAll(
                 () -> assertThat(allEvents).hasSize(2),
-                () -> assertThat(allEvents.getLast()).isInstanceOf(FundsCredited.class),
-                () -> assertThat(allEvents.getLast().version()).isEqualTo(2L),
+                () -> assertThat(fundsCredited.transactionId()).isEqualTo(transactionId),
+                () -> assertThat(fundsCredited.version()).isEqualTo(2L),
                 () -> assertThat(accountAfterCredit.getBalance()).isEqualTo(expectedBalance),
                 () -> assertThat(accountAfterCredit.getStatus()).isEqualTo(AccountStatus.OPENED),
                 () -> assertThat(accountAfterCredit.getVersion()).isEqualTo(2L)
@@ -74,7 +80,7 @@ class AccountCreditTest {
         Account account = Account.rehydrate(List.of(accountOpened));
         SupportedCurrency chf = SupportedCurrency.CHF;
         Money creditAmount = Money.of(BigDecimal.valueOf(5L), chf);
-        CreditAccount creditAccount = new CreditAccount(accountId, creditAmount);
+        CreditAccount creditAccount = new CreditAccount(TransactionId.newId(), accountId, creditAmount);
 
         // Act ... Assert
         Instant occurredAt = Instant.now();
@@ -98,7 +104,7 @@ class AccountCreditTest {
         Account account = Account.rehydrate(List.of(accountOpened));
         Money creditAmount = Money.of(BigDecimal.valueOf(5L), currency);
         AccountId otherAccountId = AccountId.newId();
-        CreditAccount creditAccount = new CreditAccount(otherAccountId, creditAmount);
+        CreditAccount creditAccount = new CreditAccount(TransactionId.newId(), otherAccountId, creditAmount);
 
         // Act ... Assert
         Instant occurredAt = Instant.now();
@@ -121,7 +127,7 @@ class AccountCreditTest {
         );
         Account account = Account.rehydrate(List.of(accountOpened));
         Money creditAmount = Money.of(BigDecimal.valueOf(-10L), usd);
-        CreditAccount creditAccount = new CreditAccount(accountId, creditAmount);
+        CreditAccount creditAccount = new CreditAccount(TransactionId.newId(), accountId, creditAmount);
 
         // Act ... Assert
         Instant occurredAt = Instant.now();
@@ -143,6 +149,7 @@ class AccountCreditTest {
                 initialBalance
         );
         FundsDebited debited = new FundsDebited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 2L,
@@ -155,7 +162,7 @@ class AccountCreditTest {
         );
         Account closedAccount = Account.rehydrate(List.of(opened, debited, closed));
         Money creditAmount = Money.of(BigDecimal.valueOf(10L), usd);
-        CreditAccount creditAccount = new CreditAccount(accountId, creditAmount);
+        CreditAccount creditAccount = new CreditAccount(TransactionId.newId(), accountId, creditAmount);
 
         // Act + Assert
         Instant occurredAt = Instant.now();

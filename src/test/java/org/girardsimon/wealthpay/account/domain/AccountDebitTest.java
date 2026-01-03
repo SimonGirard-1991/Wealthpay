@@ -16,6 +16,7 @@ import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -32,12 +33,13 @@ class AccountDebitTest {
     @Test
     void debitAccount_emits_FundsDebited_event_and_updates_account_balance() {
         // Arrange
+        TransactionId transactionId = TransactionId.newId();
         AccountId accountId = AccountId.newId();
         SupportedCurrency currency = SupportedCurrency.USD;
         Money initialBalance = Money.of(BigDecimal.valueOf(10L), currency);
         OpenAccount openAccount = new OpenAccount(currency, initialBalance);
         Money debitAmount = Money.of(BigDecimal.valueOf(5L), currency);
-        DebitAccount debitAccount = new DebitAccount(accountId, debitAmount);
+        DebitAccount debitAccount = new DebitAccount(transactionId, accountId, debitAmount);
 
         // Act
         List<AccountEvent> openingEvents = Account.handle(openAccount, accountId, 1L, Instant.now());
@@ -48,10 +50,13 @@ class AccountDebitTest {
 
         // Assert
         Money expectedBalance = Money.of(BigDecimal.valueOf(5L), currency);
+        AccountEvent lastEvent = allEvents.getLast();
+        assertThat(lastEvent).isInstanceOf(FundsDebited.class);
+        FundsDebited fundsDebited = (FundsDebited) lastEvent;
         assertAll(
                 () -> assertThat(allEvents).hasSize(2),
-                () -> assertThat(allEvents.getLast()).isInstanceOf(FundsDebited.class),
-                () -> assertThat(allEvents.getLast().version()).isEqualTo(2L),
+                () -> assertThat(fundsDebited.transactionId()).isEqualTo(transactionId),
+                () -> assertThat(fundsDebited.version()).isEqualTo(2L),
                 () -> assertThat(accountAfterCredit.getBalance()).isEqualTo(expectedBalance),
                 () -> assertThat(accountAfterCredit.getStatus()).isEqualTo(AccountStatus.OPENED),
                 () -> assertThat(accountAfterCredit.getVersion()).isEqualTo(2L)
@@ -74,7 +79,7 @@ class AccountDebitTest {
         Account account = Account.rehydrate(List.of(accountOpened));
         SupportedCurrency chf = SupportedCurrency.CHF;
         Money debitAmount = Money.of(BigDecimal.valueOf(5L), chf);
-        DebitAccount debitAccount = new DebitAccount(accountId, debitAmount);
+        DebitAccount debitAccount = new DebitAccount(TransactionId.newId(), accountId, debitAmount);
 
         // Act ... Assert
         Instant occurredAt = Instant.now();
@@ -98,7 +103,7 @@ class AccountDebitTest {
         Account account = Account.rehydrate(List.of(accountOpened));
         Money debitAmount = Money.of(BigDecimal.valueOf(5L), usd);
         AccountId otherAccountId = AccountId.newId();
-        DebitAccount debitAccount = new DebitAccount(otherAccountId, debitAmount);
+        DebitAccount debitAccount = new DebitAccount(TransactionId.newId(), otherAccountId, debitAmount);
 
         // Act ... Assert
         Instant occurredAt = Instant.now();
@@ -121,7 +126,7 @@ class AccountDebitTest {
         );
         Account account = Account.rehydrate(List.of(accountOpened));
         Money debitAmount = Money.of(BigDecimal.valueOf(-5L), usd);
-        DebitAccount debitAccount = new DebitAccount(accountId, debitAmount);
+        DebitAccount debitAccount = new DebitAccount(TransactionId.newId(), accountId, debitAmount);
 
         // Act ... Assert
         Instant occurredAt = Instant.now();
@@ -143,6 +148,7 @@ class AccountDebitTest {
                 initialBalance
         );
         FundsDebited debited = new FundsDebited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 2L,
@@ -155,7 +161,7 @@ class AccountDebitTest {
         );
         Account closedAccount = Account.rehydrate(List.of(opened, debited, closed));
         Money debitAmount = Money.of(BigDecimal.valueOf(5L), usd);
-        DebitAccount debitAccount = new DebitAccount(accountId, debitAmount);
+        DebitAccount debitAccount = new DebitAccount(TransactionId.newId(), accountId, debitAmount);
 
         // Act ... Assert
         Instant occurredAt = Instant.now();
@@ -178,7 +184,7 @@ class AccountDebitTest {
         );
         Account account = Account.rehydrate(List.of(accountOpened));
         Money debitAmount = Money.of(BigDecimal.valueOf(15L), usd);
-        DebitAccount debitAccount = new DebitAccount(accountId, debitAmount);
+        DebitAccount debitAccount = new DebitAccount(TransactionId.newId(), accountId, debitAmount);
 
         // Act ... Assert
         Instant occurredAt = Instant.now();

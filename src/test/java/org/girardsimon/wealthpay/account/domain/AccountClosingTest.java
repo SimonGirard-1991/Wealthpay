@@ -12,6 +12,7 @@ import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -39,6 +40,7 @@ class AccountClosingTest {
                 initialBalance
         );
         FundsDebited debited = new FundsDebited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 2L,
@@ -78,6 +80,7 @@ class AccountClosingTest {
                 initialBalance
         );
         FundsDebited debited = new FundsDebited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 2L,
@@ -107,6 +110,7 @@ class AccountClosingTest {
                 initialBalance
         );
         FundsDebited debited = new FundsDebited(
+                TransactionId.newId(),
                 accountId,
                 Instant.now(),
                 2L,

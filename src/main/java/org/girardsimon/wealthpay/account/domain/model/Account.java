@@ -46,7 +46,7 @@ public class Account {
 
     public static List<AccountEvent> handle(OpenAccount openAccount, AccountId accountId, long version, Instant occurredAt) {
         Money initialBalance = openAccount.initialBalance();
-        if(initialBalance.isNegativeOrZero()) {
+        if(initialBalance.isStrictlyNegative()) {
             throw new InvalidInitialBalanceException(initialBalance);
         }
         SupportedCurrency accountCurrency = openAccount.accountCurrency();
@@ -70,6 +70,7 @@ public class Account {
         checkStrictlyPositiveAmount(creditAccount.amount());
         ensureActive();
         FundsCredited fundsCredited = new FundsCredited(
+                creditAccount.transactionId(),
                 creditAccount.accountId(),
                 occurredAt,
                 this.version + 1,
@@ -93,6 +94,7 @@ public class Account {
             throw new InsufficientFundsException();
         }
         FundsDebited fundsDebited = new FundsDebited(
+                debitAccount.transactionId(),
                 debitAccount.accountId(),
                 occurredAt,
                 this.version + 1,
