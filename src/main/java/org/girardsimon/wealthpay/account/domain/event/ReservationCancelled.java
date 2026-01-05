@@ -11,6 +11,6 @@ public record ReservationCancelled (
         Instant occurredAt,
         long version,
         ReservationId reservationId,
-        Money amountCancelled
+        Money money
 ) implements AccountEvent {
 }

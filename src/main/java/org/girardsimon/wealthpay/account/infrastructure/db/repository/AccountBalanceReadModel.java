@@ -117,11 +117,11 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
                 currentState.currency = opened.currency().name();
                 currentState.status = AccountStatus.OPENED.name();
             }
-            case FundsCredited credited -> currentState.balance = currentState.balance.add(credited.amount().amount());
-            case FundsDebited debited -> currentState.balance = currentState.balance.subtract(debited.amount().amount());
+            case FundsCredited credited -> currentState.balance = currentState.balance.add(credited.money().amount());
+            case FundsDebited debited -> currentState.balance = currentState.balance.subtract(debited.money().amount());
             case AccountClosed _ -> currentState.status = AccountStatus.CLOSED.name();
-            case FundsReserved fundsReserved -> currentState.reserved = currentState.reserved.add(fundsReserved.amount().amount());
-            case ReservationCancelled reservationCancelled -> currentState.reserved = currentState.reserved.subtract(reservationCancelled.amountCancelled().amount());
+            case FundsReserved fundsReserved -> currentState.reserved = currentState.reserved.add(fundsReserved.money().amount());
+            case ReservationCancelled reservationCancelled -> currentState.reserved = currentState.reserved.subtract(reservationCancelled.money().amount());
             case ReservationCaptured reservationCaptured -> {
                 currentState.reserved = currentState.reserved.subtract(reservationCaptured.money().amount());
                 currentState.balance = currentState.balance.subtract(reservationCaptured.money().amount());

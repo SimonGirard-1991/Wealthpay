@@ -215,10 +215,10 @@ public class Account {
                 this.balance = accountOpened.initialBalance();
                 this.status = AccountStatus.OPENED;
             }
-            case FundsCredited fundsCredited -> this.balance = this.balance.add(fundsCredited.amount());
+            case FundsCredited fundsCredited -> this.balance = this.balance.add(fundsCredited.money());
             case AccountClosed _ -> this.status = AccountStatus.CLOSED;
-            case FundsDebited fundsDebited -> this.balance = this.balance.subtract(fundsDebited.amount());
-            case FundsReserved fundsReserved -> this.reservations.put(fundsReserved.reservationId(), fundsReserved.amount());
+            case FundsDebited fundsDebited -> this.balance = this.balance.subtract(fundsDebited.money());
+            case FundsReserved fundsReserved -> this.reservations.put(fundsReserved.reservationId(), fundsReserved.money());
             case ReservationCancelled reservationCancelled -> this.reservations.remove(reservationCancelled.reservationId());
             case ReservationCaptured reservationCaptured -> {
                 this.balance = this.balance.subtract(reservationCaptured.money());

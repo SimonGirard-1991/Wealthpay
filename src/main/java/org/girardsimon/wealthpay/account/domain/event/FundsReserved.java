@@ -11,6 +11,6 @@ public record FundsReserved(
         Instant occurredAt,
         long version,
         ReservationId reservationId,
-        Money amount
+        Money money
 ) implements AccountEvent {
 }

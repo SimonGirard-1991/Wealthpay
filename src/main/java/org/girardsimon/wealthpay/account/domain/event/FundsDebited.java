@@ -11,6 +11,6 @@ public record FundsDebited(
         AccountId accountId,
         Instant occurredAt,
         long version,
-        Money amount
+        Money money
 ) implements AccountEvent {
 }
