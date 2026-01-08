@@ -22,7 +22,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -96,20 +95,20 @@ class OpenAccountControllerTest {
     @Test
     void getAccountById_should_return_200_with_account_response() throws Exception {
         // Arrange
-        UUID accountId = UUID.randomUUID();
+        AccountId accountId = AccountId.newId();
         AccountBalanceView accountBalanceView = mock(AccountBalanceView.class);
         when(accountApplicationService.getAccountBalance(accountId)).thenReturn(accountBalanceView);
         when(accountBalanceViewDomainToDtoMapper.apply(accountBalanceView)).thenReturn(new AccountResponseDto()
-                .id(accountId)
+                .id(accountId.id())
                 .balanceAmount(BigDecimal.valueOf(100.50).setScale(2, RoundingMode.HALF_EVEN))
                 .currency(SupportedCurrencyDto.USD)
                 .status(AccountStatusDto.OPENED));
 
         // Act ... Assert
-        mockMvc.perform(get("/accounts/{id}", accountId)
+        mockMvc.perform(get("/accounts/{id}", accountId.id())
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(accountId.toString()))
+                .andExpect(jsonPath("$.id").value(accountId.id().toString()))
                 .andExpect(jsonPath("$.balanceAmount").value("100.5"))
                 .andExpect(jsonPath("$.currency").value("USD"))
                 .andExpect(jsonPath("$.status").value("OPENED"));

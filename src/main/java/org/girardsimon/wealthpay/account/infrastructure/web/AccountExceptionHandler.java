@@ -1,6 +1,5 @@
 package org.girardsimon.wealthpay.account.infrastructure.web;
 
-import org.girardsimon.wealthpay.account.domain.exception.AccountAlreadyExistsException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountBalanceNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountCurrencyMismatchException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
@@ -15,6 +14,8 @@ import org.girardsimon.wealthpay.account.domain.exception.ReservationConflictExc
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.shared.api.generated.model.ApiErrorDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -23,10 +24,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class AccountExceptionHandler {
 
+    Logger log = LoggerFactory.getLogger(AccountExceptionHandler.class);
+
     @ExceptionHandler({
             AccountIdMismatchException.class
     })
     public ResponseEntity<ApiErrorDto> handleBadRequestException(Exception e) {
+        log.warn("Bad Request exception: ", e);
         ApiErrorDto apiErrorDto = new ApiErrorDto()
                 .status(HttpStatus.BAD_REQUEST.value())
                 .message(e.getMessage());
@@ -42,6 +46,7 @@ public class AccountExceptionHandler {
             AccountBalanceNotFoundException.class
     })
     public ResponseEntity<ApiErrorDto> handleNotFoundException(Exception e) {
+        log.warn("Not Found exception: ", e);
         ApiErrorDto apiErrorDto = new ApiErrorDto()
                 .status(HttpStatus.NOT_FOUND.value())
                 .message(e.getMessage());
@@ -52,10 +57,10 @@ public class AccountExceptionHandler {
     }
 
     @ExceptionHandler({
-            AccountInactiveException.class,
-            AccountAlreadyExistsException.class
+            AccountInactiveException.class
     })
     public ResponseEntity<ApiErrorDto> handleConflictException(Exception e) {
+        log.warn("Conflict exception: ", e);
         ApiErrorDto apiErrorDto = new ApiErrorDto()
                 .status(HttpStatus.CONFLICT.value())
                 .message(e.getMessage());
@@ -74,6 +79,7 @@ public class AccountExceptionHandler {
             UnsupportedCurrencyException.class
     })
     public ResponseEntity<ApiErrorDto> handleUnprocessableEntityException(Exception e) {
+        log.warn("Unprocessable Entity exception: ", e);
         ApiErrorDto apiErrorDto = new ApiErrorDto()
                 .status(HttpStatus.UNPROCESSABLE_CONTENT.value())
                 .message(e.getMessage());
@@ -87,6 +93,7 @@ public class AccountExceptionHandler {
             InvalidAccountEventStreamException.class
     })
     public ResponseEntity<ApiErrorDto> handleInternalServerErrorException(Exception e) {
+        log.error("Internal Server Error exception: ", e);
         ApiErrorDto apiErrorDto = new ApiErrorDto()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .message(e.getMessage());

@@ -1,6 +1,5 @@
 package org.girardsimon.wealthpay.account.infrastructure.web;
 
-import org.girardsimon.wealthpay.account.domain.exception.AccountAlreadyExistsException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountBalanceNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountCurrencyMismatchException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
@@ -30,7 +29,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
-import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.mockito.Mockito.when;
@@ -72,7 +70,7 @@ class AccountExceptionHandlerTest {
 
     private static Stream<Arguments> allNotFoundExceptions() {
         ReservationId reservationId = ReservationId.newId();
-        UUID accountId = UUID.randomUUID();
+        AccountId accountId = AccountId.newId();
         return Stream.of(
                 Arguments.of(new ReservationNotFoundException(reservationId), "Reservation not found: " + reservationId),
                 Arguments.of(new AccountHistoryNotFound(), "Account history not found"),
@@ -94,10 +92,8 @@ class AccountExceptionHandlerTest {
     }
 
     private static Stream<Arguments> allConflictExceptions() {
-        AccountId accountId = AccountId.newId();
         return Stream.of(
-                Arguments.of(new AccountInactiveException(), "Account is inactive"),
-                Arguments.of(new AccountAlreadyExistsException(accountId), "Account "+ accountId + " already exists")
+                Arguments.of(new AccountInactiveException(), "Account is inactive")
         );
     }
 

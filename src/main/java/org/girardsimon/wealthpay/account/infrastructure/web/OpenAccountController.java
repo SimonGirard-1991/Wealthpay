@@ -33,7 +33,7 @@ public class OpenAccountController implements AccountsApi {
 
     @Override
     public ResponseEntity<AccountResponseDto> getAccountById(UUID id) {
-        AccountBalanceView accountBalance = accountApplicationService.getAccountBalance(id);
+        AccountBalanceView accountBalance = accountApplicationService.getAccountBalance(AccountId.of(id));
         return ResponseEntity.ok(accountBalanceViewDomainToDtoMapper.apply(accountBalance));
     }
 

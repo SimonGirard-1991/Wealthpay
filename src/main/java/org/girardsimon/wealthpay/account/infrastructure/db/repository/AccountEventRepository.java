@@ -14,15 +14,11 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.logging.Logger;
 
 import static org.girardsimon.wealthpay.account.jooq.tables.EventStore.EVENT_STORE;
-import static org.jooq.impl.DSL.max;
 
 @Repository
 public class AccountEventRepository implements AccountEventStore {
-
-    private static final Logger log = Logger.getLogger(AccountEventRepository.class.getName());
 
     private final DSLContext dslContext;
     private final EventStoreEntryToAccountEventMapper eventStoreEntryToAccountEventMapper;
@@ -64,21 +60,6 @@ public class AccountEventRepository implements AccountEventStore {
 
         UUID accountUuid = accountId.id();
 
-        Long currentVersion = dslContext
-                .select(max(EVENT_STORE.VERSION))
-                .from(EVENT_STORE)
-                .where(EVENT_STORE.ACCOUNT_ID.eq(accountUuid))
-                .fetchOneInto(Long.class);
-
-        long actualVersion = currentVersion != null ? currentVersion : 0L;
-
-        if (actualVersion != expectedVersion) {
-            throw new OptimisticLockingFailureException(
-                    "Version mismatch for account %s: expected %d but found %d"
-                            .formatted(accountUuid, expectedVersion, actualVersion)
-            );
-        }
-
         try {
             for (AccountEvent event : events) {
                 String eventType = event.getClass().getSimpleName();
@@ -100,7 +81,6 @@ public class AccountEventRepository implements AccountEventStore {
                         .execute();
             }
         } catch (DataIntegrityViolationException e) {
-            log.warning("Error while appending events to account %s".formatted(accountUuid));
             throw new OptimisticLockingFailureException(
                     "Concurrent modification detected for account %s".formatted(accountUuid), e);
         }

@@ -9,7 +9,6 @@ import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
-import org.girardsimon.wealthpay.account.domain.exception.AccountAlreadyExistsException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
@@ -26,7 +25,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -87,22 +85,9 @@ class AccountApplicationServiceTest {
     }
 
     @Test
-    void openAccount_should_not_save_event_AccountOpened_when_account_already_exists() {
-        // Arrange
-        SupportedCurrency currency = SupportedCurrency.USD;
-        Money initialBalance = new Money(BigDecimal.valueOf(10L), currency);
-        OpenAccount openAccount = new OpenAccount(currency, initialBalance);
-        when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(mock(AccountOpened.class)));
-
-        // Act ... Assert
-        assertThatExceptionOfType(AccountAlreadyExistsException.class)
-                .isThrownBy(() -> accountApplicationService.openAccount(openAccount));
-    }
-
-    @Test
     void getAccountBalance_should_return_account_balance_view_for_given_id() {
         // Arrange
-        UUID uuid = UUID.randomUUID();
+        AccountId uuid = AccountId.newId();
         AccountBalanceView mock = mock(AccountBalanceView.class);
         when(accountBalanceProjector.getAccountBalance(uuid)).thenReturn(mock);
 

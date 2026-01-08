@@ -17,7 +17,7 @@ public class AccountBalanceViewDomainToDtoMapper implements Function<AccountBala
         Money balance = accountBalanceView.balance();
         SupportedCurrency currency = balance.currency();
         return new AccountResponseDto()
-                .id(accountBalanceView.accountId())
+                .id(accountBalanceView.accountId().id())
                 .balanceAmount(balance.amount())
                 .reservedAmount(accountBalanceView.reservedFunds().amount())
                 .currency(SupportedCurrencyDto.valueOf(currency.name()))

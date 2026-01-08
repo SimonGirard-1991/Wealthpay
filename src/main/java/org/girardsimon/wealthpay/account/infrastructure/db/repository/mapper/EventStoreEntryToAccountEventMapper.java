@@ -23,6 +23,8 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Function;
 
+import static org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.MapperUtils.getRequiredField;
+
 @Component
 public class EventStoreEntryToAccountEventMapper implements Function<EventStore, AccountEvent> {
 
@@ -58,11 +60,11 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
     private ReservationCancelled mapReservationCancelled(EventStore eventStore) {
         JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
-        String reservationId = root.get(RESERVATION_ID).asString();
+        String reservationId = getRequiredField(root, RESERVATION_ID).asString();
 
         return new ReservationCancelled(
                 AccountId.of(eventStore.getAccountId()),
-                Instant.parse(root.get(OCCURRED_AT).asString()),
+                Instant.parse(getRequiredField(root, OCCURRED_AT).asString()),
                 eventStore.getVersion(),
                 ReservationId.of(UUID.fromString(reservationId)),
                 extractMoney(root)
@@ -72,11 +74,11 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
     private FundsReserved mapFundsReserved(EventStore eventStore) {
         JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
-        String reservationId = root.get(RESERVATION_ID).asString();
+        String reservationId = getRequiredField(root, RESERVATION_ID).asString();
 
         return new FundsReserved(
                 AccountId.of(eventStore.getAccountId()),
-                Instant.parse(root.get(OCCURRED_AT).asString()),
+                Instant.parse(getRequiredField(root, OCCURRED_AT).asString()),
                 eventStore.getVersion(),
                 ReservationId.of(UUID.fromString(reservationId)),
                 extractMoney(root)
@@ -100,12 +102,12 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
     private FundsCredited mapFundsCredited(EventStore eventStore) {
         JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
-        String transactionId = root.get(TRANSACTION_ID).asString();
+        String transactionId = getRequiredField(root, TRANSACTION_ID).asString();
 
         return new FundsCredited(
                 TransactionId.of(UUID.fromString(transactionId)),
                 AccountId.of(eventStore.getAccountId()),
-                Instant.parse(root.get(OCCURRED_AT).asString()),
+                Instant.parse(getRequiredField(root, OCCURRED_AT).asString()),
                 eventStore.getVersion(),
                 extractMoney(root)
         );
@@ -116,7 +118,7 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
 
         return new AccountClosed(
                 AccountId.of(eventStore.getAccountId()),
-                Instant.parse(root.get(OCCURRED_AT).asString()),
+                Instant.parse(getRequiredField(root, OCCURRED_AT).asString()),
                 eventStore.getVersion()
         );
     }
@@ -124,35 +126,35 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
     private ReservationCaptured mapReservationCaptured(EventStore eventStore) {
         JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
-        String reservationId = root.get(RESERVATION_ID).asString();
+        String reservationId = getRequiredField(root, RESERVATION_ID).asString();
 
         return new ReservationCaptured(
                 AccountId.of(eventStore.getAccountId()),
                 ReservationId.of(UUID.fromString(reservationId)),
                 extractMoney(root),
                 eventStore.getVersion(),
-                Instant.parse(root.get(OCCURRED_AT).asString())
+                Instant.parse(getRequiredField(root, OCCURRED_AT).asString())
         );
     }
 
     private AccountOpened mapAccountOpened(EventStore eventStore) {
         JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
-        SupportedCurrency currency = SupportedCurrency.valueOf(root.get(CURRENCY).asString());
-        BigDecimal amount = root.get(INITIAL_BALANCE).decimalValue();
+        SupportedCurrency currency = SupportedCurrency.valueOf(getRequiredField(root, CURRENCY).asString());
+        BigDecimal amount = getRequiredField(root, INITIAL_BALANCE).decimalValue();
 
         return new AccountOpened(
                 AccountId.of(eventStore.getAccountId()),
-                Instant.parse(root.get(OCCURRED_AT).asString()),
+                Instant.parse(getRequiredField(root, OCCURRED_AT).asString()),
                 eventStore.getVersion(),
                 currency,
                 Money.of(amount, currency)
         );
     }
 
-    private Money extractMoney(JsonNode root) {
-        SupportedCurrency currency = SupportedCurrency.valueOf(root.get(CURRENCY).asString());
-        BigDecimal amount = root.get(AMOUNT).decimalValue();
+    private static Money extractMoney(JsonNode root) {
+        SupportedCurrency currency = SupportedCurrency.valueOf(getRequiredField(root, CURRENCY).asString());
+        BigDecimal amount = getRequiredField(root, AMOUNT).decimalValue();
         return Money.of(amount, currency);
     }
 }

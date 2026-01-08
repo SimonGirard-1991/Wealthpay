@@ -7,7 +7,6 @@ import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
-import org.girardsimon.wealthpay.account.domain.exception.AccountAlreadyExistsException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
@@ -18,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class AccountApplicationService {
@@ -38,10 +36,6 @@ public class AccountApplicationService {
     @Transactional
     public AccountId openAccount(OpenAccount openAccount) {
         AccountId accountId = accountIdGenerator.newId();
-        List<AccountEvent> history = accountEventStore.loadEvents(accountId);
-        if(!history.isEmpty()) {
-            throw new AccountAlreadyExistsException(accountId);
-        }
 
         long expectedVersion = 0L;
         long nextVersion = expectedVersion + 1;
@@ -52,7 +46,7 @@ public class AccountApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public AccountBalanceView getAccountBalance(UUID accountId) {
+    public AccountBalanceView getAccountBalance(AccountId accountId) {
         return accountBalanceProjector.getAccountBalance(accountId);
     }
 

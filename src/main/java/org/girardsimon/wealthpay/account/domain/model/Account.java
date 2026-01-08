@@ -51,7 +51,7 @@ public class Account {
         }
         SupportedCurrency accountCurrency = openAccount.accountCurrency();
         if(!initialBalance.currency().equals(accountCurrency)) {
-            throw new AccountCurrencyMismatchException(initialBalance.currency().name() ,
+            throw new AccountCurrencyMismatchException(initialBalance.currency().name(),
                     accountCurrency.name());
         }
         AccountOpened accountOpened = new AccountOpened(

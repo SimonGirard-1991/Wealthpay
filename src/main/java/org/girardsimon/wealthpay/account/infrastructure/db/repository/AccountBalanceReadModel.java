@@ -14,13 +14,13 @@ import org.girardsimon.wealthpay.account.domain.exception.AccountBalanceNotFound
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountBalanceViewEntryToDomainMapper;
+import org.girardsimon.wealthpay.account.jooq.tables.records.AccountBalanceViewRecord;
 import org.jooq.DSLContext;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.UUID;
 
 import static org.girardsimon.wealthpay.account.jooq.tables.AccountBalanceView.ACCOUNT_BALANCE_VIEW;
 
@@ -37,7 +37,7 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
     }
 
     @Override
-    public AccountBalanceView getAccountBalance(UUID accountId) {
+    public AccountBalanceView getAccountBalance(AccountId accountId) {
         return dslContext.select(
                         ACCOUNT_BALANCE_VIEW.ACCOUNT_ID,
                         ACCOUNT_BALANCE_VIEW.BALANCE,
@@ -47,7 +47,7 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
                         ACCOUNT_BALANCE_VIEW.VERSION
                 )
                 .from(ACCOUNT_BALANCE_VIEW)
-                .where(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID.eq(accountId))
+                .where(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID.eq(accountId.id()))
                 .fetchOptional()
                 .map(accountBalanceViewEntryToDomainMapper)
                 .orElseThrow(() -> new AccountBalanceNotFoundException(accountId));
@@ -92,22 +92,27 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
             applyEventToState(event, currentState);
         });
 
-        dslContext.insertInto(ACCOUNT_BALANCE_VIEW)
-                .set(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID, accountId.id())
-                .set(ACCOUNT_BALANCE_VIEW.CURRENCY, currentState.currency)
-                .set(ACCOUNT_BALANCE_VIEW.BALANCE, currentState.balance)
-                .set(ACCOUNT_BALANCE_VIEW.RESERVED, currentState.reserved)
-                .set(ACCOUNT_BALANCE_VIEW.STATUS, currentState.status)
-                .set(ACCOUNT_BALANCE_VIEW.VERSION, currentState.version)
+        AccountBalanceViewRecord row = dslContext.newRecord(ACCOUNT_BALANCE_VIEW);
+        row.setAccountId(accountId.id());
+        row.setCurrency(currentState.currency);
+        row.setBalance(currentState.balance);
+        row.setReserved(currentState.reserved);
+        row.setStatus(currentState.status);
+        row.setVersion(currentState.version);
+
+        int affectedRows = dslContext.insertInto(ACCOUNT_BALANCE_VIEW)
+                .set(row)
                 .onConflict(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID)
                 .doUpdate()
-                .set(ACCOUNT_BALANCE_VIEW.CURRENCY, currentState.currency)
-                .set(ACCOUNT_BALANCE_VIEW.BALANCE, currentState.balance)
-                .set(ACCOUNT_BALANCE_VIEW.RESERVED, currentState.reserved)
-                .set(ACCOUNT_BALANCE_VIEW.STATUS, currentState.status)
-                .set(ACCOUNT_BALANCE_VIEW.VERSION, currentState.version)
+                .set(row)
                 .where(ACCOUNT_BALANCE_VIEW.VERSION.lt(currentState.version))
                 .execute();
+
+        if (affectedRows == 0) {
+            throw new OptimisticLockingFailureException(
+                    "Concurrent update detected for account %s".formatted(accountId.id())
+            );
+        }
     }
 
     private static void applyEventToState(AccountEvent event, ProjectionState currentState) {
@@ -147,7 +152,8 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
         }
 
         static ProjectionState init() {
-            return new ProjectionState(BigDecimal.ZERO, BigDecimal.ZERO,null, null, 0L);
+            return new ProjectionState(BigDecimal.ZERO, BigDecimal.ZERO,
+                    null, null, 0L);
         }
     }
 }

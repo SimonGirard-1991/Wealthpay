@@ -137,7 +137,7 @@ class AccountEventRepositoryTest extends AbstractContainerTest {
                 )
                 .values(
                         accountUuid,
-                        2L,
+                        1L,
                         "AccountOpened",
                         JSONB.valueOf("{}")
                 )

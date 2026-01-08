@@ -49,14 +49,14 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
     @Test
     void getAccountBalance_should_returns_expected_account_balance_view() {
         // Arrange
-        UUID accountId = UUID.randomUUID();
+        AccountId accountId = AccountId.newId();
         String currency = "USD";
         BigDecimal balance = BigDecimal.valueOf(100.5000).setScale(4, RoundingMode.HALF_UP);
         BigDecimal reserved = BigDecimal.valueOf(0.0000).setScale(4, RoundingMode.HALF_UP);
         String status = "OPENED";
         long version = 1L;
         dslContext.insertInto(ACCOUNT_BALANCE_VIEW)
-                .set(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID, accountId)
+                .set(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID, accountId.id())
                 .set(ACCOUNT_BALANCE_VIEW.CURRENCY, currency)
                 .set(ACCOUNT_BALANCE_VIEW.BALANCE, balance)
                 .set(ACCOUNT_BALANCE_VIEW.RESERVED, reserved)
@@ -133,9 +133,9 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
         accountBalanceReadModel.project(events);
 
         // Assert
-        AccountBalanceView accountBalance = accountBalanceReadModel.getAccountBalance(accountId.id());
+        AccountBalanceView accountBalance = accountBalanceReadModel.getAccountBalance(accountId);
         assertAll(
-                () -> assertThat(accountBalance.accountId()).isEqualTo(accountId.id()),
+                () -> assertThat(accountBalance.accountId()).isEqualTo(accountId),
                 () -> assertThat(accountBalance.balance().amount()).isEqualTo(BigDecimal.valueOf(0.00)
                         .setScale(2, RoundingMode.HALF_EVEN)),
                 () -> assertThat(accountBalance.balance().currency()).isEqualTo(SupportedCurrency.USD),
@@ -181,9 +181,9 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
         accountBalanceReadModel.project(events);
 
         // Assert
-        AccountBalanceView accountBalance = accountBalanceReadModel.getAccountBalance(accountId.id());
+        AccountBalanceView accountBalance = accountBalanceReadModel.getAccountBalance(accountId);
         assertAll(
-                () -> assertThat(accountBalance.accountId()).isEqualTo(accountId.id()),
+                () -> assertThat(accountBalance.accountId()).isEqualTo(accountId),
                 () -> assertThat(accountBalance.balance().amount()).isEqualTo(BigDecimal.valueOf(800.00)
                         .setScale(2, RoundingMode.HALF_EVEN)),
                 () -> assertThat(accountBalance.balance().currency()).isEqualTo(SupportedCurrency.USD),

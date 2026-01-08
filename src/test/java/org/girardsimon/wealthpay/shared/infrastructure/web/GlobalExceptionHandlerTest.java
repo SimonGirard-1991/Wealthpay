@@ -80,4 +80,23 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.message").value(expectedMessage));
     }
+
+    public static Stream<Arguments> allInternalServerErrorExceptions() {
+        return Stream.of(
+                Arguments.of(new IllegalStateException("message"), "message")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("allInternalServerErrorExceptions")
+    void all_internal_server_error_exceptions(Throwable throwable, String expectedMessage) throws Exception {
+        // Arrange
+        when(fakeService.fakeMethod()).thenThrow(throwable);
+
+        // Act ... Assert
+        mockMvc.perform(get("/fake"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.message").value(expectedMessage));
+    }
 }
