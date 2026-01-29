@@ -5,9 +5,7 @@ import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 
 public record CaptureReservationResponse(
-        AccountId accountId,
-        ReservationId reservationId,
-        ReservationCaptureStatus reservationCaptureStatus,
-        Money money
-) {
-}
+    AccountId accountId,
+    ReservationId reservationId,
+    ReservationCaptureStatus reservationCaptureStatus,
+    Money money) {}

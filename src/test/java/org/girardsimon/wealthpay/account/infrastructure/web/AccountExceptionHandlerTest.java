@@ -1,5 +1,12 @@
 package org.girardsimon.wealthpay.account.infrastructure.web;
 
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.math.BigDecimal;
+import java.util.stream.Stream;
 import org.girardsimon.wealthpay.account.domain.exception.AccountBalanceNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountCurrencyMismatchException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
@@ -28,134 +35,141 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.math.BigDecimal;
-import java.util.stream.Stream;
-
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 @WebMvcTest(FakeController.class)
 @ActiveProfiles("test")
 class AccountExceptionHandlerTest {
 
-    @MockitoBean
-    FakeService fakeService;
+  @MockitoBean FakeService fakeService;
 
-    @Autowired
-    MockMvc mockMvc;
+  @Autowired MockMvc mockMvc;
 
-    private static Stream<Arguments> allBadRequestExceptions() {
-        AccountId accountId1 = AccountId.newId();
-        AccountId accountId2 = AccountId.newId();
-        return Stream.of(
-                Arguments.of(new IllegalArgumentException("Illegal Argument"), "Illegal Argument"),
-                Arguments.of(new AccountIdMismatchException(accountId1, accountId2), "Account id mismatch: " + accountId1 + " vs " + accountId2)
-        );
-    }
+  private static Stream<Arguments> allBadRequestExceptions() {
+    AccountId accountId1 = AccountId.newId();
+    AccountId accountId2 = AccountId.newId();
+    return Stream.of(
+        Arguments.of(new IllegalArgumentException("Illegal Argument"), "Illegal Argument"),
+        Arguments.of(
+            new AccountIdMismatchException(accountId1, accountId2),
+            "Account id mismatch: " + accountId1 + " vs " + accountId2));
+  }
 
-    @ParameterizedTest
-    @MethodSource("allBadRequestExceptions")
-    void all_bad_request_exceptions(Throwable throwable, String expectedMessage) throws Exception {
-        // Arrange
-        when(fakeService.fakeMethod()).thenThrow(throwable);
+  private static Stream<Arguments> allNotFoundExceptions() {
+    ReservationId reservationId = ReservationId.newId();
+    AccountId accountId = AccountId.newId();
+    return Stream.of(
+        Arguments.of(
+            new ReservationNotFoundException(reservationId),
+            "Reservation not found: " + reservationId),
+        Arguments.of(new AccountHistoryNotFound(), "Account history not found"),
+        Arguments.of(
+            new AccountBalanceNotFoundException(accountId),
+            "No balance found for account " + accountId));
+  }
 
-        // Act ... Assert
-        mockMvc.perform(get("/fake"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value(expectedMessage));
-    }
+  private static Stream<Arguments> allConflictExceptions() {
+    return Stream.of(Arguments.of(new AccountInactiveException(), "Account is inactive"));
+  }
 
-    private static Stream<Arguments> allNotFoundExceptions() {
-        ReservationId reservationId = ReservationId.newId();
-        AccountId accountId = AccountId.newId();
-        return Stream.of(
-                Arguments.of(new ReservationNotFoundException(reservationId), "Reservation not found: " + reservationId),
-                Arguments.of(new AccountHistoryNotFound(), "Account history not found"),
-                Arguments.of(new AccountBalanceNotFoundException(accountId), "No balance found for account " + accountId)
-        );
-    }
+  private static Stream<Arguments> allUnprocessableContentExceptions() {
+    Money negativeAmount = Money.of(BigDecimal.valueOf(-100L), SupportedCurrency.USD);
+    ReservationId reservationId = ReservationId.newId();
+    return Stream.of(
+        Arguments.of(
+            new InvalidInitialBalanceException(negativeAmount),
+            "Initial balance must be strictly positive, got Money[amount=-100.00, currency=USD]"),
+        Arguments.of(
+            new AccountCurrencyMismatchException("USD", "EUR"),
+            "Account currency USD does not match initial balance currency EUR"),
+        Arguments.of(
+            new AmountMustBePositiveException(negativeAmount),
+            "Amount must be strictly positive, got Money[amount=-100.00, currency=USD]"),
+        Arguments.of(
+            new InsufficientFundsException(), "Insufficient funds to complete the operation"),
+        Arguments.of(
+            new ReservationConflictException(
+                reservationId,
+                Money.of(BigDecimal.valueOf(10), SupportedCurrency.USD),
+                Money.of(BigDecimal.valueOf(20), SupportedCurrency.USD)),
+            "Reservation already exists: "
+                + reservationId
+                + " with amount Money[amount=10.00, currency=USD] requested Money[amount=20.00, currency=USD]"),
+        Arguments.of(new AccountNotEmptyException(), "Account is not empty"),
+        Arguments.of(new UnsupportedCurrencyException("BTC"), "Currency BTC is not supported"));
+  }
 
-    @ParameterizedTest
-    @MethodSource("allNotFoundExceptions")
-    void all_not_found_exceptions(Throwable throwable, String expectedMessage) throws Exception {
-        // Arrange
-        when(fakeService.fakeMethod()).thenThrow(throwable);
+  private static Stream<Arguments> allInternalServerErrorExceptions() {
+    return Stream.of(Arguments.of(new InvalidAccountEventStreamException("message"), "message"));
+  }
 
-        // Act ... Assert
-        mockMvc.perform(get("/fake"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.message").value(expectedMessage));
-    }
+  @ParameterizedTest
+  @MethodSource("allBadRequestExceptions")
+  void all_bad_request_exceptions(Throwable throwable, String expectedMessage) throws Exception {
+    // Arrange
+    when(fakeService.fakeMethod()).thenThrow(throwable);
 
-    private static Stream<Arguments> allConflictExceptions() {
-        return Stream.of(
-                Arguments.of(new AccountInactiveException(), "Account is inactive")
-        );
-    }
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
 
-    @ParameterizedTest
-    @MethodSource("allConflictExceptions")
-    void all_conflict_exceptions(Throwable throwable, String expectedMessage) throws Exception {
-        // Arrange
-        when(fakeService.fakeMethod()).thenThrow(throwable);
+  @ParameterizedTest
+  @MethodSource("allNotFoundExceptions")
+  void all_not_found_exceptions(Throwable throwable, String expectedMessage) throws Exception {
+    // Arrange
+    when(fakeService.fakeMethod()).thenThrow(throwable);
 
-        // Act ... Assert
-        mockMvc.perform(get("/fake"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.message").value(expectedMessage));
-    }
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.status").value(404))
+        .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
 
-    private static Stream<Arguments> allUnprocessableContentExceptions() {
-        Money negativeAmount = Money.of(BigDecimal.valueOf(-100L), SupportedCurrency.USD);
-        ReservationId reservationId = ReservationId.newId();
-        return Stream.of(
-                Arguments.of(new InvalidInitialBalanceException(negativeAmount), "Initial balance must be strictly positive, got Money[amount=-100.00, currency=USD]"),
-                Arguments.of(new AccountCurrencyMismatchException("USD", "EUR"), "Account currency USD does not match initial balance currency EUR"),
-                Arguments.of(new AmountMustBePositiveException(negativeAmount), "Amount must be strictly positive, got Money[amount=-100.00, currency=USD]"),
-                Arguments.of(new InsufficientFundsException(), "Insufficient funds to complete the operation"),
-                Arguments.of(new ReservationConflictException(reservationId,
-                                Money.of(BigDecimal.valueOf(10), SupportedCurrency.USD), Money.of(BigDecimal.valueOf(20), SupportedCurrency.USD)),
-                        "Reservation already exists: " + reservationId + " with amount Money[amount=10.00, currency=USD] requested Money[amount=20.00, currency=USD]"),
-                Arguments.of(new AccountNotEmptyException(), "Account is not empty"),
-                Arguments.of(new UnsupportedCurrencyException("BTC"), "Currency BTC is not supported")
-        );
-    }
+  @ParameterizedTest
+  @MethodSource("allConflictExceptions")
+  void all_conflict_exceptions(Throwable throwable, String expectedMessage) throws Exception {
+    // Arrange
+    when(fakeService.fakeMethod()).thenThrow(throwable);
 
-    @ParameterizedTest
-    @MethodSource("allUnprocessableContentExceptions")
-    void all_unprocessable_content_exceptions(Throwable throwable, String expectedMessage) throws Exception {
-        // Arrange
-        when(fakeService.fakeMethod()).thenThrow(throwable);
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.status").value(409))
+        .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
 
-        // Act ... Assert
-        mockMvc.perform(get("/fake"))
-                .andExpect(status().isUnprocessableContent())
-                .andExpect(jsonPath("$.status").value(422))
-                .andExpect(jsonPath("$.message").value(expectedMessage));
-    }
+  @ParameterizedTest
+  @MethodSource("allUnprocessableContentExceptions")
+  void all_unprocessable_content_exceptions(Throwable throwable, String expectedMessage)
+      throws Exception {
+    // Arrange
+    when(fakeService.fakeMethod()).thenThrow(throwable);
 
-    private static Stream<Arguments> allInternalServerErrorExceptions() {
-        return Stream.of(
-                Arguments.of(new InvalidAccountEventStreamException("message"), "message")
-        );
-    }
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake"))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.status").value(422))
+        .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
 
-    @ParameterizedTest
-    @MethodSource("allInternalServerErrorExceptions")
-    void all_internal_server_error_exceptions(Throwable throwable, String expectedMessage) throws Exception {
-        // Arrange
-        when(fakeService.fakeMethod()).thenThrow(throwable);
+  @ParameterizedTest
+  @MethodSource("allInternalServerErrorExceptions")
+  void all_internal_server_error_exceptions(Throwable throwable, String expectedMessage)
+      throws Exception {
+    // Arrange
+    when(fakeService.fakeMethod()).thenThrow(throwable);
 
-        // Act ... Assert
-        mockMvc.perform(get("/fake"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status").value(500))
-                .andExpect(jsonPath("$.message").value(expectedMessage));
-    }
-
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake"))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.status").value(500))
+        .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
 }

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @Profile("test")
 public class FakeService {
 
-    public String fakeMethod() {
-        return "fake";
-    }
+  public String fakeMethod() {
+    return "fake";
+  }
 }

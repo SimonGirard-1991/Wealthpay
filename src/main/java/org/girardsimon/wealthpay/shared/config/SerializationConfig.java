@@ -7,8 +7,8 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 public class SerializationConfig {
 
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
-    }
+  @Bean
+  public ObjectMapper objectMapper() {
+    return new ObjectMapper();
+  }
 }

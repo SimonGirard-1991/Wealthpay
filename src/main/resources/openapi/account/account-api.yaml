@@ -108,7 +108,7 @@ components:
     SupportedCurrency:
       type: string
       description: ISO 4217 currency code (e.g. USD, EUR, CHF)
-      enum: 
+      enum:
         - USD
         - AED
         - AUD

@@ -1,5 +1,12 @@
 package org.girardsimon.wealthpay.shared.infrastructure.web;
 
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.io.InputStream;
+import java.util.stream.Stream;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -13,90 +20,82 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.io.InputStream;
-import java.util.stream.Stream;
-
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 @WebMvcTest(FakeController.class)
 @ActiveProfiles("test")
 class GlobalExceptionHandlerTest {
 
-    @MockitoBean
-    FakeService fakeService;
+  @MockitoBean FakeService fakeService;
 
-    @Autowired
-    MockMvc mockMvc;
+  @Autowired MockMvc mockMvc;
 
-    public static Stream<Arguments> allBadRequestExceptions() {
-        HttpMessageNotReadableException httpMessageNotReadableException = new HttpMessageNotReadableException("message", new HttpInputMessage() {
-            @Override
-            public InputStream getBody() {
+  public static Stream<Arguments> allBadRequestExceptions() {
+    HttpMessageNotReadableException httpMessageNotReadableException =
+        new HttpMessageNotReadableException(
+            "message",
+            new HttpInputMessage() {
+              @Override
+              public InputStream getBody() {
                 return InputStream.nullInputStream();
-            }
+              }
 
-            @Override
-            public HttpHeaders getHeaders() {
+              @Override
+              public HttpHeaders getHeaders() {
                 return HttpHeaders.EMPTY;
-            }
-        });
-        return Stream.of(
-                Arguments.of(new IllegalArgumentException("Illegal Argument"), "Illegal Argument"),
-                Arguments.of(httpMessageNotReadableException, "message")
-        );
-    }
+              }
+            });
+    return Stream.of(
+        Arguments.of(new IllegalArgumentException("Illegal Argument"), "Illegal Argument"),
+        Arguments.of(httpMessageNotReadableException, "message"));
+  }
 
-    @ParameterizedTest
-    @MethodSource("allBadRequestExceptions")
-    void all_bad_request_exceptions(Throwable throwable, String expectedMessage) throws Exception {
-        // Arrange
-        when(fakeService.fakeMethod()).thenThrow(throwable);
+  public static Stream<Arguments> allConflictExceptions() {
+    return Stream.of(Arguments.of(new OptimisticLockingFailureException("message"), "message"));
+  }
 
-        // Act ... Assert
-        mockMvc.perform(get("/fake"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value(expectedMessage));
-    }
+  public static Stream<Arguments> allInternalServerErrorExceptions() {
+    return Stream.of(Arguments.of(new IllegalStateException("message"), "message"));
+  }
 
-    public static Stream<Arguments> allConflictExceptions() {
-        return Stream.of(
-                Arguments.of(new OptimisticLockingFailureException("message"), "message")
-        );
-    }
+  @ParameterizedTest
+  @MethodSource("allBadRequestExceptions")
+  void all_bad_request_exceptions(Throwable throwable, String expectedMessage) throws Exception {
+    // Arrange
+    when(fakeService.fakeMethod()).thenThrow(throwable);
 
-    @ParameterizedTest
-    @MethodSource("allConflictExceptions")
-    void all_conflict_exceptions(Throwable throwable, String expectedMessage) throws Exception {
-        // Arrange
-        when(fakeService.fakeMethod()).thenThrow(throwable);
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
 
-        // Act ... Assert
-        mockMvc.perform(get("/fake"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.message").value(expectedMessage));
-    }
+  @ParameterizedTest
+  @MethodSource("allConflictExceptions")
+  void all_conflict_exceptions(Throwable throwable, String expectedMessage) throws Exception {
+    // Arrange
+    when(fakeService.fakeMethod()).thenThrow(throwable);
 
-    public static Stream<Arguments> allInternalServerErrorExceptions() {
-        return Stream.of(
-                Arguments.of(new IllegalStateException("message"), "message")
-        );
-    }
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.status").value(409))
+        .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
 
-    @ParameterizedTest
-    @MethodSource("allInternalServerErrorExceptions")
-    void all_internal_server_error_exceptions(Throwable throwable, String expectedMessage) throws Exception {
-        // Arrange
-        when(fakeService.fakeMethod()).thenThrow(throwable);
+  @ParameterizedTest
+  @MethodSource("allInternalServerErrorExceptions")
+  void all_internal_server_error_exceptions(Throwable throwable, String expectedMessage)
+      throws Exception {
+    // Arrange
+    when(fakeService.fakeMethod()).thenThrow(throwable);
 
-        // Act ... Assert
-        mockMvc.perform(get("/fake"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status").value(500))
-                .andExpect(jsonPath("$.message").value(expectedMessage));
-    }
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake"))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.status").value(500))
+        .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
 }

@@ -1,10 +1,10 @@
 package org.girardsimon.wealthpay.account.domain.event;
 
+import java.time.Instant;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 
-import java.time.Instant;
-
-public sealed interface AccountEvent permits AccountOpened,
+public sealed interface AccountEvent
+    permits AccountOpened,
         FundsCredited,
         FundsDebited,
         FundsReserved,
@@ -12,7 +12,9 @@ public sealed interface AccountEvent permits AccountOpened,
         AccountClosed,
         ReservationCaptured {
 
-    AccountId accountId();
-    Instant occurredAt();
-    long version();
+  AccountId accountId();
+
+  Instant occurredAt();
+
+  long version();
 }

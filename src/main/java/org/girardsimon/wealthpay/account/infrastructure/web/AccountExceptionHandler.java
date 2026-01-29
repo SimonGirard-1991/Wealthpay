@@ -24,82 +24,62 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class AccountExceptionHandler {
 
-    Logger log = LoggerFactory.getLogger(AccountExceptionHandler.class);
+  Logger log = LoggerFactory.getLogger(AccountExceptionHandler.class);
 
-    @ExceptionHandler({
-            AccountIdMismatchException.class
-    })
-    public ResponseEntity<ApiErrorDto> handleBadRequestException(Exception e) {
-        log.warn("Bad Request exception: ", e);
-        ApiErrorDto apiErrorDto = new ApiErrorDto()
-                .status(HttpStatus.BAD_REQUEST.value())
-                .message(e.getMessage());
+  @ExceptionHandler({AccountIdMismatchException.class})
+  public ResponseEntity<ApiErrorDto> handleBadRequestException(Exception e) {
+    log.warn("Bad Request exception: ", e);
+    ApiErrorDto apiErrorDto =
+        new ApiErrorDto().status(HttpStatus.BAD_REQUEST.value()).message(e.getMessage());
 
-        return ResponseEntity
-                .badRequest()
-                .body(apiErrorDto);
-    }
+    return ResponseEntity.badRequest().body(apiErrorDto);
+  }
 
-    @ExceptionHandler({
-            ReservationNotFoundException.class,
-            AccountHistoryNotFound.class,
-            AccountBalanceNotFoundException.class
-    })
-    public ResponseEntity<ApiErrorDto> handleNotFoundException(Exception e) {
-        log.warn("Not Found exception: ", e);
-        ApiErrorDto apiErrorDto = new ApiErrorDto()
-                .status(HttpStatus.NOT_FOUND.value())
-                .message(e.getMessage());
+  @ExceptionHandler({
+    ReservationNotFoundException.class,
+    AccountHistoryNotFound.class,
+    AccountBalanceNotFoundException.class
+  })
+  public ResponseEntity<ApiErrorDto> handleNotFoundException(Exception e) {
+    log.warn("Not Found exception: ", e);
+    ApiErrorDto apiErrorDto =
+        new ApiErrorDto().status(HttpStatus.NOT_FOUND.value()).message(e.getMessage());
 
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(apiErrorDto);
-    }
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(apiErrorDto);
+  }
 
-    @ExceptionHandler({
-            AccountInactiveException.class
-    })
-    public ResponseEntity<ApiErrorDto> handleConflictException(Exception e) {
-        log.warn("Conflict exception: ", e);
-        ApiErrorDto apiErrorDto = new ApiErrorDto()
-                .status(HttpStatus.CONFLICT.value())
-                .message(e.getMessage());
+  @ExceptionHandler({AccountInactiveException.class})
+  public ResponseEntity<ApiErrorDto> handleConflictException(Exception e) {
+    log.warn("Conflict exception: ", e);
+    ApiErrorDto apiErrorDto =
+        new ApiErrorDto().status(HttpStatus.CONFLICT.value()).message(e.getMessage());
 
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(apiErrorDto);
-    }
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(apiErrorDto);
+  }
 
-    @ExceptionHandler({
-            InvalidInitialBalanceException.class,
-            AccountCurrencyMismatchException.class,
-            AmountMustBePositiveException.class,
-            InsufficientFundsException.class,
-            ReservationConflictException.class,
-            AccountNotEmptyException.class,
-            UnsupportedCurrencyException.class
-    })
-    public ResponseEntity<ApiErrorDto> handleUnprocessableEntityException(Exception e) {
-        log.warn("Unprocessable Entity exception: ", e);
-        ApiErrorDto apiErrorDto = new ApiErrorDto()
-                .status(HttpStatus.UNPROCESSABLE_CONTENT.value())
-                .message(e.getMessage());
+  @ExceptionHandler({
+    InvalidInitialBalanceException.class,
+    AccountCurrencyMismatchException.class,
+    AmountMustBePositiveException.class,
+    InsufficientFundsException.class,
+    ReservationConflictException.class,
+    AccountNotEmptyException.class,
+    UnsupportedCurrencyException.class
+  })
+  public ResponseEntity<ApiErrorDto> handleUnprocessableEntityException(Exception e) {
+    log.warn("Unprocessable Entity exception: ", e);
+    ApiErrorDto apiErrorDto =
+        new ApiErrorDto().status(HttpStatus.UNPROCESSABLE_CONTENT.value()).message(e.getMessage());
 
-        return ResponseEntity
-                .unprocessableContent()
-                .body(apiErrorDto);
-    }
+    return ResponseEntity.unprocessableContent().body(apiErrorDto);
+  }
 
-    @ExceptionHandler({
-            InvalidAccountEventStreamException.class
-    })
-    public ResponseEntity<ApiErrorDto> handleInternalServerErrorException(Exception e) {
-        log.error("Internal Server Error exception: ", e);
-        ApiErrorDto apiErrorDto = new ApiErrorDto()
-                .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                .message(e.getMessage());
+  @ExceptionHandler({InvalidAccountEventStreamException.class})
+  public ResponseEntity<ApiErrorDto> handleInternalServerErrorException(Exception e) {
+    log.error("Internal Server Error exception: ", e);
+    ApiErrorDto apiErrorDto =
+        new ApiErrorDto().status(HttpStatus.INTERNAL_SERVER_ERROR.value()).message(e.getMessage());
 
-        return ResponseEntity
-                .internalServerError()
-                .body(apiErrorDto);
-    }
+    return ResponseEntity.internalServerError().body(apiErrorDto);
+  }
 }

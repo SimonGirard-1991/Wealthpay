@@ -6,9 +6,9 @@ import org.springframework.modulith.core.ApplicationModules;
 
 class ArchitectureTests {
 
-    @Test
-    void verify_modularity() {
-        ApplicationModules applicationModules = ApplicationModules.of(WealthpayApplication.class);
-        applicationModules.verify();
-    }
+  @Test
+  void verify_modularity() {
+    ApplicationModules applicationModules = ApplicationModules.of(WealthpayApplication.class);
+    applicationModules.verify();
+  }
 }
