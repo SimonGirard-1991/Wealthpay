@@ -30,7 +30,7 @@ class AccountOpeningTest {
     OpenAccount openAccount = new OpenAccount(currency, initialBalance);
 
     // Act
-    List<AccountEvent> events = Account.handle(openAccount, accountId, 1L, Instant.now());
+    List<AccountEvent> events = Account.handle(openAccount, accountId, Instant.now());
     Account account = Account.rehydrate(events);
 
     // Assert
@@ -56,7 +56,7 @@ class AccountOpeningTest {
     // Act ... Assert
     Instant occurredAt = Instant.now();
     assertThatExceptionOfType(AccountCurrencyMismatchException.class)
-        .isThrownBy(() -> Account.handle(openAccount, accountId, 1L, occurredAt));
+        .isThrownBy(() -> Account.handle(openAccount, accountId, occurredAt));
   }
 
   @Test
@@ -70,7 +70,7 @@ class AccountOpeningTest {
     // Act ... Assert
     Instant occurredAt = Instant.now();
     assertThatExceptionOfType(InvalidInitialBalanceException.class)
-        .isThrownBy(() -> Account.handle(openAccount, accountId, 1L, occurredAt));
+        .isThrownBy(() -> Account.handle(openAccount, accountId, occurredAt));
   }
 
   @Test
@@ -83,7 +83,7 @@ class AccountOpeningTest {
     Instant occurredAt = Instant.now();
 
     // Act
-    List<AccountEvent> accountEvents = Account.handle(openAccount, accountId, 1L, occurredAt);
+    List<AccountEvent> accountEvents = Account.handle(openAccount, accountId, occurredAt);
 
     // Assert
     assertThat(accountEvents).hasSize(1);

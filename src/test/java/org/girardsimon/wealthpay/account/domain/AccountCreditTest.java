@@ -41,7 +41,7 @@ class AccountCreditTest {
     CreditAccount creditAccount = new CreditAccount(transactionId, accountId, creditAmount);
 
     // Act
-    List<AccountEvent> openingEvents = Account.handle(openAccount, accountId, 1L, Instant.now());
+    List<AccountEvent> openingEvents = Account.handle(openAccount, accountId, Instant.now());
     Account account = Account.rehydrate(openingEvents);
     List<AccountEvent> creditEvents = account.handle(creditAccount, Instant.now());
     List<AccountEvent> allEvents =

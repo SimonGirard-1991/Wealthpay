@@ -41,9 +41,8 @@ public class AccountApplicationService {
     AccountId accountId = accountIdGenerator.newId();
 
     long expectedVersion = 0L;
-    long nextVersion = expectedVersion + 1;
     List<AccountEvent> createdAccountEvents =
-        Account.handle(openAccount, accountId, nextVersion, Instant.now(clock));
+        Account.handle(openAccount, accountId, Instant.now(clock));
     accountEventStore.appendEvents(accountId, expectedVersion, createdAccountEvents);
     accountBalanceProjector.project(createdAccountEvents);
     return accountId;
@@ -76,13 +75,18 @@ public class AccountApplicationService {
       return new CaptureReservationResponse(
           accountId, captureReservation.reservationId(), ReservationCaptureStatus.NO_EFFECT, null);
     }
-    long expectedVersion = account.getVersion();
-    accountEventStore.appendEvents(accountId, expectedVersion, captureReservationEvents);
+
+    long versionBeforeEvents = versionBeforeEvents(account, captureReservationEvents);
+    accountEventStore.appendEvents(accountId, versionBeforeEvents, captureReservationEvents);
     accountBalanceProjector.project(captureReservationEvents);
     return new CaptureReservationResponse(
         accountId,
         captureReservation.reservationId(),
         ReservationCaptureStatus.CAPTURED,
         reservationCaptured.money());
+  }
+
+  private static long versionBeforeEvents(Account account, List<AccountEvent> events) {
+    return account.getVersion() - events.size();
   }
 }

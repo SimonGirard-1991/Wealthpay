@@ -1,6 +1,7 @@
 package org.girardsimon.wealthpay.account.infrastructure.db.repository;
 
 import static org.girardsimon.wealthpay.account.jooq.tables.EventStore.EVENT_STORE;
+import static org.jooq.impl.DSL.max;
 
 import java.util.List;
 import java.util.UUID;
@@ -61,8 +62,32 @@ public class AccountEventRepository implements AccountEventStore {
 
     UUID accountUuid = accountId.id();
 
+    Long currentVersion =
+        dslContext
+            .select(max(EVENT_STORE.VERSION))
+            .from(EVENT_STORE)
+            .where(EVENT_STORE.ACCOUNT_ID.eq(accountUuid))
+            .fetchOneInto(Long.class);
+
+    long actualVersion = currentVersion != null ? currentVersion : 0L;
+
+    if (actualVersion != expectedVersion) {
+      throw new OptimisticLockingFailureException(
+          "Version mismatch for account %s: expected %d but found %d"
+              .formatted(accountUuid, expectedVersion, actualVersion));
+    }
+
+    long nextExpectedVersion = actualVersion;
+
     try {
       for (AccountEvent event : events) {
+        nextExpectedVersion++;
+        if (event.version() != nextExpectedVersion) {
+          throw new IllegalStateException( // This indicates a bug in the calling code, not a
+              // concurrency issue.
+              "Event version gap: expected %d but got %d for account %s"
+                  .formatted(nextExpectedVersion, event.version(), accountUuid));
+        }
         String eventType = event.getClass().getSimpleName();
         JSONB payload = accountEventSerializer.apply(event);
 

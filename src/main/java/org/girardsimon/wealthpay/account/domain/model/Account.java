@@ -44,7 +44,7 @@ public class Account {
   }
 
   public static List<AccountEvent> handle(
-      OpenAccount openAccount, AccountId accountId, long version, Instant occurredAt) {
+      OpenAccount openAccount, AccountId accountId, Instant occurredAt) {
     Money initialBalance = openAccount.initialBalance();
     if (initialBalance.isStrictlyNegative()) {
       throw new InvalidInitialBalanceException(initialBalance);
@@ -55,7 +55,7 @@ public class Account {
           initialBalance.currency().name(), accountCurrency.name());
     }
     AccountOpened accountOpened =
-        new AccountOpened(accountId, occurredAt, version, accountCurrency, initialBalance);
+        new AccountOpened(accountId, occurredAt, 1L, accountCurrency, initialBalance);
     return List.of(accountOpened);
   }
 
@@ -91,6 +91,7 @@ public class Account {
             occurredAt,
             this.version + 1,
             creditAccount.amount());
+    apply(fundsCredited);
     return List.of(fundsCredited);
   }
 
@@ -109,6 +110,7 @@ public class Account {
             occurredAt,
             this.version + 1,
             debitAccount.amount());
+    apply(fundsDebited);
     return List.of(fundsDebited);
   }
 
@@ -136,6 +138,7 @@ public class Account {
             this.version + 1,
             reserveFunds.reservationId(),
             reserveFunds.money());
+    apply(fundsReserved);
     return List.of(fundsReserved);
   }
 
@@ -152,6 +155,7 @@ public class Account {
             this.version + 1,
             cancelReservation.reservationId(),
             this.reservations.get(cancelReservation.reservationId()));
+    apply(reservationCancelled);
     return List.of(reservationCancelled);
   }
 
@@ -163,6 +167,7 @@ public class Account {
     }
     AccountClosed accountClosed =
         new AccountClosed(closeAccount.accountId(), occurredAt, this.version + 1);
+    apply(accountClosed);
     return List.of(accountClosed);
   }
 
@@ -180,6 +185,7 @@ public class Account {
             money,
             this.version + 1,
             occurredAt);
+    apply(reservationCaptured);
     return List.of(reservationCaptured);
   }
 

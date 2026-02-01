@@ -44,7 +44,7 @@ class ReserveFundsTest {
     ReserveFunds reserveFunds = new ReserveFunds(accountId, reservationId, reservationAmount);
 
     // Act
-    List<AccountEvent> openingEvents = Account.handle(openAccount, accountId, 1L, Instant.now());
+    List<AccountEvent> openingEvents = Account.handle(openAccount, accountId, Instant.now());
     Account account = Account.rehydrate(openingEvents);
     List<AccountEvent> reserveFundsEvents = account.handle(reserveFunds, Instant.now());
     List<AccountEvent> allEvents =

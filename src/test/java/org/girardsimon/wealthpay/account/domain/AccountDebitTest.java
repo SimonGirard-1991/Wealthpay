@@ -41,7 +41,7 @@ class AccountDebitTest {
     DebitAccount debitAccount = new DebitAccount(transactionId, accountId, debitAmount);
 
     // Act
-    List<AccountEvent> openingEvents = Account.handle(openAccount, accountId, 1L, Instant.now());
+    List<AccountEvent> openingEvents = Account.handle(openAccount, accountId, Instant.now());
     Account account = Account.rehydrate(openingEvents);
     List<AccountEvent> debitEvents = account.handle(debitAccount, Instant.now());
     List<AccountEvent> allEvents =
