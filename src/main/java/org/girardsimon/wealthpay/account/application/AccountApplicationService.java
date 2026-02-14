@@ -23,6 +23,7 @@ public class AccountApplicationService {
 
   private final AccountEventStore accountEventStore;
   private final AccountBalanceProjector accountBalanceProjector;
+  private final AccountEventPublisher accountEventPublisher;
   private final Clock clock;
   private final AccountIdGenerator accountIdGenerator;
   private final EventIdGenerator eventIdGenerator;
@@ -30,11 +31,13 @@ public class AccountApplicationService {
   public AccountApplicationService(
       AccountEventStore accountEventStore,
       AccountBalanceProjector accountBalanceProjector,
+      AccountEventPublisher accountEventPublisher,
       Clock clock,
       AccountIdGenerator accountIdGenerator,
       EventIdGenerator eventIdGenerator) {
     this.accountEventStore = accountEventStore;
     this.accountBalanceProjector = accountBalanceProjector;
+    this.accountEventPublisher = accountEventPublisher;
     this.clock = clock;
     this.accountIdGenerator = accountIdGenerator;
     this.eventIdGenerator = eventIdGenerator;
@@ -52,7 +55,7 @@ public class AccountApplicationService {
     List<AccountEvent> createdAccountEvents =
         Account.handle(openAccount, accountId, eventIdGenerator, Instant.now(clock));
     accountEventStore.appendEvents(accountId, expectedVersion, createdAccountEvents);
-    accountBalanceProjector.project(createdAccountEvents);
+    accountEventPublisher.publish(createdAccountEvents);
     return accountId;
   }
 
@@ -86,7 +89,7 @@ public class AccountApplicationService {
 
     long versionBeforeEvents = versionBeforeEvents(account, captureReservationEvents);
     accountEventStore.appendEvents(accountId, versionBeforeEvents, captureReservationEvents);
-    accountBalanceProjector.project(captureReservationEvents);
+    accountEventPublisher.publish(captureReservationEvents);
     return new CaptureReservationResponse(
         accountId,
         captureReservation.reservationId(),

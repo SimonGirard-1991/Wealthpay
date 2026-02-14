@@ -45,6 +45,7 @@ class AccountApplicationServiceTest {
 
   AccountEventStore accountEventStore = mock(AccountEventStore.class);
   AccountBalanceProjector accountBalanceProjector = mock(AccountBalanceProjector.class);
+  AccountEventPublisher accountEventPublisher = mock(AccountEventPublisher.class);
 
   Clock clock = Clock.fixed(Instant.parse("2025-11-16T15:00:00Z"), ZoneOffset.UTC);
 
@@ -56,7 +57,12 @@ class AccountApplicationServiceTest {
 
   AccountApplicationService accountApplicationService =
       new AccountApplicationService(
-          accountEventStore, accountBalanceProjector, clock, accountIdGenerator, eventIdGenerator);
+          accountEventStore,
+          accountBalanceProjector,
+          accountEventPublisher,
+          clock,
+          accountIdGenerator,
+          eventIdGenerator);
 
   @Test
   void openAccount_saves_event_AccountOpened_when_account_does_not_exist() {
@@ -73,9 +79,9 @@ class AccountApplicationServiceTest {
     AccountEventMeta accountEventMeta =
         AccountEventMeta.of(eventId, accountId, Instant.parse("2025-11-16T15:00:00Z"), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta, currency, initialBalance);
-    InOrder inOrder = inOrder(accountEventStore, accountBalanceProjector);
+    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
     inOrder.verify(accountEventStore).appendEvents(accountId, 0L, List.of(accountOpened));
-    inOrder.verify(accountBalanceProjector).project(List.of(accountOpened));
+    inOrder.verify(accountEventPublisher).publish(List.of(accountOpened));
   }
 
   @Test
@@ -120,9 +126,9 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(eventId, accountId, Instant.parse("2025-11-16T15:00:00Z"), 3L);
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(accountEventMeta, reservationId, reservedAmount);
-    InOrder inOrder = inOrder(accountEventStore, accountBalanceProjector);
+    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
     inOrder.verify(accountEventStore).appendEvents(accountId, 2L, List.of(reservationCaptured));
-    inOrder.verify(accountBalanceProjector).project(List.of(reservationCaptured));
+    inOrder.verify(accountEventPublisher).publish(List.of(reservationCaptured));
     assertAll(
         () -> assertThat(captureReservationResponse.accountId()).isEqualTo(accountId),
         () -> assertThat(captureReservationResponse.reservationId()).isEqualTo(reservationId),
@@ -161,7 +167,7 @@ class AccountApplicationServiceTest {
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(accountEventMeta, reservationId, reservedAmount);
     verify(accountEventStore, times(0)).appendEvents(any(), anyLong(), any());
-    verify(accountBalanceProjector, times(0)).project(List.of(reservationCaptured));
+    verify(accountEventPublisher, times(0)).publish(List.of(reservationCaptured));
     assertAll(
         () -> assertThat(captureReservationResponse.accountId()).isEqualTo(accountId),
         () -> assertThat(captureReservationResponse.reservationId()).isEqualTo(otherReservationId),

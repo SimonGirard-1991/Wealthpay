@@ -10,6 +10,11 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.event.AccountClosed;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
@@ -32,13 +37,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jooq.test.autoconfigure.JooqTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @JooqTest
 @Import({AccountBalanceReadModel.class, AccountBalanceViewEntryToDomainMapper.class})
 class AccountBalanceReadModelTest extends AbstractContainerTest {
 
   @Autowired private DSLContext dslContext;
+  @Autowired private PlatformTransactionManager transactionManager;
 
   @Autowired private AccountBalanceReadModel accountBalanceReadModel;
 
@@ -181,7 +189,8 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
   }
 
   @Test
-  void project_should_throw_optimistic_lock_exception_when_expected_version_is_outdated() {
+  void
+      project_should_throw_illegal_state_exception_when_expected_version_is_inconsistent_to_read_model() {
     // Arrange
     UUID accountId = UUID.randomUUID();
     String currency = "USD";
@@ -199,7 +208,7 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
         .set(ACCOUNT_BALANCE_VIEW.VERSION, version)
         .execute();
     AccountEventMeta meta =
-        AccountEventMeta.of(EventId.newId(), AccountId.of(accountId), Instant.now(), version - 1);
+        AccountEventMeta.of(EventId.newId(), AccountId.of(accountId), Instant.now(), version + 10L);
     FundsCredited fundsCredited =
         new FundsCredited(
             meta, TransactionId.newId(), Money.of(BigDecimal.valueOf(500L), SupportedCurrency.USD));
@@ -207,7 +216,82 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
     List<AccountEvent> events = List.of(fundsCredited);
 
     // Act ... Assert
-    assertThatExceptionOfType(OptimisticLockingFailureException.class)
+    assertThatExceptionOfType(IllegalStateException.class)
         .isThrownBy(() -> accountBalanceReadModel.project(events));
+  }
+
+  @Test
+  void project_should_be_idempotent() throws Exception {
+    // Arrange
+    AccountId accountId = AccountId.newId();
+    long initialVersion = 55L;
+    TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+    // REQUIRES_NEW forces the actual commit (otherwise @JooqTest rolls back everything)
+    txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    txTemplate.execute(
+        _ -> {
+          String currency = "USD";
+          BigDecimal balance = BigDecimal.valueOf(1000L);
+          BigDecimal reserved = BigDecimal.ZERO;
+          String status = "OPENED";
+          dslContext
+              .insertInto(ACCOUNT_BALANCE_VIEW)
+              .set(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID, accountId.id())
+              .set(ACCOUNT_BALANCE_VIEW.CURRENCY, currency)
+              .set(ACCOUNT_BALANCE_VIEW.BALANCE, balance)
+              .set(ACCOUNT_BALANCE_VIEW.RESERVED, reserved)
+              .set(ACCOUNT_BALANCE_VIEW.STATUS, status)
+              .set(ACCOUNT_BALANCE_VIEW.VERSION, initialVersion)
+              .execute();
+          return null;
+        });
+    int threads = 2;
+    CountDownLatch ready = new CountDownLatch(threads);
+    CountDownLatch go = new CountDownLatch(1);
+    AtomicInteger successes = new AtomicInteger();
+    AtomicInteger failures = new AtomicInteger();
+    try (ExecutorService executor = Executors.newFixedThreadPool(threads)) {
+      for (int i = 0; i < threads; i++) {
+        Runnable runnable =
+            () -> {
+              ready.countDown(); // Signal "I'm ready"
+              try {
+                go.await();
+                AccountEventMeta metaCredited =
+                    AccountEventMeta.of(
+                        EventId.newId(), accountId, Instant.now(), initialVersion + 1L);
+                FundsCredited credited =
+                    new FundsCredited(
+                        metaCredited,
+                        TransactionId.newId(),
+                        Money.of(BigDecimal.TEN, SupportedCurrency.USD));
+
+                txTemplate.execute(
+                    _ -> {
+                      accountBalanceReadModel.project(List.of(credited));
+                      return null;
+                    });
+                successes.incrementAndGet();
+              } catch (InterruptedException _) {
+                failures.incrementAndGet();
+              }
+            };
+        executor.submit(runnable);
+      }
+
+      // Act
+      ready.await(); // Wait until all threads are ready
+      go.countDown();
+      executor.shutdown();
+      boolean terminated = executor.awaitTermination(10, TimeUnit.SECONDS);
+      assertThat(terminated).isTrue();
+    }
+
+    // Assert
+    AccountBalanceView accountBalance = accountBalanceReadModel.getAccountBalance(accountId);
+    assertAll(
+        () -> assertThat(successes.get()).isEqualTo(2),
+        () -> assertThat(failures.get()).isZero(),
+        () -> assertThat(accountBalance.version()).isEqualTo(initialVersion + 1L));
   }
 }

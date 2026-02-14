@@ -89,37 +89,12 @@ public class Outbox extends TableImpl<OutboxRecord> {
     /**
      * The column <code>account.outbox.occurred_at</code>.
      */
-    public final TableField<OutboxRecord, OffsetDateTime> OCCURRED_AT = createField(DSL.name("occurred_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "");
+    public final TableField<OutboxRecord, OffsetDateTime> OCCURRED_AT = createField(DSL.name("occurred_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
 
     /**
      * The column <code>account.outbox.payload</code>.
      */
     public final TableField<OutboxRecord, JSONB> PAYLOAD = createField(DSL.name("payload"), SQLDataType.JSONB.nullable(false), this, "");
-
-    /**
-     * The column <code>account.outbox.status</code>.
-     */
-    public final TableField<OutboxRecord, String> STATUS = createField(DSL.name("status"), SQLDataType.CLOB.nullable(false).defaultValue(DSL.field(DSL.raw("'PENDING'::text"), SQLDataType.CLOB)), this, "");
-
-    /**
-     * The column <code>account.outbox.publish_attempts</code>.
-     */
-    public final TableField<OutboxRecord, Integer> PUBLISH_ATTEMPTS = createField(DSL.name("publish_attempts"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "");
-
-    /**
-     * The column <code>account.outbox.last_error</code>.
-     */
-    public final TableField<OutboxRecord, String> LAST_ERROR = createField(DSL.name("last_error"), SQLDataType.CLOB, this, "");
-
-    /**
-     * The column <code>account.outbox.available_at</code>.
-     */
-    public final TableField<OutboxRecord, OffsetDateTime> AVAILABLE_AT = createField(DSL.name("available_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
-
-    /**
-     * The column <code>account.outbox.published_at</code>.
-     */
-    public final TableField<OutboxRecord, OffsetDateTime> PUBLISHED_AT = createField(DSL.name("published_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "");
 
     private Outbox(Name alias, Table<OutboxRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
@@ -157,7 +132,7 @@ public class Outbox extends TableImpl<OutboxRecord> {
 
     @Override
     public List<Index> getIndexes() {
-        return Arrays.asList(Indexes.OUTBOX_AGGREGATE_ORDER_IDX, Indexes.OUTBOX_PENDING_IDX);
+        return Arrays.asList(Indexes.OUTBOX_AGGREGATE_ORDER_IDX);
     }
 
     @Override

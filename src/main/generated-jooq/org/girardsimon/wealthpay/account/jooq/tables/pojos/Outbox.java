@@ -27,11 +27,6 @@ public class Outbox implements Serializable {
     private String eventType;
     private OffsetDateTime occurredAt;
     private JSONB payload;
-    private String status;
-    private Integer publishAttempts;
-    private String lastError;
-    private OffsetDateTime availableAt;
-    private OffsetDateTime publishedAt;
 
     public Outbox() {}
 
@@ -44,11 +39,6 @@ public class Outbox implements Serializable {
         this.eventType = value.eventType;
         this.occurredAt = value.occurredAt;
         this.payload = value.payload;
-        this.status = value.status;
-        this.publishAttempts = value.publishAttempts;
-        this.lastError = value.lastError;
-        this.availableAt = value.availableAt;
-        this.publishedAt = value.publishedAt;
     }
 
     public Outbox(
@@ -59,12 +49,7 @@ public class Outbox implements Serializable {
         Long aggregateVersion,
         String eventType,
         OffsetDateTime occurredAt,
-        JSONB payload,
-        String status,
-        Integer publishAttempts,
-        String lastError,
-        OffsetDateTime availableAt,
-        OffsetDateTime publishedAt
+        JSONB payload
     ) {
         this.outboxId = outboxId;
         this.eventId = eventId;
@@ -74,11 +59,6 @@ public class Outbox implements Serializable {
         this.eventType = eventType;
         this.occurredAt = occurredAt;
         this.payload = payload;
-        this.status = status;
-        this.publishAttempts = publishAttempts;
-        this.lastError = lastError;
-        this.availableAt = availableAt;
-        this.publishedAt = publishedAt;
     }
 
     /**
@@ -193,76 +173,6 @@ public class Outbox implements Serializable {
         this.payload = payload;
     }
 
-    /**
-     * Getter for <code>account.outbox.status</code>.
-     */
-    public String getStatus() {
-        return this.status;
-    }
-
-    /**
-     * Setter for <code>account.outbox.status</code>.
-     */
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    /**
-     * Getter for <code>account.outbox.publish_attempts</code>.
-     */
-    public Integer getPublishAttempts() {
-        return this.publishAttempts;
-    }
-
-    /**
-     * Setter for <code>account.outbox.publish_attempts</code>.
-     */
-    public void setPublishAttempts(Integer publishAttempts) {
-        this.publishAttempts = publishAttempts;
-    }
-
-    /**
-     * Getter for <code>account.outbox.last_error</code>.
-     */
-    public String getLastError() {
-        return this.lastError;
-    }
-
-    /**
-     * Setter for <code>account.outbox.last_error</code>.
-     */
-    public void setLastError(String lastError) {
-        this.lastError = lastError;
-    }
-
-    /**
-     * Getter for <code>account.outbox.available_at</code>.
-     */
-    public OffsetDateTime getAvailableAt() {
-        return this.availableAt;
-    }
-
-    /**
-     * Setter for <code>account.outbox.available_at</code>.
-     */
-    public void setAvailableAt(OffsetDateTime availableAt) {
-        this.availableAt = availableAt;
-    }
-
-    /**
-     * Getter for <code>account.outbox.published_at</code>.
-     */
-    public OffsetDateTime getPublishedAt() {
-        return this.publishedAt;
-    }
-
-    /**
-     * Setter for <code>account.outbox.published_at</code>.
-     */
-    public void setPublishedAt(OffsetDateTime publishedAt) {
-        this.publishedAt = publishedAt;
-    }
-
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
@@ -320,36 +230,6 @@ public class Outbox implements Serializable {
         }
         else if (!this.payload.equals(other.payload))
             return false;
-        if (this.status == null) {
-            if (other.status != null)
-                return false;
-        }
-        else if (!this.status.equals(other.status))
-            return false;
-        if (this.publishAttempts == null) {
-            if (other.publishAttempts != null)
-                return false;
-        }
-        else if (!this.publishAttempts.equals(other.publishAttempts))
-            return false;
-        if (this.lastError == null) {
-            if (other.lastError != null)
-                return false;
-        }
-        else if (!this.lastError.equals(other.lastError))
-            return false;
-        if (this.availableAt == null) {
-            if (other.availableAt != null)
-                return false;
-        }
-        else if (!this.availableAt.equals(other.availableAt))
-            return false;
-        if (this.publishedAt == null) {
-            if (other.publishedAt != null)
-                return false;
-        }
-        else if (!this.publishedAt.equals(other.publishedAt))
-            return false;
         return true;
     }
 
@@ -365,11 +245,6 @@ public class Outbox implements Serializable {
         result = prime * result + ((this.eventType == null) ? 0 : this.eventType.hashCode());
         result = prime * result + ((this.occurredAt == null) ? 0 : this.occurredAt.hashCode());
         result = prime * result + ((this.payload == null) ? 0 : this.payload.hashCode());
-        result = prime * result + ((this.status == null) ? 0 : this.status.hashCode());
-        result = prime * result + ((this.publishAttempts == null) ? 0 : this.publishAttempts.hashCode());
-        result = prime * result + ((this.lastError == null) ? 0 : this.lastError.hashCode());
-        result = prime * result + ((this.availableAt == null) ? 0 : this.availableAt.hashCode());
-        result = prime * result + ((this.publishedAt == null) ? 0 : this.publishedAt.hashCode());
         return result;
     }
 
@@ -385,11 +260,6 @@ public class Outbox implements Serializable {
         sb.append(", ").append(eventType);
         sb.append(", ").append(occurredAt);
         sb.append(", ").append(payload);
-        sb.append(", ").append(status);
-        sb.append(", ").append(publishAttempts);
-        sb.append(", ").append(lastError);
-        sb.append(", ").append(availableAt);
-        sb.append(", ").append(publishedAt);
 
         sb.append(")");
         return sb.toString();

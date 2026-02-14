@@ -1,6 +1,7 @@
 package org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper;
 
-import static org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.MapperUtils.getRequiredField;
+import static org.girardsimon.wealthpay.account.utils.MoneyDeserializerUtils.extractMoney;
+import static org.girardsimon.wealthpay.shared.utils.MapperUtils.getRequiredField;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -22,6 +23,7 @@ import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.girardsimon.wealthpay.account.jooq.tables.pojos.EventStore;
+import org.girardsimon.wealthpay.account.utils.AccountEventType;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -29,24 +31,16 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 public class EventStoreEntryToAccountEventMapper implements Function<EventStore, AccountEvent> {
 
-  public static final String OCCURRED_AT = "occurredAt";
-  public static final String AMOUNT = "amount";
-  public static final String CURRENCY = "currency";
-  public static final String RESERVATION_ID = "reservationId";
-  public static final String INITIAL_BALANCE = "initialBalance";
-  public static final String TRANSACTION_ID = "transactionId";
+  private static final String OCCURRED_AT = "occurredAt";
+  private static final String CURRENCY = "currency";
+  private static final String RESERVATION_ID = "reservationId";
+  private static final String INITIAL_BALANCE = "initialBalance";
+  private static final String TRANSACTION_ID = "transactionId";
 
   private final ObjectMapper objectMapper;
 
   public EventStoreEntryToAccountEventMapper(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
-  }
-
-  private static Money extractMoney(JsonNode root) {
-    SupportedCurrency currency =
-        SupportedCurrency.valueOf(getRequiredField(root, CURRENCY).asString());
-    BigDecimal amount = getRequiredField(root, AMOUNT).decimalValue();
-    return Money.of(amount, currency);
   }
 
   private static AccountEventMeta getAccountEventMeta(EventStore eventStore, JsonNode root) {
@@ -59,17 +53,16 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
 
   @Override
   public AccountEvent apply(EventStore eventStore) {
-    String eventType = eventStore.getEventType();
+    AccountEventType accountEventType = AccountEventType.from(eventStore.getEventType());
 
-    return switch (eventType) {
-      case "AccountOpened" -> mapAccountOpened(eventStore);
-      case "AccountClosed" -> mapAccountClosed(eventStore);
-      case "ReservationCaptured" -> mapReservationCaptured(eventStore);
-      case "FundsCredited" -> mapFundsCredited(eventStore);
-      case "FundsDebited" -> mapFundsDebited(eventStore);
-      case "FundsReserved" -> mapFundsReserved(eventStore);
-      case "ReservationCancelled" -> mapReservationCancelled(eventStore);
-      default -> throw new IllegalArgumentException("Unknown event type: " + eventType);
+    return switch (accountEventType) {
+      case ACCOUNT_OPENED -> mapAccountOpened(eventStore);
+      case ACCOUNT_CLOSED -> mapAccountClosed(eventStore);
+      case RESERVATION_CAPTURED -> mapReservationCaptured(eventStore);
+      case FUNDS_CREDITED -> mapFundsCredited(eventStore);
+      case FUNDS_DEBITED -> mapFundsDebited(eventStore);
+      case FUNDS_RESERVED -> mapFundsReserved(eventStore);
+      case RESERVATION_CANCELLED -> mapReservationCancelled(eventStore);
     };
   }
 
@@ -137,7 +130,7 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
     JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
     SupportedCurrency currency =
-        SupportedCurrency.valueOf(getRequiredField(root, CURRENCY).asString());
+        SupportedCurrency.fromValue(getRequiredField(root, CURRENCY).asString());
     BigDecimal amount = getRequiredField(root, INITIAL_BALANCE).decimalValue();
 
     return new AccountOpened(

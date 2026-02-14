@@ -11,12 +11,12 @@ cancel reservation, close account) using techniques common in real financial sys
 
 ## 📋 Prerequisites
 
-| Tool       | Version | Notes                          |
-|------------|---------|--------------------------------|
-| Java       | 25+     | Required for flexible `main()` |
-| Maven      | 3.9+    |                                |
-| Docker     | 24+     | For PostgreSQL                 |
-| Git        | 2.9+    | For custom hooks path          |
+| Tool   | Version | Notes                                 |
+|--------|---------|---------------------------------------|
+| Java   | 25+     | Required for flexible `main()`        |
+| Maven  | 3.9+    |                                       |
+| Docker | 24+     | For PostgreSQL, Kafka, Debezium, etc. |
+| Git    | 2.9+    | For custom hooks path                 |
 
 ---
 
@@ -38,7 +38,14 @@ cancel reservation, close account) using techniques common in real financial sys
 ### ✔ CQRS
 
 - Commands mutate state via events
-- Queries rely on read projections (to be introduced later)
+- Queries rely on a read projection kept eventually consistent via Kafka
+
+### ✔ Transactional Outbox + CDC
+
+- Events are written to an `outbox` table in the same transaction as the event store
+- Debezium captures outbox changes from the PostgreSQL WAL (Change Data Capture)
+- Events are routed to Kafka topics via the Debezium Outbox EventRouter transform
+- Kafka consumers project events into read models with at-least-once / idempotent guarantees
 
 ### ✔ Hexagonal Architecture
 
@@ -49,7 +56,7 @@ cancel reservation, close account) using techniques common in real financial sys
 ### ✔ Modular Monolith with Spring Modulith
 
 - `account` is a standalone, closed module
-- `shared` contains cross-cutting concerns (clock, global error handling)
+- `shared` contains cross-cutting concerns (clock, global error handling, serialization)
 - Module boundaries are enforced via architecture tests
 
 ---
@@ -61,6 +68,7 @@ cancel reservation, close account) using techniques common in real financial sys
 - Local development uses `docker-compose`
 - Schema managed via Flyway migrations
 - Event store modeled with `JSONB` payloads and versioning
+- WAL configured for logical replication (`wal_level=logical`)
 
 ### ✔ JOOQ for type-safe SQL
 
@@ -86,15 +94,25 @@ git config core.hooksPath .githooks
 
 This ensures `spotless:check` runs before each commit, preventing unformatted code from entering the repository.
 
-### 1. Start PostgreSQL (Docker)
+### 1. Start Infrastructure (Docker)
 
-Use the provided `docker-compose.yml`:
+Use the provided `docker-compose.local.yml`:
 
 ```bash
-docker-compose up -d
+docker compose -f docker-compose.local.yml up -d
 ```
 
-### 2. Apply Flyway migrations
+### 2. Register the Debezium Connector
+
+Once Kafka Connect is healthy:
+
+```bash
+./debezium/register-connector.sh
+```
+
+This registers the outbox CDC connector that captures events from the account.outbox table.
+
+### 3. Apply Flyway migrations
 
 Flyway is executed automatically when Spring Boot starts.
 
@@ -105,13 +123,14 @@ mvn spring-boot:run
 ```
 
 This will:
+
 - connect to the local PostgreSQL instance
 - apply all Flyway migrations
 - create/update the account schema
 
 You can stop the application once the startup completes.
 
-### 3. Generate jOOQ classes
+### 4. Generate jOOQ classes
 
 (only when the database schema changes)
 
@@ -131,7 +150,7 @@ src/main/generated-jooq/
 
 These files are versioned so that CI and other developers can build the project without needing to run jOOQ codegen.
 
-### 4. Build the project
+### 5. Build the project
 
 Once the jOOQ sources exist (generated locally or pulled from Git):
 
@@ -165,21 +184,23 @@ mvn spotless:check
 
 ### Configuration
 
-| Tool               | Standard                    |
-|--------------------|-----------------------------|
-| Java               | Google Java Format 1.33.0   |
-| Indentation        | 2 spaces                    |
-| Line length        | 100 characters              |
-| Imports            | Organized, no wildcards     |
-| Files              | UTF-8, LF line endings      |
+| Tool        | Standard                  |
+|-------------|---------------------------|
+| Java        | Google Java Format 1.33.0 |
+| Indentation | 2 spaces                  |
+| Line length | 100 characters            |
+| Imports     | Organized, no wildcards   |
+| Files       | UTF-8, LF line endings    |
 
 The formatting rules are defined in:
+
 - `pom.xml` — Spotless plugin configuration
 - `.editorconfig` — Editor-agnostic formatting hints
 
 ### Important Notes
 
-- **Flyway migrations** (`src/main/resources/db/migration/`) are excluded from formatting — migrations are immutable once applied
+- **Flyway migrations** (`src/main/resources/db/migration/`) are excluded from formatting — migrations are immutable
+  once applied
 - **Generated jOOQ classes** (`src/main/generated-jooq/`) are excluded — they are regenerated from the database schema
 - The pre-commit hook blocks commits with formatting violations
 
@@ -206,6 +227,7 @@ Error handling:
 - Web layer tested using `@WebMvcTest`
 - Architecture rules enforced with Spring Modulith tests
 - Integration tests using real PostgreSQL via Testcontainers
+- Kafka consumer integration tests using `@EmbeddedKafka`
 
 ---
 
@@ -219,7 +241,7 @@ This project is both:
     - DDD & tactical patterns
     - Event Sourcing & consistency handling
     - Hexagonal + modular monolith
-    - Spring Boot 3.3+, JOOQ, Flyway, Postgres
+    - Spring Boot 3.3+, JOOQ, Flyway, Postgres, Kafka, Debezium
     - OpenAPI contract-first API design
     - Strong testing practices
 

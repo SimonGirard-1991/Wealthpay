@@ -133,76 +133,6 @@ public class OutboxRecord extends UpdatableRecordImpl<OutboxRecord> {
         return (JSONB) get(7);
     }
 
-    /**
-     * Setter for <code>account.outbox.status</code>.
-     */
-    public void setStatus(String value) {
-        set(8, value);
-    }
-
-    /**
-     * Getter for <code>account.outbox.status</code>.
-     */
-    public String getStatus() {
-        return (String) get(8);
-    }
-
-    /**
-     * Setter for <code>account.outbox.publish_attempts</code>.
-     */
-    public void setPublishAttempts(Integer value) {
-        set(9, value);
-    }
-
-    /**
-     * Getter for <code>account.outbox.publish_attempts</code>.
-     */
-    public Integer getPublishAttempts() {
-        return (Integer) get(9);
-    }
-
-    /**
-     * Setter for <code>account.outbox.last_error</code>.
-     */
-    public void setLastError(String value) {
-        set(10, value);
-    }
-
-    /**
-     * Getter for <code>account.outbox.last_error</code>.
-     */
-    public String getLastError() {
-        return (String) get(10);
-    }
-
-    /**
-     * Setter for <code>account.outbox.available_at</code>.
-     */
-    public void setAvailableAt(OffsetDateTime value) {
-        set(11, value);
-    }
-
-    /**
-     * Getter for <code>account.outbox.available_at</code>.
-     */
-    public OffsetDateTime getAvailableAt() {
-        return (OffsetDateTime) get(11);
-    }
-
-    /**
-     * Setter for <code>account.outbox.published_at</code>.
-     */
-    public void setPublishedAt(OffsetDateTime value) {
-        set(12, value);
-    }
-
-    /**
-     * Getter for <code>account.outbox.published_at</code>.
-     */
-    public OffsetDateTime getPublishedAt() {
-        return (OffsetDateTime) get(12);
-    }
-
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -226,7 +156,7 @@ public class OutboxRecord extends UpdatableRecordImpl<OutboxRecord> {
     /**
      * Create a detached, initialised OutboxRecord
      */
-    public OutboxRecord(Long outboxId, UUID eventId, String aggregateType, UUID aggregateId, Long aggregateVersion, String eventType, OffsetDateTime occurredAt, JSONB payload, String status, Integer publishAttempts, String lastError, OffsetDateTime availableAt, OffsetDateTime publishedAt) {
+    public OutboxRecord(Long outboxId, UUID eventId, String aggregateType, UUID aggregateId, Long aggregateVersion, String eventType, OffsetDateTime occurredAt, JSONB payload) {
         super(Outbox.OUTBOX);
 
         setOutboxId(outboxId);
@@ -237,11 +167,6 @@ public class OutboxRecord extends UpdatableRecordImpl<OutboxRecord> {
         setEventType(eventType);
         setOccurredAt(occurredAt);
         setPayload(payload);
-        setStatus(status);
-        setPublishAttempts(publishAttempts);
-        setLastError(lastError);
-        setAvailableAt(availableAt);
-        setPublishedAt(publishedAt);
         resetChangedOnNotNull();
     }
 
@@ -260,11 +185,6 @@ public class OutboxRecord extends UpdatableRecordImpl<OutboxRecord> {
             setEventType(value.getEventType());
             setOccurredAt(value.getOccurredAt());
             setPayload(value.getPayload());
-            setStatus(value.getStatus());
-            setPublishAttempts(value.getPublishAttempts());
-            setLastError(value.getLastError());
-            setAvailableAt(value.getAvailableAt());
-            setPublishedAt(value.getPublishedAt());
             resetChangedOnNotNull();
         }
     }

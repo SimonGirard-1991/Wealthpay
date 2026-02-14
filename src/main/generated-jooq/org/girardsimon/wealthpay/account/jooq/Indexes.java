@@ -27,5 +27,4 @@ public class Indexes {
     public static final Index IDX_EVENT_STORE_ACCOUNT_ID_VERSION = Internal.createIndex(DSL.name("idx_event_store_account_id_version"), EventStore.EVENT_STORE, new OrderField[] { EventStore.EVENT_STORE.ACCOUNT_ID, EventStore.EVENT_STORE.VERSION }, false);
     public static final Index IDX_EVENT_STORE_EVENT_ID = Internal.createIndex(DSL.name("idx_event_store_event_id"), EventStore.EVENT_STORE, new OrderField[] { EventStore.EVENT_STORE.EVENT_ID }, true);
     public static final Index OUTBOX_AGGREGATE_ORDER_IDX = Internal.createIndex(DSL.name("outbox_aggregate_order_idx"), Outbox.OUTBOX, new OrderField[] { Outbox.OUTBOX.AGGREGATE_ID, Outbox.OUTBOX.AGGREGATE_VERSION }, false);
-    public static final Index OUTBOX_PENDING_IDX = Internal.createIndex(DSL.name("outbox_pending_idx"), Outbox.OUTBOX, new OrderField[] { Outbox.OUTBOX.STATUS, Outbox.OUTBOX.AVAILABLE_AT, Outbox.OUTBOX.OUTBOX_ID }, false);
 }

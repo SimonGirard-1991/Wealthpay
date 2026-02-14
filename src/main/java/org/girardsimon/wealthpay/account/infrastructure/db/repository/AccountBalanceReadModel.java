@@ -20,8 +20,8 @@ import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountBalanceViewEntryToDomainMapper;
 import org.girardsimon.wealthpay.account.jooq.tables.records.AccountBalanceViewRecord;
 import org.jooq.DSLContext;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class AccountBalanceReadModel implements AccountBalanceProjector {
@@ -64,6 +64,23 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
     currentState.version = event.version();
   }
 
+  private static void applyEvents(List<AccountEvent> events, ProjectionState currentState) {
+    events.forEach(
+        event -> {
+          long expectedNextVersion = currentState.version + 1;
+
+          if (event.version() < expectedNextVersion) {
+            return;
+          }
+          if (event.version() != expectedNextVersion) {
+            throw new IllegalStateException(
+                "Non contiguous versions for account %s: expected %d but got %d"
+                    .formatted(event.accountId().id(), currentState.version, event.version()));
+          }
+          applyEventToState(event, currentState);
+        });
+  }
+
   @Override
   public AccountBalanceView getAccountBalance(AccountId accountId) {
     return dslContext
@@ -82,6 +99,7 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
   }
 
   @Override
+  @Transactional
   public void project(List<AccountEvent> events) {
     if (events.isEmpty()) {
       return;
@@ -111,16 +129,11 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
                         currentRecord.get(ACCOUNT_BALANCE_VIEW.VERSION)))
             .orElseGet(ProjectionState::init);
 
-    events.forEach(
-        event -> {
-          long expectedNextVersion = currentState.version + 1;
-          if (event.version() != expectedNextVersion) {
-            throw new OptimisticLockingFailureException(
-                "Non contiguous versions for account %s: expected %d but got %d"
-                    .formatted(accountId.id(), currentState.version, event.version()));
-          }
-          applyEventToState(event, currentState);
-        });
+    long initialVersion = currentState.version;
+    applyEvents(events, currentState);
+    if (currentState.version == initialVersion) {
+      return;
+    }
 
     AccountBalanceViewRecord row = dslContext.newRecord(ACCOUNT_BALANCE_VIEW);
     row.setAccountId(accountId.id());
@@ -130,20 +143,14 @@ public class AccountBalanceReadModel implements AccountBalanceProjector {
     row.setStatus(currentState.status);
     row.setVersion(currentState.version);
 
-    int affectedRows =
-        dslContext
-            .insertInto(ACCOUNT_BALANCE_VIEW)
-            .set(row)
-            .onConflict(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID)
-            .doUpdate()
-            .set(row)
-            .where(ACCOUNT_BALANCE_VIEW.VERSION.lt(currentState.version))
-            .execute();
-
-    if (affectedRows == 0) {
-      throw new OptimisticLockingFailureException(
-          "Concurrent update detected for account %s".formatted(accountId.id()));
-    }
+    dslContext
+        .insertInto(ACCOUNT_BALANCE_VIEW)
+        .set(row)
+        .onConflict(ACCOUNT_BALANCE_VIEW.ACCOUNT_ID)
+        .doUpdate()
+        .set(row)
+        .where(ACCOUNT_BALANCE_VIEW.VERSION.lt(currentState.version))
+        .execute();
   }
 
   private static final class ProjectionState {

@@ -81,6 +81,17 @@ public class AccountEventRepository implements AccountEventStore {
     long nextExpectedVersion = actualVersion;
 
     try {
+
+      var insertStep =
+          dslContext
+              .insertInto(EVENT_STORE)
+              .columns(
+                  EVENT_STORE.EVENT_ID,
+                  EVENT_STORE.ACCOUNT_ID,
+                  EVENT_STORE.VERSION,
+                  EVENT_STORE.EVENT_TYPE,
+                  EVENT_STORE.PAYLOAD);
+
       for (AccountEvent event : events) {
         nextExpectedVersion++;
         if (event.version() != nextExpectedVersion) {
@@ -92,17 +103,11 @@ public class AccountEventRepository implements AccountEventStore {
         String eventType = event.getClass().getSimpleName();
         JSONB payload = accountEventSerializer.apply(event);
 
-        dslContext
-            .insertInto(EVENT_STORE)
-            .columns(
-                EVENT_STORE.EVENT_ID,
-                EVENT_STORE.ACCOUNT_ID,
-                EVENT_STORE.VERSION,
-                EVENT_STORE.EVENT_TYPE,
-                EVENT_STORE.PAYLOAD)
-            .values(event.eventId().id(), accountUuid, event.version(), eventType, payload)
-            .execute();
+        insertStep.values(event.eventId().id(), accountUuid, event.version(), eventType, payload);
       }
+
+      insertStep.execute();
+
     } catch (DataIntegrityViolationException e) {
       throw new OptimisticLockingFailureException(
           "Concurrent modification detected for account %s".formatted(accountUuid), e);
