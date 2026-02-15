@@ -89,7 +89,7 @@ public class Outbox extends TableImpl<OutboxRecord> {
     /**
      * The column <code>account.outbox.occurred_at</code>.
      */
-    public final TableField<OutboxRecord, OffsetDateTime> OCCURRED_AT = createField(DSL.name("occurred_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
+    public final TableField<OutboxRecord, OffsetDateTime> OCCURRED_AT = createField(DSL.name("occurred_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "");
 
     /**
      * The column <code>account.outbox.payload</code>.
