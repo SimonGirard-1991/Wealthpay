@@ -5,8 +5,10 @@ import java.time.Instant;
 import java.util.List;
 import org.girardsimon.wealthpay.account.application.response.CaptureReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationCaptureStatus;
+import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
+import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
@@ -22,22 +24,25 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccountApplicationService {
 
   private final AccountEventStore accountEventStore;
-  private final AccountBalanceProjector accountBalanceProjector;
+  private final AccountBalanceReader accountBalanceReader;
   private final AccountEventPublisher accountEventPublisher;
+  private final ProcessedTransactionStore processedTransactionStore;
   private final Clock clock;
   private final AccountIdGenerator accountIdGenerator;
   private final EventIdGenerator eventIdGenerator;
 
   public AccountApplicationService(
       AccountEventStore accountEventStore,
-      AccountBalanceProjector accountBalanceProjector,
+      AccountBalanceReader accountBalanceReader,
       AccountEventPublisher accountEventPublisher,
+      ProcessedTransactionStore processedTransactionStore,
       Clock clock,
       AccountIdGenerator accountIdGenerator,
       EventIdGenerator eventIdGenerator) {
     this.accountEventStore = accountEventStore;
-    this.accountBalanceProjector = accountBalanceProjector;
+    this.accountBalanceReader = accountBalanceReader;
     this.accountEventPublisher = accountEventPublisher;
+    this.processedTransactionStore = processedTransactionStore;
     this.clock = clock;
     this.accountIdGenerator = accountIdGenerator;
     this.eventIdGenerator = eventIdGenerator;
@@ -61,7 +66,7 @@ public class AccountApplicationService {
 
   @Transactional(readOnly = true)
   public AccountBalanceView getAccountBalance(AccountId accountId) {
-    return accountBalanceProjector.getAccountBalance(accountId);
+    return accountBalanceReader.getAccountBalance(accountId);
   }
 
   @Transactional
@@ -95,5 +100,31 @@ public class AccountApplicationService {
         captureReservation.reservationId(),
         ReservationCaptureStatus.CAPTURED,
         reservationCaptured.money());
+  }
+
+  @Transactional
+  public TransactionStatus creditAccount(CreditAccount creditAccount) {
+    TransactionStatus transactionStatus =
+        processedTransactionStore.register(
+            creditAccount.accountId(), creditAccount.transactionId(), Instant.now(clock));
+
+    if (transactionStatus == TransactionStatus.NO_EFFECT) {
+      return transactionStatus;
+    }
+
+    List<AccountEvent> history = accountEventStore.loadEvents(creditAccount.accountId());
+    if (history.isEmpty()) {
+      throw new AccountHistoryNotFound();
+    }
+    Account account = Account.rehydrate(history);
+    List<AccountEvent> creditAccountEvents =
+        account.handle(creditAccount, eventIdGenerator, Instant.now(clock));
+
+    long versionBeforeEvents = versionBeforeEvents(account, creditAccountEvents);
+    accountEventStore.appendEvents(
+        creditAccount.accountId(), versionBeforeEvents, creditAccountEvents);
+    accountEventPublisher.publish(creditAccountEvents);
+
+    return transactionStatus;
   }
 }

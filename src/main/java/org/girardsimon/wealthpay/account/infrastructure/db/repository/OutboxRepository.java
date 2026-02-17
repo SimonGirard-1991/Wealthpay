@@ -2,7 +2,8 @@ package org.girardsimon.wealthpay.account.infrastructure.db.repository;
 
 import static org.girardsimon.wealthpay.account.jooq.tables.Outbox.OUTBOX;
 
-import java.time.ZoneOffset;
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.girardsimon.wealthpay.account.application.AccountEventPublisher;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
@@ -17,9 +18,13 @@ public class OutboxRepository implements AccountEventPublisher {
   private final DSLContext dslContext;
   private final AccountEventSerializer accountEventSerializer;
 
-  public OutboxRepository(DSLContext dslContext, AccountEventSerializer accountEventSerializer) {
+  private final Clock clock;
+
+  public OutboxRepository(
+      DSLContext dslContext, AccountEventSerializer accountEventSerializer, Clock clock) {
     this.dslContext = dslContext;
     this.accountEventSerializer = accountEventSerializer;
+    this.clock = clock;
   }
 
   @Override
@@ -50,7 +55,7 @@ public class OutboxRepository implements AccountEventPublisher {
           event.accountId().id(),
           event.version(),
           eventType,
-          event.occurredAt().atOffset(ZoneOffset.UTC),
+          OffsetDateTime.ofInstant(event.occurredAt(), clock.getZone()),
           payload);
     }
 

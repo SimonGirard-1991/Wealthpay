@@ -30,9 +30,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
-@WebMvcTest(OpenAccountController.class)
+@WebMvcTest(AccountController.class)
 @Import(GlobalExceptionHandler.class)
-class OpenAccountControllerTest {
+class AccountControllerTest {
 
   @MockitoBean AccountApplicationService accountApplicationService;
 

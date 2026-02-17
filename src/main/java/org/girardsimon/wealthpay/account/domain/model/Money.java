@@ -4,7 +4,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * Immutable value object representing a monetary amount in a specific currency.
+ * Immutable value object representing a posted monetary amount in a specific currency.
+ *
+ * <p>A Money value is legally payable and must respect ISO 4217 fraction digits. It is suitable for
+ * balances, transactions, statements, and settlements.
+ *
+ * <p>This type must NOT be used for intermediate financial calculations (e.g., interest accruals,
+ * FX conversions, price computations). Such calculations require higher precision and must be
+ * converted to Money only at posting time.
  *
  * <p>This class guarantees the following invariants:
  *

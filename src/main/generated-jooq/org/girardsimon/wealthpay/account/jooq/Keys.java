@@ -8,10 +8,12 @@ import org.girardsimon.wealthpay.account.jooq.tables.AccountBalanceView;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
+import org.girardsimon.wealthpay.account.jooq.tables.ProcessedTransactions;
 import org.girardsimon.wealthpay.account.jooq.tables.records.AccountBalanceViewRecord;
 import org.girardsimon.wealthpay.account.jooq.tables.records.EventStoreRecord;
 import org.girardsimon.wealthpay.account.jooq.tables.records.FlywaySchemaHistoryRecord;
 import org.girardsimon.wealthpay.account.jooq.tables.records.OutboxRecord;
+import org.girardsimon.wealthpay.account.jooq.tables.records.ProcessedTransactionsRecord;
 import org.jooq.TableField;
 import org.jooq.UniqueKey;
 import org.jooq.impl.DSL;
@@ -35,4 +37,5 @@ public class Keys {
     public static final UniqueKey<FlywaySchemaHistoryRecord> FLYWAY_SCHEMA_HISTORY_PK = Internal.createUniqueKey(FlywaySchemaHistory.FLYWAY_SCHEMA_HISTORY, DSL.name("flyway_schema_history_pk"), new TableField[] { FlywaySchemaHistory.FLYWAY_SCHEMA_HISTORY.INSTALLED_RANK }, true);
     public static final UniqueKey<OutboxRecord> OUTBOX_EVENT_ID_KEY = Internal.createUniqueKey(Outbox.OUTBOX, DSL.name("outbox_event_id_key"), new TableField[] { Outbox.OUTBOX.EVENT_ID }, true);
     public static final UniqueKey<OutboxRecord> OUTBOX_PKEY = Internal.createUniqueKey(Outbox.OUTBOX, DSL.name("outbox_pkey"), new TableField[] { Outbox.OUTBOX.OUTBOX_ID }, true);
+    public static final UniqueKey<ProcessedTransactionsRecord> PROCESSED_TRANSACTIONS_PKEY = Internal.createUniqueKey(ProcessedTransactions.PROCESSED_TRANSACTIONS, DSL.name("processed_transactions_pkey"), new TableField[] { ProcessedTransactions.PROCESSED_TRANSACTIONS.ACCOUNT_ID, ProcessedTransactions.PROCESSED_TRANSACTIONS.TRANSACTION_ID }, true);
 }

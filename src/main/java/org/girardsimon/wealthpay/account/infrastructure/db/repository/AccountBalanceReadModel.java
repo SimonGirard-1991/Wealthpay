@@ -5,6 +5,7 @@ import static org.girardsimon.wealthpay.account.jooq.tables.AccountBalanceView.A
 import java.math.BigDecimal;
 import java.util.List;
 import org.girardsimon.wealthpay.account.application.AccountBalanceProjector;
+import org.girardsimon.wealthpay.account.application.AccountBalanceReader;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.event.AccountClosed;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
@@ -24,7 +25,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
-public class AccountBalanceReadModel implements AccountBalanceProjector {
+public class AccountBalanceReadModel implements AccountBalanceProjector, AccountBalanceReader {
 
   private final DSLContext dslContext;
 

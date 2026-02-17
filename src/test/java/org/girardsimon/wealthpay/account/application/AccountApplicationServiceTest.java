@@ -19,12 +19,15 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.girardsimon.wealthpay.account.application.response.CaptureReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationCaptureStatus;
+import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
+import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.AccountEventMeta;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
+import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
@@ -35,6 +38,7 @@ import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -43,11 +47,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AccountApplicationServiceTest {
 
+  public static final Instant INSTANT_FOR_TESTS = Instant.parse("2025-11-16T15:00:00Z");
   AccountEventStore accountEventStore = mock(AccountEventStore.class);
-  AccountBalanceProjector accountBalanceProjector = mock(AccountBalanceProjector.class);
+  AccountBalanceReader accountBalanceReader = mock(AccountBalanceReader.class);
   AccountEventPublisher accountEventPublisher = mock(AccountEventPublisher.class);
+  ProcessedTransactionStore processedTransactionStore = mock(ProcessedTransactionStore.class);
 
-  Clock clock = Clock.fixed(Instant.parse("2025-11-16T15:00:00Z"), ZoneOffset.UTC);
+  Clock clock = Clock.fixed(INSTANT_FOR_TESTS, ZoneOffset.UTC);
 
   AccountId accountId = AccountId.newId();
   EventId eventId = EventId.newId();
@@ -58,8 +64,9 @@ class AccountApplicationServiceTest {
   AccountApplicationService accountApplicationService =
       new AccountApplicationService(
           accountEventStore,
-          accountBalanceProjector,
+          accountBalanceReader,
           accountEventPublisher,
+          processedTransactionStore,
           clock,
           accountIdGenerator,
           eventIdGenerator);
@@ -89,7 +96,7 @@ class AccountApplicationServiceTest {
     // Arrange
     AccountId uuid = AccountId.newId();
     AccountBalanceView mock = mock(AccountBalanceView.class);
-    when(accountBalanceProjector.getAccountBalance(uuid)).thenReturn(mock);
+    when(accountBalanceReader.getAccountBalance(uuid)).thenReturn(mock);
 
     // Act
     AccountBalanceView accountBalanceView = accountApplicationService.getAccountBalance(uuid);
@@ -123,7 +130,7 @@ class AccountApplicationServiceTest {
 
     // Assert
     AccountEventMeta accountEventMeta =
-        AccountEventMeta.of(eventId, accountId, Instant.parse("2025-11-16T15:00:00Z"), 3L);
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 3L);
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(accountEventMeta, reservationId, reservedAmount);
     InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
@@ -163,7 +170,7 @@ class AccountApplicationServiceTest {
 
     // Assert
     AccountEventMeta accountEventMeta =
-        AccountEventMeta.of(eventId, accountId, Instant.parse("2025-11-16T15:00:00Z"), 3L);
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 3L);
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(accountEventMeta, reservationId, reservedAmount);
     verify(accountEventStore, times(0)).appendEvents(any(), anyLong(), any());
@@ -187,5 +194,52 @@ class AccountApplicationServiceTest {
     // Act ... Assert
     assertThatExceptionOfType(AccountHistoryNotFound.class)
         .isThrownBy(() -> accountApplicationService.captureReservation(captureReservation));
+  }
+
+  @Test
+  void creditAccount_should_not_persist_event_when_transaction_status_is_no_effect() {
+    // Arrange
+    TransactionId transactionId = TransactionId.newId();
+    Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.EUR);
+    CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
+    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.NO_EFFECT);
+
+    // Act
+    TransactionStatus transactionStatus = accountApplicationService.creditAccount(creditAccount);
+
+    // Assert
+    assertThat(transactionStatus).isEqualTo(TransactionStatus.NO_EFFECT);
+    verifyNoInteractions(accountEventStore);
+    verifyNoInteractions(accountEventPublisher);
+  }
+
+  @Test
+  void creditAccount_should_save_funds_credited_event_when_transaction_status_is_committed() {
+    // Arrange
+    TransactionId transactionId = TransactionId.newId();
+    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.COMMITTED);
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    List<AccountEvent> accountEvents = List.of(accountOpened);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    Money money = Money.of(new BigDecimal("50.00"), SupportedCurrency.USD);
+    CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
+
+    // Act
+    TransactionStatus transactionStatus = accountApplicationService.creditAccount(creditAccount);
+
+    // Assert
+    AccountEventMeta accountEventMeta =
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 2L);
+    FundsCredited fundsCredited = new FundsCredited(accountEventMeta, transactionId, money);
+    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
+    inOrder.verify(accountEventStore).appendEvents(accountId, 1L, List.of(fundsCredited));
+    inOrder.verify(accountEventPublisher).publish(List.of(fundsCredited));
+    assertThat(transactionStatus).isEqualTo(TransactionStatus.COMMITTED);
   }
 }

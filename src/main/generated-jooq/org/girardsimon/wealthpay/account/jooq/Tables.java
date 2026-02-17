@@ -8,6 +8,7 @@ import org.girardsimon.wealthpay.account.jooq.tables.AccountBalanceView;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
+import org.girardsimon.wealthpay.account.jooq.tables.ProcessedTransactions;
 
 
 /**
@@ -35,4 +36,9 @@ public class Tables {
      * The table <code>account.outbox</code>.
      */
     public static final Outbox OUTBOX = Outbox.OUTBOX;
+
+    /**
+     * The table <code>account.processed_transactions</code>.
+     */
+    public static final ProcessedTransactions PROCESSED_TRANSACTIONS = ProcessedTransactions.PROCESSED_TRANSACTIONS;
 }

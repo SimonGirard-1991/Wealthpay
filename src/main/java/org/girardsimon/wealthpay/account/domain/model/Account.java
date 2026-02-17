@@ -87,14 +87,14 @@ public class Account {
   public List<AccountEvent> handle(
       CreditAccount creditAccount, EventIdGenerator eventIdGenerator, Instant occurredAt) {
     ensureAccountIdConsistency(creditAccount.accountId());
-    checkCurrencyConsistency(creditAccount.amount().currency());
-    checkStrictlyPositiveAmount(creditAccount.amount());
+    checkCurrencyConsistency(creditAccount.money().currency());
+    checkStrictlyPositiveAmount(creditAccount.money());
     ensureActive();
     AccountEventMeta meta =
         AccountEventMeta.of(
             eventIdGenerator.newId(), creditAccount.accountId(), occurredAt, this.version + 1);
     FundsCredited fundsCredited =
-        new FundsCredited(meta, creditAccount.transactionId(), creditAccount.amount());
+        new FundsCredited(meta, creditAccount.transactionId(), creditAccount.money());
     apply(fundsCredited);
     return List.of(fundsCredited);
   }
@@ -102,17 +102,17 @@ public class Account {
   public List<AccountEvent> handle(
       DebitAccount debitAccount, EventIdGenerator eventIdGenerator, Instant occurredAt) {
     ensureAccountIdConsistency(debitAccount.accountId());
-    checkCurrencyConsistency(debitAccount.amount().currency());
-    checkStrictlyPositiveAmount(debitAccount.amount());
+    checkCurrencyConsistency(debitAccount.money().currency());
+    checkStrictlyPositiveAmount(debitAccount.money());
     ensureActive();
-    if (debitAccount.amount().isGreaterThan(getAvailableBalance())) {
+    if (debitAccount.money().isGreaterThan(getAvailableBalance())) {
       throw new InsufficientFundsException();
     }
     AccountEventMeta meta =
         AccountEventMeta.of(
             eventIdGenerator.newId(), debitAccount.accountId(), occurredAt, this.version + 1);
     FundsDebited fundsDebited =
-        new FundsDebited(meta, debitAccount.transactionId(), debitAccount.amount());
+        new FundsDebited(meta, debitAccount.transactionId(), debitAccount.money());
     apply(fundsDebited);
     return List.of(fundsDebited);
   }

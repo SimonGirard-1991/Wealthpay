@@ -212,6 +212,7 @@
                                 <dateLibrary>java8</dateLibrary>
                                 <disallowAdditionalPropertiesIfNotPresent>false
                                 </disallowAdditionalPropertiesIfNotPresent>
+                                <useTags>true</useTags>
                             </configOptions>
                         </configuration>
                     </execution>
@@ -236,6 +237,7 @@
                                 <dateLibrary>java8</dateLibrary>
                                 <disallowAdditionalPropertiesIfNotPresent>false
                                 </disallowAdditionalPropertiesIfNotPresent>
+                                <useTags>true</useTags>
                             </configOptions>
                         </configuration>
                     </execution>

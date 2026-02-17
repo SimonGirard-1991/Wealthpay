@@ -2,7 +2,7 @@ package org.girardsimon.wealthpay.account.infrastructure.web;
 
 import java.net.URI;
 import java.util.UUID;
-import org.girardsimon.wealthpay.account.api.generated.AccountsApi;
+import org.girardsimon.wealthpay.account.api.generated.AccountApi;
 import org.girardsimon.wealthpay.account.api.generated.model.AccountResponseDto;
 import org.girardsimon.wealthpay.account.api.generated.model.OpenAccountRequestDto;
 import org.girardsimon.wealthpay.account.api.generated.model.OpenAccountResponseDto;
@@ -17,14 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
-public class OpenAccountController implements AccountsApi {
+public class AccountController implements AccountApi {
 
   private final AccountApplicationService accountApplicationService;
 
   private final OpenAccountDtoToDomainMapper openAccountDtoToDomainMapper;
   private final AccountBalanceViewDomainToDtoMapper accountBalanceViewDomainToDtoMapper;
 
-  public OpenAccountController(
+  public AccountController(
       AccountApplicationService accountApplicationService,
       OpenAccountDtoToDomainMapper openAccountDtoToDomainMapper,
       AccountBalanceViewDomainToDtoMapper accountBalanceViewDomainToDtoMapper) {

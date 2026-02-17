@@ -11,6 +11,8 @@ servers:
 paths:
   /accounts:
     post:
+      tags:
+        - Account
       summary: Open new bank account
       operationId: openAccount
       requestBody:
@@ -29,6 +31,8 @@ paths:
 
   /accounts/{id}:
     get:
+      tags:
+        - Account
       summary: Get the details of an account
       operationId: getAccountById
       parameters:
@@ -46,6 +50,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountResponse'
+  /accounts/{id}/deposits:
+    post:
+      tags:
+        - Account Transaction
+      summary: Deposit money into an account
+      operationId: creditAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditAccountRequest'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique account identifier (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: Transaction-Id
+          in: header
+          required: true
+          description: Unique transaction identifier (UUID) for Idempotency
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transaction status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
 
 components:
   schemas:
@@ -66,6 +104,20 @@ components:
         initialAmountCurrency:
           description: Currency of the initial deposit
           $ref: '#/components/schemas/SupportedCurrency'
+
+    CreditAccountRequest:
+      type: object
+      required:
+        - currency
+        - amount
+      properties:
+        currency:
+          description: Deposit currency
+          $ref: '#/components/schemas/SupportedCurrency'
+        amount:
+          type: number
+          description: Deposit amount
+          exclusiveMinimum: 0
 
     OpenAccountResponse:
       type: object
@@ -140,3 +192,18 @@ components:
       enum:
         - OPENED
         - CLOSED
+
+    TransactionResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/TransactionStatus'
+
+    TransactionStatus:
+      type: string
+      description: Transaction Status
+      enum:
+        - NO_EFFECT
+        - COMMITTED
