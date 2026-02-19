@@ -9,11 +9,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.girardsimon.wealthpay.account.api.generated.model.CreditAccountRequestDto;
+import org.girardsimon.wealthpay.account.api.generated.model.DebitAccountRequestDto;
 import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDto;
 import org.girardsimon.wealthpay.account.application.AccountApplicationService;
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
+import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CreditAccountDtoToDomainMapper;
+import org.girardsimon.wealthpay.account.infrastructure.web.mapper.DebitAccountDtoToDomainMapper;
 import org.girardsimon.wealthpay.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +34,8 @@ class AccountTransactionControllerTest {
   @MockitoBean AccountApplicationService accountApplicationService;
 
   @MockitoBean CreditAccountDtoToDomainMapper creditAccountDtoToDomainMapper;
+
+  @MockitoBean DebitAccountDtoToDomainMapper debitAccountDtoToDomainMapper;
 
   @Autowired MockMvc mockMvc;
 
@@ -58,6 +63,32 @@ class AccountTransactionControllerTest {
                 .header("Transaction-Id", transactionId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(creditAccountRequestDto)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("COMMITTED"));
+  }
+
+  @Test
+  void debitAccount_should_return_200_with_transaction_status() throws Exception {
+    // Arrange
+    UUID accountId = UUID.randomUUID();
+    UUID transactionId = UUID.randomUUID();
+    DebitAccountRequestDto debitAccountRequestDto =
+        new DebitAccountRequestDto()
+            .amount(BigDecimal.valueOf(100.50))
+            .currency(SupportedCurrencyDto.USD);
+    DebitAccount debitAccount = mock(DebitAccount.class);
+    when(debitAccountDtoToDomainMapper.apply(accountId, transactionId, debitAccountRequestDto))
+        .thenReturn(debitAccount);
+    when(accountApplicationService.debitAccount(debitAccount))
+        .thenReturn(TransactionStatus.COMMITTED);
+
+    // Act ... Assert
+    mockMvc
+        .perform(
+            post("/accounts/{id}/withdrawals", accountId)
+                .header("Transaction-Id", transactionId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(debitAccountRequestDto)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("COMMITTED"));
   }

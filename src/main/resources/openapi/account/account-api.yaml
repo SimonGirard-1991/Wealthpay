@@ -85,6 +85,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/TransactionResponse'
 
+  /accounts/{id}/withdrawals:
+    post:
+      tags:
+        - Account Transaction
+      summary: Withdraw money from an account
+      operationId: debitAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DebitAccountRequest'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique account identifier (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: Transaction-Id
+          in: header
+          required: true
+          description: Unique transaction identifier (UUID) for Idempotency
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transaction status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
 components:
   schemas:
     OpenAccountRequest:
@@ -117,6 +151,20 @@ components:
         amount:
           type: number
           description: Deposit amount
+          exclusiveMinimum: 0
+
+    DebitAccountRequest:
+      type: object
+      required:
+        - currency
+        - amount
+      properties:
+        currency:
+          description: Withdrawal currency
+          $ref: '#/components/schemas/SupportedCurrency'
+        amount:
+          type: number
+          description: Withdrawal amount
           exclusiveMinimum: 0
 
     OpenAccountResponse:

@@ -3,16 +3,18 @@ package org.girardsimon.wealthpay.account.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.BiFunction;
 import org.girardsimon.wealthpay.account.application.response.CaptureReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationCaptureStatus;
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
+import org.girardsimon.wealthpay.account.domain.command.AccountTransaction;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
 import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
+import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
-import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
@@ -52,15 +54,23 @@ public class AccountApplicationService {
     return account.getVersion() - events.size();
   }
 
+  private Account loadAccount(AccountId accountId) {
+    List<AccountEvent> history = accountEventStore.loadEvents(accountId);
+    return Account.rehydrate(history);
+  }
+
+  private void saveEvents(
+      long expectedVersion, List<AccountEvent> accountEvents, AccountId accountId) {
+    accountEventStore.appendEvents(accountId, expectedVersion, accountEvents);
+    accountEventPublisher.publish(accountEvents);
+  }
+
   @Transactional
   public AccountId openAccount(OpenAccount openAccount) {
     AccountId accountId = accountIdGenerator.newId();
-
-    long expectedVersion = 0L;
     List<AccountEvent> createdAccountEvents =
         Account.handle(openAccount, accountId, eventIdGenerator, Instant.now(clock));
-    accountEventStore.appendEvents(accountId, expectedVersion, createdAccountEvents);
-    accountEventPublisher.publish(createdAccountEvents);
+    saveEvents(0L, createdAccountEvents, accountId);
     return accountId;
   }
 
@@ -72,11 +82,8 @@ public class AccountApplicationService {
   @Transactional
   public CaptureReservationResponse captureReservation(CaptureReservation captureReservation) {
     AccountId accountId = captureReservation.accountId();
-    List<AccountEvent> history = accountEventStore.loadEvents(accountId);
-    if (history.isEmpty()) {
-      throw new AccountHistoryNotFound();
-    }
-    Account account = Account.rehydrate(history);
+    Account account = loadAccount(accountId);
+
     List<AccountEvent> captureReservationEvents =
         account.handle(captureReservation, eventIdGenerator, Instant.now(clock));
 
@@ -93,8 +100,7 @@ public class AccountApplicationService {
     }
 
     long versionBeforeEvents = versionBeforeEvents(account, captureReservationEvents);
-    accountEventStore.appendEvents(accountId, versionBeforeEvents, captureReservationEvents);
-    accountEventPublisher.publish(captureReservationEvents);
+    saveEvents(versionBeforeEvents, captureReservationEvents, accountId);
     return new CaptureReservationResponse(
         accountId,
         captureReservation.reservationId(),
@@ -102,29 +108,30 @@ public class AccountApplicationService {
         reservationCaptured.money());
   }
 
+  private TransactionStatus processTransaction(
+      AccountTransaction command, BiFunction<Account, Instant, List<AccountEvent>> handler) {
+    Instant now = Instant.now(clock);
+    TransactionStatus status =
+        processedTransactionStore.register(command.accountId(), command.transactionId(), now);
+    if (status == TransactionStatus.NO_EFFECT) {
+      return status;
+    }
+    Account account = loadAccount(command.accountId());
+    List<AccountEvent> events = handler.apply(account, now);
+    long versionBeforeEvents = versionBeforeEvents(account, events);
+    saveEvents(versionBeforeEvents, events, command.accountId());
+    return status;
+  }
+
   @Transactional
   public TransactionStatus creditAccount(CreditAccount creditAccount) {
-    TransactionStatus transactionStatus =
-        processedTransactionStore.register(
-            creditAccount.accountId(), creditAccount.transactionId(), Instant.now(clock));
+    return processTransaction(
+        creditAccount, (account, now) -> account.handle(creditAccount, eventIdGenerator, now));
+  }
 
-    if (transactionStatus == TransactionStatus.NO_EFFECT) {
-      return transactionStatus;
-    }
-
-    List<AccountEvent> history = accountEventStore.loadEvents(creditAccount.accountId());
-    if (history.isEmpty()) {
-      throw new AccountHistoryNotFound();
-    }
-    Account account = Account.rehydrate(history);
-    List<AccountEvent> creditAccountEvents =
-        account.handle(creditAccount, eventIdGenerator, Instant.now(clock));
-
-    long versionBeforeEvents = versionBeforeEvents(account, creditAccountEvents);
-    accountEventStore.appendEvents(
-        creditAccount.accountId(), versionBeforeEvents, creditAccountEvents);
-    accountEventPublisher.publish(creditAccountEvents);
-
-    return transactionStatus;
+  @Transactional
+  public TransactionStatus debitAccount(DebitAccount debitAccount) {
+    return processTransaction(
+        debitAccount, (account, now) -> account.handle(debitAccount, eventIdGenerator, now));
   }
 }

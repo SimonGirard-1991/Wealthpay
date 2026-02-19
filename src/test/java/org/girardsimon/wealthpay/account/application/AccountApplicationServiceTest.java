@@ -23,11 +23,13 @@ import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
 import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
+import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.AccountEventMeta;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
+import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
@@ -240,6 +242,53 @@ class AccountApplicationServiceTest {
     InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
     inOrder.verify(accountEventStore).appendEvents(accountId, 1L, List.of(fundsCredited));
     inOrder.verify(accountEventPublisher).publish(List.of(fundsCredited));
+    assertThat(transactionStatus).isEqualTo(TransactionStatus.COMMITTED);
+  }
+
+  @Test
+  void debitAccount_should_not_persist_event_when_transaction_status_is_no_effect() {
+    // Arrange
+    TransactionId transactionId = TransactionId.newId();
+    Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.EUR);
+    DebitAccount debitAccount = new DebitAccount(transactionId, accountId, money);
+    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.NO_EFFECT);
+
+    // Act
+    TransactionStatus transactionStatus = accountApplicationService.debitAccount(debitAccount);
+
+    // Assert
+    assertThat(transactionStatus).isEqualTo(TransactionStatus.NO_EFFECT);
+    verifyNoInteractions(accountEventStore);
+    verifyNoInteractions(accountEventPublisher);
+  }
+
+  @Test
+  void debitAccount_should_save_funds_debited_event_when_transaction_status_is_committed() {
+    // Arrange
+    TransactionId transactionId = TransactionId.newId();
+    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.COMMITTED);
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    List<AccountEvent> accountEvents = List.of(accountOpened);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
+    DebitAccount debitAccount = new DebitAccount(transactionId, accountId, money);
+
+    // Act
+    TransactionStatus transactionStatus = accountApplicationService.debitAccount(debitAccount);
+
+    // Assert
+    AccountEventMeta accountEventMeta =
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 2L);
+    FundsDebited fundsDebited = new FundsDebited(accountEventMeta, transactionId, money);
+    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
+    inOrder.verify(accountEventStore).appendEvents(accountId, 1L, List.of(fundsDebited));
+    inOrder.verify(accountEventPublisher).publish(List.of(fundsDebited));
     assertThat(transactionStatus).isEqualTo(TransactionStatus.COMMITTED);
   }
 }

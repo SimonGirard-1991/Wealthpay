@@ -4,7 +4,8 @@ import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 
-public record DebitAccount(TransactionId transactionId, AccountId accountId, Money money) {
+public record DebitAccount(TransactionId transactionId, AccountId accountId, Money money)
+    implements AccountTransaction {
 
   public DebitAccount {
     if (transactionId == null || accountId == null || money == null) {

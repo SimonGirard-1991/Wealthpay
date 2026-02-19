@@ -5,38 +5,38 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 
 import java.math.BigDecimal;
 import java.util.UUID;
-import org.girardsimon.wealthpay.account.api.generated.model.CreditAccountRequestDto;
+import org.girardsimon.wealthpay.account.api.generated.model.DebitAccountRequestDto;
 import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDto;
-import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
+import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.junit.jupiter.api.Test;
 
-class CreditAccountDtoToDomainMapperTest {
+class DebitAccountDtoToDomainMapperTest {
 
-  CreditAccountDtoToDomainMapper mapper = new CreditAccountDtoToDomainMapper();
+  DebitAccountDtoToDomainMapper mapper = new DebitAccountDtoToDomainMapper();
 
   @Test
-  void shouldMapCreditAccountRequestDtoToCreditAccountCommand() {
+  void shouldMapDebitAccountRequestDtoToDebitAccountCommand() {
     // Arrange
     UUID accountId = UUID.randomUUID();
     UUID transactionId = UUID.randomUUID();
-    CreditAccountRequestDto creditAccountRequestDto =
-        new CreditAccountRequestDto()
+    DebitAccountRequestDto debitAccountRequestDto =
+        new DebitAccountRequestDto()
             .currency(SupportedCurrencyDto.USD)
             .amount(BigDecimal.valueOf(100.50));
 
     // Act
-    CreditAccount creditAccount = mapper.apply(accountId, transactionId, creditAccountRequestDto);
+    DebitAccount debitAccount = mapper.apply(accountId, transactionId, debitAccountRequestDto);
 
     // Assert
     assertAll(
-        () -> assertThat(creditAccount.transactionId()).isEqualTo(TransactionId.of(transactionId)),
-        () -> assertThat(creditAccount.accountId()).isEqualTo(AccountId.of(accountId)),
+        () -> assertThat(debitAccount.transactionId()).isEqualTo(TransactionId.of(transactionId)),
+        () -> assertThat(debitAccount.accountId()).isEqualTo(AccountId.of(accountId)),
         () ->
-            assertThat(creditAccount.money())
+            assertThat(debitAccount.money())
                 .isEqualTo(Money.of(BigDecimal.valueOf(100.50), SupportedCurrency.USD)));
   }
 }
