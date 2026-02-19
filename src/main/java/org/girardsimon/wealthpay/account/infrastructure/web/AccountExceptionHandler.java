@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class AccountExceptionHandler {
 
-  Logger log = LoggerFactory.getLogger(AccountExceptionHandler.class);
+  private static final Logger log = LoggerFactory.getLogger(AccountExceptionHandler.class);
 
   @ExceptionHandler({AccountIdMismatchException.class})
   public ResponseEntity<ApiErrorDto> handleBadRequestException(Exception e) {
