@@ -86,7 +86,6 @@ class AccountOpeningTest {
     SupportedCurrency currency = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.ZERO, currency);
     OpenAccount openAccount = new OpenAccount(currency, initialBalance);
-    Instant occurredAt = Instant.now();
 
     // Act
     HandleResult result = Account.handle(openAccount, accountId, eventIdGenerator, Instant.now());

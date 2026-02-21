@@ -184,9 +184,9 @@ class ReserveFundsTest {
 
     // Act ... Assert
     Instant occurredAt = Instant.now();
+    ReservationId reservationId = ReservationId.newId();
     assertThatExceptionOfType(InsufficientFundsException.class)
         .isThrownBy(
-            () ->
-                account.handle(reserveFunds, eventIdGenerator, ReservationId.newId(), occurredAt));
+            () -> account.handle(reserveFunds, eventIdGenerator, reservationId, occurredAt));
   }
 }
