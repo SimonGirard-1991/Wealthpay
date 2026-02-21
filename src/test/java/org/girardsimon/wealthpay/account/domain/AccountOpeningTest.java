@@ -16,6 +16,7 @@ import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
+import org.girardsimon.wealthpay.account.domain.model.HandleResult;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
@@ -34,8 +35,8 @@ class AccountOpeningTest {
     OpenAccount openAccount = new OpenAccount(currency, initialBalance);
 
     // Act
-    List<AccountEvent> events =
-        Account.handle(openAccount, accountId, eventIdGenerator, Instant.now());
+    HandleResult result = Account.handle(openAccount, accountId, eventIdGenerator, Instant.now());
+    List<AccountEvent> events = result.events();
     Account account = Account.rehydrate(events);
 
     // Assert
@@ -88,8 +89,8 @@ class AccountOpeningTest {
     Instant occurredAt = Instant.now();
 
     // Act
-    List<AccountEvent> accountEvents =
-        Account.handle(openAccount, accountId, eventIdGenerator, occurredAt);
+    HandleResult result = Account.handle(openAccount, accountId, eventIdGenerator, Instant.now());
+    List<AccountEvent> accountEvents = result.events();
 
     // Assert
     assertThat(accountEvents).hasSize(1);

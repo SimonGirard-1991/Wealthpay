@@ -18,7 +18,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.exception.AccountCurrencyMismatchException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
@@ -29,7 +29,6 @@ import org.girardsimon.wealthpay.account.domain.exception.AmountMustBePositiveEx
 import org.girardsimon.wealthpay.account.domain.exception.InsufficientFundsException;
 import org.girardsimon.wealthpay.account.domain.exception.InvalidAccountEventStreamException;
 import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceException;
-import org.girardsimon.wealthpay.account.domain.exception.ReservationConflictException;
 
 public class Account {
   private final AccountId id;
@@ -44,7 +43,7 @@ public class Account {
     this.currency = currency;
   }
 
-  public static List<AccountEvent> handle(
+  public static HandleResult handle(
       OpenAccount openAccount,
       AccountId accountId,
       EventIdGenerator eventIdGenerator,
@@ -61,7 +60,7 @@ public class Account {
     AccountEventMeta meta =
         AccountEventMeta.of(eventIdGenerator.newId(), accountId, occurredAt, 1L);
     AccountOpened accountOpened = new AccountOpened(meta, accountCurrency, initialBalance);
-    return List.of(accountOpened);
+    return new EventsOnly(List.of(accountOpened));
   }
 
   private static void checkStrictlyPositiveAmount(Money amount) {
@@ -84,7 +83,7 @@ public class Account {
     return account;
   }
 
-  public List<AccountEvent> handle(
+  public HandleResult handle(
       CreditAccount creditAccount, EventIdGenerator eventIdGenerator, Instant occurredAt) {
     ensureAccountIdConsistency(creditAccount.accountId());
     checkCurrencyConsistency(creditAccount.money().currency());
@@ -96,10 +95,10 @@ public class Account {
     FundsCredited fundsCredited =
         new FundsCredited(meta, creditAccount.transactionId(), creditAccount.money());
     apply(fundsCredited);
-    return List.of(fundsCredited);
+    return new EventsOnly(List.of(fundsCredited));
   }
 
-  public List<AccountEvent> handle(
+  public HandleResult handle(
       DebitAccount debitAccount, EventIdGenerator eventIdGenerator, Instant occurredAt) {
     ensureAccountIdConsistency(debitAccount.accountId());
     checkCurrencyConsistency(debitAccount.money().currency());
@@ -114,24 +113,19 @@ public class Account {
     FundsDebited fundsDebited =
         new FundsDebited(meta, debitAccount.transactionId(), debitAccount.money());
     apply(fundsDebited);
-    return List.of(fundsDebited);
+    return new EventsOnly(List.of(fundsDebited));
   }
 
-  public List<AccountEvent> handle(
-      ReserveFunds reserveFunds, EventIdGenerator eventIdGenerator, Instant occurredAt) {
+  public HandleResult handle(
+      ReserveFunds reserveFunds,
+      EventIdGenerator eventIdGenerator,
+      ReservationId reservationId,
+      Instant occurredAt) {
     ensureAccountIdConsistency(reserveFunds.accountId());
     checkCurrencyConsistency(reserveFunds.money().currency());
     checkStrictlyPositiveAmount(reserveFunds.money());
     ensureActive();
 
-    Money existing = this.reservations.get(reserveFunds.reservationId());
-    if (existing != null) {
-      if (existing.equals(reserveFunds.money())) {
-        return List.of();
-      }
-      throw new ReservationConflictException(
-          reserveFunds.reservationId(), existing, reserveFunds.money());
-    }
     if (reserveFunds.money().isGreaterThan(getAvailableBalance())) {
       throw new InsufficientFundsException();
     }
@@ -139,31 +133,29 @@ public class Account {
         AccountEventMeta.of(
             eventIdGenerator.newId(), reserveFunds.accountId(), occurredAt, this.version + 1);
     FundsReserved fundsReserved =
-        new FundsReserved(meta, reserveFunds.reservationId(), reserveFunds.money());
+        new FundsReserved(meta, reserveFunds.transactionId(), reservationId, reserveFunds.money());
     apply(fundsReserved);
-    return List.of(fundsReserved);
+    return new EventsOnly(List.of(fundsReserved));
   }
 
-  public List<AccountEvent> handle(
+  public ReservationOutcome handle(
       CancelReservation cancelReservation, EventIdGenerator eventIdGenerator, Instant occurredAt) {
     ensureAccountIdConsistency(cancelReservation.accountId());
     ensureActive();
     if (!this.reservations.containsKey(cancelReservation.reservationId())) {
-      return List.of();
+      return new ReservationOutcome(List.of(), null);
     }
     AccountEventMeta meta =
         AccountEventMeta.of(
             eventIdGenerator.newId(), cancelReservation.accountId(), occurredAt, this.version + 1);
-    ReservationCancelled reservationCancelled =
-        new ReservationCancelled(
-            meta,
-            cancelReservation.reservationId(),
-            this.reservations.get(cancelReservation.reservationId()));
-    apply(reservationCancelled);
-    return List.of(reservationCancelled);
+    Money money = this.reservations.get(cancelReservation.reservationId());
+    ReservationCanceled reservationCanceled =
+        new ReservationCanceled(meta, cancelReservation.reservationId(), money);
+    apply(reservationCanceled);
+    return new ReservationOutcome(List.of(reservationCanceled), money);
   }
 
-  public List<AccountEvent> handle(
+  public HandleResult handle(
       CloseAccount closeAccount, EventIdGenerator eventIdGenerator, Instant occurredAt) {
     ensureAccountIdConsistency(closeAccount.accountId());
     ensureActive();
@@ -175,10 +167,10 @@ public class Account {
             eventIdGenerator.newId(), closeAccount.accountId(), occurredAt, this.version + 1);
     AccountClosed accountClosed = new AccountClosed(meta);
     apply(accountClosed);
-    return List.of(accountClosed);
+    return new EventsOnly(List.of(accountClosed));
   }
 
-  public List<AccountEvent> handle(
+  public ReservationOutcome handle(
       CaptureReservation captureReservation,
       EventIdGenerator eventIdGenerator,
       Instant occurredAt) {
@@ -186,7 +178,7 @@ public class Account {
     ensureActive();
     Money money = this.reservations.get(captureReservation.reservationId());
     if (money == null) {
-      return List.of();
+      return new ReservationOutcome(List.of(), null);
     }
     AccountEventMeta meta =
         AccountEventMeta.of(
@@ -194,7 +186,7 @@ public class Account {
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(meta, captureReservation.reservationId(), money);
     apply(reservationCaptured);
-    return List.of(reservationCaptured);
+    return new ReservationOutcome(List.of(reservationCaptured), money);
   }
 
   private void ensureAccountIdConsistency(AccountId accountId) {
@@ -228,8 +220,8 @@ public class Account {
       case FundsDebited fundsDebited -> this.balance = this.balance.subtract(fundsDebited.money());
       case FundsReserved fundsReserved ->
           this.reservations.put(fundsReserved.reservationId(), fundsReserved.money());
-      case ReservationCancelled reservationCancelled ->
-          this.reservations.remove(reservationCancelled.reservationId());
+      case ReservationCanceled reservationCanceled ->
+          this.reservations.remove(reservationCanceled.reservationId());
       case ReservationCaptured reservationCaptured -> {
         this.balance = this.balance.subtract(reservationCaptured.money());
         this.reservations.remove(reservationCaptured.reservationId());

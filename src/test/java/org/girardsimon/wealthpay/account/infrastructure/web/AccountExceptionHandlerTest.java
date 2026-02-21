@@ -17,7 +17,8 @@ import org.girardsimon.wealthpay.account.domain.exception.AmountMustBePositiveEx
 import org.girardsimon.wealthpay.account.domain.exception.InsufficientFundsException;
 import org.girardsimon.wealthpay.account.domain.exception.InvalidAccountEventStreamException;
 import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceException;
-import org.girardsimon.wealthpay.account.domain.exception.ReservationConflictException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
@@ -67,12 +68,19 @@ class AccountExceptionHandlerTest {
   }
 
   private static Stream<Arguments> allConflictExceptions() {
-    return Stream.of(Arguments.of(new AccountInactiveException(), "Account is inactive"));
+    ReservationId reservationId = ReservationId.newId();
+    return Stream.of(
+        Arguments.of(new AccountInactiveException(), "Account is inactive"),
+        Arguments.of(
+            new ReservationAlreadyCanceledException(reservationId),
+            "Reservation already canceled: " + reservationId),
+        Arguments.of(
+            new ReservationAlreadyCapturedException(reservationId),
+            "Reservation already captured: " + reservationId));
   }
 
   private static Stream<Arguments> allUnprocessableContentExceptions() {
     Money negativeAmount = Money.of(BigDecimal.valueOf(-100L), SupportedCurrency.USD);
-    ReservationId reservationId = ReservationId.newId();
     return Stream.of(
         Arguments.of(
             new InvalidInitialBalanceException(negativeAmount),
@@ -85,14 +93,6 @@ class AccountExceptionHandlerTest {
             "Amount must be strictly positive, got Money[amount=-100.00, currency=USD]"),
         Arguments.of(
             new InsufficientFundsException(), "Insufficient funds to complete the operation"),
-        Arguments.of(
-            new ReservationConflictException(
-                reservationId,
-                Money.of(BigDecimal.valueOf(10), SupportedCurrency.USD),
-                Money.of(BigDecimal.valueOf(20), SupportedCurrency.USD)),
-            "Reservation already exists: "
-                + reservationId
-                + " with amount Money[amount=10.00, currency=USD] requested Money[amount=20.00, currency=USD]"),
         Arguments.of(new AccountNotEmptyException(), "Account is not empty"),
         Arguments.of(new UnsupportedCurrencyException("BTC"), "Currency BTC is not supported"));
   }

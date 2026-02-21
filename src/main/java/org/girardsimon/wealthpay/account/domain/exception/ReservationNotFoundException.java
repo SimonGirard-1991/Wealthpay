@@ -6,4 +6,8 @@ public class ReservationNotFoundException extends RuntimeException {
   public ReservationNotFoundException(ReservationId reservationId) {
     super("Reservation not found: " + reservationId);
   }
+
+  public ReservationNotFoundException(String message) {
+    super(message);
+  }
 }

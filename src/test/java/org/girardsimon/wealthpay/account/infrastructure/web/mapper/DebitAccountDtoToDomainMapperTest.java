@@ -19,7 +19,7 @@ class DebitAccountDtoToDomainMapperTest {
   DebitAccountDtoToDomainMapper mapper = new DebitAccountDtoToDomainMapper();
 
   @Test
-  void shouldMapDebitAccountRequestDtoToDebitAccountCommand() {
+  void map_debit_account_dto_to_command() {
     // Arrange
     UUID accountId = UUID.randomUUID();
     UUID transactionId = UUID.randomUUID();

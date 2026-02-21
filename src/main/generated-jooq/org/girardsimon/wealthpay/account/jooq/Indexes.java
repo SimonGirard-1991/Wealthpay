@@ -7,6 +7,7 @@ package org.girardsimon.wealthpay.account.jooq;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
+import org.girardsimon.wealthpay.account.jooq.tables.ProcessedReservations;
 import org.jooq.Index;
 import org.jooq.OrderField;
 import org.jooq.impl.DSL;
@@ -27,4 +28,5 @@ public class Indexes {
     public static final Index IDX_EVENT_STORE_ACCOUNT_ID_VERSION = Internal.createIndex(DSL.name("idx_event_store_account_id_version"), EventStore.EVENT_STORE, new OrderField[] { EventStore.EVENT_STORE.ACCOUNT_ID, EventStore.EVENT_STORE.VERSION }, false);
     public static final Index IDX_EVENT_STORE_EVENT_ID = Internal.createIndex(DSL.name("idx_event_store_event_id"), EventStore.EVENT_STORE, new OrderField[] { EventStore.EVENT_STORE.EVENT_ID }, true);
     public static final Index OUTBOX_AGGREGATE_ORDER_IDX = Internal.createIndex(DSL.name("outbox_aggregate_order_idx"), Outbox.OUTBOX, new OrderField[] { Outbox.OUTBOX.AGGREGATE_ID, Outbox.OUTBOX.AGGREGATE_VERSION }, false);
+    public static final Index PROCESSED_RESERVATIONS_OCCURRED_AT_IDX = Internal.createIndex(DSL.name("processed_reservations_occurred_at_idx"), ProcessedReservations.PROCESSED_RESERVATIONS, new OrderField[] { ProcessedReservations.PROCESSED_RESERVATIONS.OCCURRED_AT }, false);
 }

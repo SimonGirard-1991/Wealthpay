@@ -14,7 +14,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
@@ -62,16 +62,16 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
       case FUNDS_CREDITED -> mapFundsCredited(eventStore);
       case FUNDS_DEBITED -> mapFundsDebited(eventStore);
       case FUNDS_RESERVED -> mapFundsReserved(eventStore);
-      case RESERVATION_CANCELLED -> mapReservationCancelled(eventStore);
+      case RESERVATION_CANCELED -> mapReservationCanceled(eventStore);
     };
   }
 
-  private ReservationCancelled mapReservationCancelled(EventStore eventStore) {
+  private ReservationCanceled mapReservationCanceled(EventStore eventStore) {
     JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
     String reservationId = getRequiredField(root, RESERVATION_ID).asString();
 
-    return new ReservationCancelled(
+    return new ReservationCanceled(
         getAccountEventMeta(eventStore, root),
         ReservationId.of(UUID.fromString(reservationId)),
         extractMoney(root));
@@ -80,10 +80,12 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
   private FundsReserved mapFundsReserved(EventStore eventStore) {
     JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
+    String transactionId = getRequiredField(root, TRANSACTION_ID).asString();
     String reservationId = getRequiredField(root, RESERVATION_ID).asString();
 
     return new FundsReserved(
         getAccountEventMeta(eventStore, root),
+        TransactionId.of(UUID.fromString(transactionId)),
         ReservationId.of(UUID.fromString(reservationId)),
         extractMoney(root));
   }
@@ -91,7 +93,7 @@ public class EventStoreEntryToAccountEventMapper implements Function<EventStore,
   private FundsDebited mapFundsDebited(EventStore eventStore) {
     JsonNode root = objectMapper.readTree(eventStore.getPayload().data());
 
-    String transactionId = root.get(TRANSACTION_ID).asString();
+    String transactionId = getRequiredField(root, TRANSACTION_ID).asString();
 
     return new FundsDebited(
         getAccountEventMeta(eventStore, root),

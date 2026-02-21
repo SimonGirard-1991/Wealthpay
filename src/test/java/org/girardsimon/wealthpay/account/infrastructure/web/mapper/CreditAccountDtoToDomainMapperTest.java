@@ -19,7 +19,7 @@ class CreditAccountDtoToDomainMapperTest {
   CreditAccountDtoToDomainMapper mapper = new CreditAccountDtoToDomainMapper();
 
   @Test
-  void shouldMapCreditAccountRequestDtoToCreditAccountCommand() {
+  void map_credit_account_dto_to_command() {
     // Arrange
     UUID accountId = UUID.randomUUID();
     UUID transactionId = UUID.randomUUID();

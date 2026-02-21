@@ -13,7 +13,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
@@ -110,29 +110,33 @@ class AccountEventSerializerTest {
             """);
     AccountEventMeta metaReserved =
         AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 2L);
+    TransactionId transactionIdFundsReserved =
+        TransactionId.of(UUID.fromString("48df9a88-50f0-47c6-96fd-f2afff2abf8d"));
     FundsReserved fundsReserved =
         new FundsReserved(
             metaReserved,
+            transactionIdFundsReserved,
             reservationId,
             Money.of(BigDecimal.valueOf(40.10), SupportedCurrency.GBP));
     JSONB payloadFundsReserved =
         JSONB.valueOf(
             """
             {
+                "transactionId": "48df9a88-50f0-47c6-96fd-f2afff2abf8d",
                 "reservationId": "09518c66-ff5e-4596-9049-74dfbdf6f6db",
                 "currency": "GBP",
                 "amount": 40.10,
                 "occurredAt": "2025-11-16T15:00:00Z"
             }
             """);
-    AccountEventMeta metaCancelled =
+    AccountEventMeta metaCanceled =
         AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 2L);
-    ReservationCancelled reservationCancelled =
-        new ReservationCancelled(
-            metaCancelled,
+    ReservationCanceled reservationCanceled =
+        new ReservationCanceled(
+            metaCanceled,
             reservationId,
             Money.of(BigDecimal.valueOf(40.10), SupportedCurrency.GBP));
-    JSONB payloadReservationCancelled =
+    JSONB payloadReservationCanceled =
         JSONB.valueOf(
             """
             {
@@ -149,7 +153,7 @@ class AccountEventSerializerTest {
         Arguments.of(fundsCredited, payloadFundsCredited),
         Arguments.of(fundsDebited, payloadFundsDebited),
         Arguments.of(fundsReserved, payloadFundsReserved),
-        Arguments.of(reservationCancelled, payloadReservationCancelled));
+        Arguments.of(reservationCanceled, payloadReservationCanceled));
   }
 
   @ParameterizedTest

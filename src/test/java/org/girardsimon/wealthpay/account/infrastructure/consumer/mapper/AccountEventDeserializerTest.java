@@ -19,7 +19,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
@@ -121,42 +121,45 @@ class AccountEventDeserializerTest {
 
     String fundsReservedPayload =
         """
-        {"reservationId":"a8129cdf-801a-430f-9b77-06d2c5377304","currency":"GBP","amount":75.0,"occurredAt":"2025-11-16T15:00:00Z"}
+        {"transactionId":"c18916a0-1d63-417b-a871-9c845bbe80aa","reservationId":"a8129cdf-801a-430f-9b77-06d2c5377304","currency":"GBP","amount":75.0,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
     EventId fundsReservedEventId = EventId.newId();
     ConsumerRecord<String, Object> fundsReserved =
         buildConsumerRecord(
             accountId, fundsReservedEventId, "FundsReserved", occuredAt, 4L, fundsReservedPayload);
     AccountEventMeta meta4 = AccountEventMeta.of(fundsReservedEventId, accountId, occuredAt, 4L);
+    TransactionId fundsReservedTransactionId =
+        TransactionId.of(UUID.fromString("c18916a0-1d63-417b-a871-9c845bbe80aa"));
     ReservationId fundsReservedReservationId =
         ReservationId.of(UUID.fromString("a8129cdf-801a-430f-9b77-06d2c5377304"));
     FundsReserved fundsReservedEvent =
         new FundsReserved(
             meta4,
+            fundsReservedTransactionId,
             fundsReservedReservationId,
             Money.of(new BigDecimal("75.00"), SupportedCurrency.GBP));
 
-    String reservationCancelledPayload =
+    String reservationCanceledPayload =
         """
         {"reservationId":"eb5739f5-d653-4716-8731-07136a5f9891","currency":"JPY","amount":100.0,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
-    EventId reservationCancelledEventId = EventId.newId();
-    ConsumerRecord<String, Object> reservationCancelled =
+    EventId reservationCanceledEventId = EventId.newId();
+    ConsumerRecord<String, Object> reservationCanceled =
         buildConsumerRecord(
             accountId,
-            reservationCancelledEventId,
-            "ReservationCancelled",
+            reservationCanceledEventId,
+            "ReservationCanceled",
             occuredAt,
             5L,
-            reservationCancelledPayload);
+            reservationCanceledPayload);
     AccountEventMeta meta5 =
-        AccountEventMeta.of(reservationCancelledEventId, accountId, occuredAt, 5L);
-    ReservationId reservationCancelledReservationId =
+        AccountEventMeta.of(reservationCanceledEventId, accountId, occuredAt, 5L);
+    ReservationId reservationCanceledReservationId =
         ReservationId.of(UUID.fromString("eb5739f5-d653-4716-8731-07136a5f9891"));
-    ReservationCancelled reservationCancelledEvent =
-        new ReservationCancelled(
+    ReservationCanceled reservationCanceledEvent =
+        new ReservationCanceled(
             meta5,
-            reservationCancelledReservationId,
+            reservationCanceledReservationId,
             Money.of(new BigDecimal("100.00"), SupportedCurrency.JPY));
 
     String reservationCapturedPayload =
@@ -195,7 +198,7 @@ class AccountEventDeserializerTest {
         Arguments.of(fundsCredited, fundsCreditedEvent),
         Arguments.of(fundsDebited, fundsDebitedEvent),
         Arguments.of(fundsReserved, fundsReservedEvent),
-        Arguments.of(reservationCancelled, reservationCancelledEvent),
+        Arguments.of(reservationCanceled, reservationCanceledEvent),
         Arguments.of(reservationCaptured, reservationCapturedEvent),
         Arguments.of(accountClosed, accountClosedEvent));
   }
@@ -371,7 +374,7 @@ class AccountEventDeserializerTest {
     // Invalid reservationId UUID
     String invalidReservationId =
         """
-        {"reservationId":"not-a-valid-uuid","currency":"USD","amount":75.0,"occurredAt":"2025-11-16T15:00:00Z"}
+        {"transactionId":"6a19786d-7b2a-466a-b0c7-e82997b0d979", "reservationId":"not-a-valid-uuid","currency":"USD","amount":75.0,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
     ConsumerRecord<String, Object> recordWithInvalidReservationId =
         buildConsumerRecord(

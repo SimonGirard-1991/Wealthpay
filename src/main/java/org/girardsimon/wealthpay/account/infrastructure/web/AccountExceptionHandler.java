@@ -10,7 +10,8 @@ import org.girardsimon.wealthpay.account.domain.exception.AmountMustBePositiveEx
 import org.girardsimon.wealthpay.account.domain.exception.InsufficientFundsException;
 import org.girardsimon.wealthpay.account.domain.exception.InvalidAccountEventStreamException;
 import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceException;
-import org.girardsimon.wealthpay.account.domain.exception.ReservationConflictException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.shared.api.generated.model.ApiErrorDto;
@@ -48,7 +49,11 @@ public class AccountExceptionHandler {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(apiErrorDto);
   }
 
-  @ExceptionHandler({AccountInactiveException.class})
+  @ExceptionHandler({
+    AccountInactiveException.class,
+    ReservationAlreadyCanceledException.class,
+    ReservationAlreadyCapturedException.class
+  })
   public ResponseEntity<ApiErrorDto> handleConflictException(Exception e) {
     log.warn("Conflict exception: ", e);
     ApiErrorDto apiErrorDto =
@@ -62,7 +67,6 @@ public class AccountExceptionHandler {
     AccountCurrencyMismatchException.class,
     AmountMustBePositiveException.class,
     InsufficientFundsException.class,
-    ReservationConflictException.class,
     AccountNotEmptyException.class,
     UnsupportedCurrencyException.class
   })

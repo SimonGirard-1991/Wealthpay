@@ -7,7 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -17,28 +17,41 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
+import org.girardsimon.wealthpay.account.application.response.CancelReservationResponse;
+import org.girardsimon.wealthpay.account.application.response.CancelReservationStatus;
 import org.girardsimon.wealthpay.account.application.response.CaptureReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationCaptureStatus;
+import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
+import org.girardsimon.wealthpay.account.application.response.ReserveFundsStatus;
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
+import org.girardsimon.wealthpay.account.domain.command.CancelReservation;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
 import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
 import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
+import org.girardsimon.wealthpay.account.domain.command.ReserveFunds;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.AccountEventMeta;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
 import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
+import org.girardsimon.wealthpay.account.domain.model.ReservationPhase;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.junit.jupiter.api.Test;
@@ -54,14 +67,17 @@ class AccountApplicationServiceTest {
   AccountBalanceReader accountBalanceReader = mock(AccountBalanceReader.class);
   AccountEventPublisher accountEventPublisher = mock(AccountEventPublisher.class);
   ProcessedTransactionStore processedTransactionStore = mock(ProcessedTransactionStore.class);
+  ProcessedReservationStore processedReservationStore = mock(ProcessedReservationStore.class);
 
   Clock clock = Clock.fixed(INSTANT_FOR_TESTS, ZoneOffset.UTC);
 
   AccountId accountId = AccountId.newId();
   EventId eventId = EventId.newId();
+  ReservationId reservationId = ReservationId.newId();
 
   AccountIdGenerator accountIdGenerator = () -> accountId;
   EventIdGenerator eventIdGenerator = () -> eventId;
+  ReservationIdGenerator reservationIdGenerator = () -> reservationId;
 
   AccountApplicationService accountApplicationService =
       new AccountApplicationService(
@@ -69,9 +85,11 @@ class AccountApplicationServiceTest {
           accountBalanceReader,
           accountEventPublisher,
           processedTransactionStore,
+          processedReservationStore,
           clock,
           accountIdGenerator,
-          eventIdGenerator);
+          eventIdGenerator,
+          reservationIdGenerator);
 
   @Test
   void openAccount_saves_event_AccountOpened_when_account_does_not_exist() {
@@ -117,11 +135,11 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    ReservationId reservationId = ReservationId.newId();
+    TransactionId transactionId = TransactionId.newId();
     AccountEventMeta accountEventMeta2 =
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
-        new FundsReserved(accountEventMeta2, reservationId, reservedAmount);
+        new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
     CaptureReservation captureReservation = new CaptureReservation(accountId, reservationId);
@@ -135,20 +153,23 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 3L);
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(accountEventMeta, reservationId, reservedAmount);
-    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
+    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher, processedReservationStore);
     inOrder.verify(accountEventStore).appendEvents(accountId, 2L, List.of(reservationCaptured));
     inOrder.verify(accountEventPublisher).publish(List.of(reservationCaptured));
+    inOrder
+        .verify(processedReservationStore)
+        .updatePhase(accountId, reservationId, ReservationPhase.CAPTURED, INSTANT_FOR_TESTS);
     assertAll(
         () -> assertThat(captureReservationResponse.accountId()).isEqualTo(accountId),
         () -> assertThat(captureReservationResponse.reservationId()).isEqualTo(reservationId),
         () ->
             assertThat(captureReservationResponse.reservationCaptureStatus())
                 .isEqualTo(ReservationCaptureStatus.CAPTURED),
-        () -> assertThat(captureReservationResponse.money()).isEqualTo(reservedAmount));
+        () -> assertThat(captureReservationResponse.money()).contains(reservedAmount));
   }
 
   @Test
-  void captureReservation_should_not_save_data_when_no_reservation_found() {
+  void captureReservation_should_have_idempotent_behavior_when_reservation_is_already_captured() {
     // Arrange
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
@@ -156,34 +177,85 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    ReservationId reservationId = ReservationId.newId();
+    TransactionId transactionId = TransactionId.newId();
     AccountEventMeta accountEventMeta2 =
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
-        new FundsReserved(accountEventMeta2, reservationId, reservedAmount);
+        new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
     ReservationId otherReservationId = ReservationId.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
+    when(processedReservationStore.lookup(accountId, otherReservationId))
+        .thenReturn(Optional.of(ReservationPhase.CAPTURED));
 
     // Act
     CaptureReservationResponse captureReservationResponse =
         accountApplicationService.captureReservation(captureReservation);
 
     // Assert
-    AccountEventMeta accountEventMeta =
-        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 3L);
-    ReservationCaptured reservationCaptured =
-        new ReservationCaptured(accountEventMeta, reservationId, reservedAmount);
-    verify(accountEventStore, times(0)).appendEvents(any(), anyLong(), any());
-    verify(accountEventPublisher, times(0)).publish(List.of(reservationCaptured));
+    verify(accountEventStore, never()).appendEvents(any(), anyLong(), any());
+    verify(accountEventPublisher, never()).publish(any());
     assertAll(
         () -> assertThat(captureReservationResponse.accountId()).isEqualTo(accountId),
         () -> assertThat(captureReservationResponse.reservationId()).isEqualTo(otherReservationId),
         () ->
             assertThat(captureReservationResponse.reservationCaptureStatus())
                 .isEqualTo(ReservationCaptureStatus.NO_EFFECT),
-        () -> assertThat(captureReservationResponse.money()).isNull());
+        () -> assertThat(captureReservationResponse.money()).isEmpty());
+  }
+
+  @Test
+  void captureReservation_should_throw_reservation_not_found_when_reservation_does_not_exist() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
+    TransactionId transactionId = TransactionId.newId();
+    AccountEventMeta accountEventMeta2 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    FundsReserved fundsReserved =
+        new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
+    List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    ReservationId otherReservationId = ReservationId.newId();
+    CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
+    when(processedReservationStore.lookup(accountId, otherReservationId))
+        .thenReturn(Optional.empty());
+
+    // Act ... Assert
+    assertThatExceptionOfType(ReservationNotFoundException.class)
+        .isThrownBy(() -> accountApplicationService.captureReservation(captureReservation));
+  }
+
+  @Test
+  void
+      captureReservation_should_throw_reservation_already_canceled_when_reservation_is_already_canceled() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
+    TransactionId transactionId = TransactionId.newId();
+    AccountEventMeta accountEventMeta2 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    FundsReserved fundsReserved =
+        new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
+    List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    ReservationId otherReservationId = ReservationId.newId();
+    CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
+    when(processedReservationStore.lookup(accountId, otherReservationId))
+        .thenReturn(Optional.of(ReservationPhase.CANCELED));
+
+    // Act ... Assert
+    assertThatExceptionOfType(ReservationAlreadyCanceledException.class)
+        .isThrownBy(() -> accountApplicationService.captureReservation(captureReservation));
   }
 
   @Test
@@ -196,6 +268,146 @@ class AccountApplicationServiceTest {
     // Act ... Assert
     assertThatExceptionOfType(AccountHistoryNotFound.class)
         .isThrownBy(() -> accountApplicationService.captureReservation(captureReservation));
+  }
+
+  @Test
+  void cancelReservation_should_save_reservation_canceled_event_when_reservation_exists() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
+    TransactionId transactionId = TransactionId.newId();
+    AccountEventMeta accountEventMeta2 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    FundsReserved fundsReserved =
+        new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
+    CancelReservation cancelReservation = new CancelReservation(accountId, reservationId);
+
+    // Act
+    CancelReservationResponse cancelReservationResponse =
+        accountApplicationService.cancelReservation(cancelReservation);
+
+    // Assert
+    AccountEventMeta accountEventMeta =
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 3L);
+    ReservationCanceled reservationCanceled =
+        new ReservationCanceled(accountEventMeta, reservationId, reservedAmount);
+    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher, processedReservationStore);
+    inOrder.verify(accountEventStore).appendEvents(accountId, 2L, List.of(reservationCanceled));
+    inOrder.verify(accountEventPublisher).publish(List.of(reservationCanceled));
+    inOrder
+        .verify(processedReservationStore)
+        .updatePhase(accountId, reservationId, ReservationPhase.CANCELED, INSTANT_FOR_TESTS);
+    assertAll(
+        () -> assertThat(cancelReservationResponse.accountId()).isEqualTo(accountId),
+        () -> assertThat(cancelReservationResponse.reservationId()).isEqualTo(reservationId),
+        () ->
+            assertThat(cancelReservationResponse.cancelReservationStatus())
+                .isEqualTo(CancelReservationStatus.CANCELED),
+        () -> assertThat(cancelReservationResponse.money()).contains(reservedAmount));
+  }
+
+  @Test
+  void cancelReservation_should_have_idempotent_behavior_when_reservation_is_already_canceled() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
+    TransactionId transactionId = TransactionId.newId();
+    AccountEventMeta accountEventMeta2 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    FundsReserved fundsReserved =
+        new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
+    ReservationId otherReservationId = ReservationId.newId();
+    CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
+    when(processedReservationStore.lookup(accountId, otherReservationId))
+        .thenReturn(Optional.of(ReservationPhase.CANCELED));
+
+    // Act
+    CancelReservationResponse cancelReservationResponse =
+        accountApplicationService.cancelReservation(cancelReservation);
+
+    // Assert
+    verify(accountEventStore, never()).appendEvents(any(), anyLong(), any());
+    verify(accountEventPublisher, never()).publish(any());
+    verify(processedReservationStore, never()).updatePhase(any(), any(), any(), any());
+    assertAll(
+        () -> assertThat(cancelReservationResponse.accountId()).isEqualTo(accountId),
+        () -> assertThat(cancelReservationResponse.reservationId()).isEqualTo(otherReservationId),
+        () ->
+            assertThat(cancelReservationResponse.cancelReservationStatus())
+                .isEqualTo(CancelReservationStatus.NO_EFFECT),
+        () -> assertThat(cancelReservationResponse.money()).isEmpty());
+  }
+
+  @Test
+  void cancelReservation_should_throw_reservation_not_found_when_reservation_does_not_exist() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
+    TransactionId transactionId = TransactionId.newId();
+    AccountEventMeta accountEventMeta2 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    FundsReserved fundsReserved =
+        new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
+    ReservationId otherReservationId = ReservationId.newId();
+    CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
+    when(processedReservationStore.lookup(accountId, otherReservationId))
+        .thenReturn(Optional.empty());
+
+    // Act ... Assert
+    assertThatExceptionOfType(ReservationNotFoundException.class)
+        .isThrownBy(() -> accountApplicationService.cancelReservation(cancelReservation));
+  }
+
+  @Test
+  void
+      cancelReservation_should_throw_reservation_already_captured_when_reservation_is_already_captured() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
+    TransactionId transactionId = TransactionId.newId();
+    AccountEventMeta accountEventMeta2 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    FundsReserved fundsReserved =
+        new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
+    ReservationId otherReservationId = ReservationId.newId();
+    CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
+    when(processedReservationStore.lookup(accountId, otherReservationId))
+        .thenReturn(Optional.of(ReservationPhase.CAPTURED));
+
+    // Act ... Assert
+    assertThatExceptionOfType(ReservationAlreadyCapturedException.class)
+        .isThrownBy(() -> accountApplicationService.cancelReservation(cancelReservation));
+  }
+
+  @Test
+  void cancelReservation_should_throw_account_history_not_found_when_no_corresponding_account() {
+    // Arrange
+    CancelReservation cancelReservation = new CancelReservation(accountId, ReservationId.newId());
+    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of());
+
+    // Act ... Assert
+    assertThatExceptionOfType(AccountHistoryNotFound.class)
+        .isThrownBy(() -> accountApplicationService.cancelReservation(cancelReservation));
   }
 
   @Test
@@ -290,5 +502,68 @@ class AccountApplicationServiceTest {
     inOrder.verify(accountEventStore).appendEvents(accountId, 1L, List.of(fundsDebited));
     inOrder.verify(accountEventPublisher).publish(List.of(fundsDebited));
     assertThat(transactionStatus).isEqualTo(TransactionStatus.COMMITTED);
+  }
+
+  @Test
+  void reserveFunds_should_not_persist_event_when_transaction_status_is_no_effect() {
+    // Arrange
+    TransactionId transactionId = TransactionId.newId();
+    Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.USD);
+    ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, money);
+    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.NO_EFFECT);
+    when(processedReservationStore.lookup(accountId, transactionId)).thenReturn(reservationId);
+
+    // Act
+    ReserveFundsResponse reserveFundsResponse =
+        accountApplicationService.reserveFunds(reserveFunds);
+
+    // Assert
+    verifyNoInteractions(accountEventStore);
+    verifyNoInteractions(accountEventPublisher);
+    verify(processedReservationStore, never()).register(any(), any(), any(), any(), any());
+    assertAll(
+        () -> assertThat(reserveFundsResponse.reservationId()).isEqualTo(reservationId),
+        () ->
+            assertThat(reserveFundsResponse.reserveFundsStatus())
+                .isEqualTo(ReserveFundsStatus.NO_EFFECT));
+  }
+
+  @Test
+  void reserveFunds_should_save_funds_reserved_event_when_transaction_status_is_committed() {
+    // Arrange
+    TransactionId transactionId = TransactionId.newId();
+    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.COMMITTED);
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened));
+    Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
+    ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, money);
+
+    // Act
+    ReserveFundsResponse reserveFundsResponse =
+        accountApplicationService.reserveFunds(reserveFunds);
+
+    // Assert
+    AccountEventMeta accountEventMeta =
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 2L);
+    FundsReserved fundsReserved =
+        new FundsReserved(accountEventMeta, transactionId, reservationId, money);
+    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher, processedReservationStore);
+    inOrder.verify(accountEventStore).appendEvents(accountId, 1L, List.of(fundsReserved));
+    inOrder.verify(accountEventPublisher).publish(List.of(fundsReserved));
+    inOrder
+        .verify(processedReservationStore)
+        .register(
+            accountId, transactionId, reservationId, ReservationPhase.RESERVED, INSTANT_FOR_TESTS);
+    assertAll(
+        () -> assertThat(reserveFundsResponse.reservationId()).isEqualTo(reservationId),
+        () ->
+            assertThat(reserveFundsResponse.reserveFundsStatus())
+                .isEqualTo(ReserveFundsStatus.RESERVED));
   }
 }

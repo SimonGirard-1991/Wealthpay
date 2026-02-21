@@ -13,7 +13,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
@@ -172,6 +172,7 @@ class EventStoreEntryToAccountEventMapperTest {
         JSONB.valueOf(
             """
             {
+                "transactionId": "48df9a88-50f0-47c6-96fd-f2afff2abf8d",
                 "reservationId": "09518c66-ff5e-4596-9049-74dfbdf6f6db",
                 "currency": "GBP",
                 "amount": 40.10,
@@ -187,15 +188,16 @@ class EventStoreEntryToAccountEventMapperTest {
     FundsReserved fundsReserved =
         new FundsReserved(
             metaReserved,
+            TransactionId.of(UUID.fromString("48df9a88-50f0-47c6-96fd-f2afff2abf8d")),
             ReservationId.of(UUID.fromString("09518c66-ff5e-4596-9049-74dfbdf6f6db")),
             Money.of(BigDecimal.valueOf(40.10), SupportedCurrency.GBP));
-    UUID reservationCancelledEventId = UUID.randomUUID();
-    EventStore fundsReservationCancelledEvent = new EventStore();
-    fundsReservationCancelledEvent.setEventType("ReservationCancelled");
-    fundsReservationCancelledEvent.setEventId(reservationCancelledEventId);
-    fundsReservationCancelledEvent.setAccountId(accountId);
-    fundsReservationCancelledEvent.setVersion(13L);
-    fundsReservationCancelledEvent.setPayload(
+    UUID reservationCanceledEventId = UUID.randomUUID();
+    EventStore fundsReservationCanceledEvent = new EventStore();
+    fundsReservationCanceledEvent.setEventType("ReservationCanceled");
+    fundsReservationCanceledEvent.setEventId(reservationCanceledEventId);
+    fundsReservationCanceledEvent.setAccountId(accountId);
+    fundsReservationCanceledEvent.setVersion(13L);
+    fundsReservationCanceledEvent.setPayload(
         JSONB.valueOf(
             """
             {
@@ -205,15 +207,15 @@ class EventStoreEntryToAccountEventMapperTest {
                 "occurredAt": "2025-11-16T15:00:00Z"
             }
             """));
-    AccountEventMeta metaReservationCancelled =
+    AccountEventMeta metaReservationCanceled =
         AccountEventMeta.of(
-            EventId.of(reservationCancelledEventId),
+            EventId.of(reservationCanceledEventId),
             AccountId.of(accountId),
             Instant.parse("2025-11-16T15:00:00Z"),
             13L);
-    ReservationCancelled reservationCancelled =
-        new ReservationCancelled(
-            metaReservationCancelled,
+    ReservationCanceled reservationCanceled =
+        new ReservationCanceled(
+            metaReservationCanceled,
             ReservationId.of(UUID.fromString("09518c66-ff5e-4596-9049-74dfbdf6f6db")),
             Money.of(BigDecimal.valueOf(40.10), SupportedCurrency.GBP));
     return Stream.of(
@@ -223,7 +225,7 @@ class EventStoreEntryToAccountEventMapperTest {
         Arguments.of(fundsCreditedEvent, fundsCredited),
         Arguments.of(fundsDebitedEvent, fundsDebited),
         Arguments.of(fundsReservedEvent, fundsReserved),
-        Arguments.of(fundsReservationCancelledEvent, reservationCancelled));
+        Arguments.of(fundsReservationCanceledEvent, reservationCanceled));
   }
 
   @ParameterizedTest

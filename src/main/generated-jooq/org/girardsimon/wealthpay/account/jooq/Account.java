@@ -11,6 +11,7 @@ import org.girardsimon.wealthpay.account.jooq.tables.AccountBalanceView;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
+import org.girardsimon.wealthpay.account.jooq.tables.ProcessedReservations;
 import org.girardsimon.wealthpay.account.jooq.tables.ProcessedTransactions;
 import org.jooq.Catalog;
 import org.jooq.Table;
@@ -51,6 +52,11 @@ public class Account extends SchemaImpl {
     public final Outbox OUTBOX = Outbox.OUTBOX;
 
     /**
+     * The table <code>account.processed_reservations</code>.
+     */
+    public final ProcessedReservations PROCESSED_RESERVATIONS = ProcessedReservations.PROCESSED_RESERVATIONS;
+
+    /**
      * The table <code>account.processed_transactions</code>.
      */
     public final ProcessedTransactions PROCESSED_TRANSACTIONS = ProcessedTransactions.PROCESSED_TRANSACTIONS;
@@ -75,6 +81,7 @@ public class Account extends SchemaImpl {
             EventStore.EVENT_STORE,
             FlywaySchemaHistory.FLYWAY_SCHEMA_HISTORY,
             Outbox.OUTBOX,
+            ProcessedReservations.PROCESSED_RESERVATIONS,
             ProcessedTransactions.PROCESSED_TRANSACTIONS
         );
     }

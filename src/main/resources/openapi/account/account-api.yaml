@@ -119,6 +119,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransactionResponse'
+
+  /accounts/{id}/reservations:
+    post:
+      tags:
+        - Account Reservation
+      summary: Reserve money for future operations
+      operationId: reserveFunds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReserveFundsRequest'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique account identifier (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: Transaction-Id
+          in: header
+          required: true
+          description: Unique transaction identifier (UUID) for Idempotency
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reservation Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReserveFundsResponse'
+
+  /accounts/{id}/reservations/{reservationId}/capture:
+    post:
+      tags:
+        - Account Reservation
+      summary: Capture reservation
+      operationId: captureReservation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique account identifier (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: reservationId
+          in: path
+          required: true
+          description: Unique reservation identifier (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reservation Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureReservationResponse'
+
+  /accounts/{id}/reservations/{reservationId}/cancel:
+    post:
+      tags:
+        - Account Reservation
+      summary: Cancel reservation
+      operationId: cancelReservation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique account identifier (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: reservationId
+          in: path
+          required: true
+          description: Unique reservation identifier (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reservation Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelReservationResponse'
 components:
   schemas:
     OpenAccountRequest:
@@ -255,3 +348,91 @@ components:
       enum:
         - NO_EFFECT
         - COMMITTED
+
+    ReserveFundsRequest:
+      type: object
+      required:
+        - currency
+        - amount
+      properties:
+        currency:
+          description: Reservation currency
+          $ref: '#/components/schemas/SupportedCurrency'
+        amount:
+          type: number
+          description: Reservation amount
+          exclusiveMinimum: 0
+
+    ReserveFundsResponse:
+      type: object
+      required:
+        - status
+        - reservationId
+      properties:
+        status:
+          $ref: '#/components/schemas/ReserveFundsStatus'
+        reservationId:
+          type: string
+          format: uuid
+
+    ReserveFundsStatus:
+      type: string
+      description: Reservation Status
+      enum:
+        - RESERVED
+        - NO_EFFECT
+
+    CaptureReservationResponse:
+      type: object
+      required:
+        - accountId
+        - reservationId
+        - status
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        currency:
+          $ref: '#/components/schemas/SupportedCurrency'
+        status:
+          $ref: '#/components/schemas/ReservationCaptureStatus'
+
+
+    ReservationCaptureStatus:
+      type: string
+      description: Reservation Capture Status
+      enum:
+        - CAPTURED
+        - NO_EFFECT
+
+    CancelReservationResponse:
+      type: object
+      required:
+        - accountId
+        - reservationId
+        - status
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        currency:
+          $ref: '#/components/schemas/SupportedCurrency'
+        status:
+          $ref: '#/components/schemas/ReservationCanceledStatus'
+
+    ReservationCanceledStatus:
+      type: string
+      description: Reservation Cancel Status
+      enum:
+        - CANCELED
+        - NO_EFFECT

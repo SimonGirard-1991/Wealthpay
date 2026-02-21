@@ -23,7 +23,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
@@ -107,10 +107,11 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
     ReservationId reservationId = ReservationId.newId();
     Money moneyReserved = Money.of(BigDecimal.valueOf(200L), SupportedCurrency.USD);
     AccountEventMeta meta3 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 3L);
-    FundsReserved fundsReserved = new FundsReserved(meta3, reservationId, moneyReserved);
+    FundsReserved fundsReserved =
+        new FundsReserved(meta3, TransactionId.newId(), reservationId, moneyReserved);
     AccountEventMeta meta4 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 4L);
-    ReservationCancelled reservationCancelled =
-        new ReservationCancelled(meta4, reservationId, moneyReserved);
+    ReservationCanceled reservationCanceled =
+        new ReservationCanceled(meta4, reservationId, moneyReserved);
     AccountEventMeta meta5 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 5L);
     FundsDebited fundsDebited =
         new FundsDebited(
@@ -124,7 +125,7 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
             accountOpened,
             fundsCredited,
             fundsReserved,
-            reservationCancelled,
+            reservationCanceled,
             fundsDebited,
             accountClosed);
 
@@ -161,7 +162,8 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
     ReservationId reservationId = ReservationId.newId();
     Money moneyReserved = Money.of(BigDecimal.valueOf(200L), SupportedCurrency.USD);
     AccountEventMeta meta2 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
-    FundsReserved fundsReserved = new FundsReserved(meta2, reservationId, moneyReserved);
+    FundsReserved fundsReserved =
+        new FundsReserved(meta2, TransactionId.newId(), reservationId, moneyReserved);
     AccountEventMeta meta3 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 3L);
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(meta3, reservationId, moneyReserved);

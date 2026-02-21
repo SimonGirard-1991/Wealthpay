@@ -48,9 +48,10 @@ class AccountDebitTest {
 
     // Act
     List<AccountEvent> openingEvents =
-        Account.handle(openAccount, accountId, eventIdGenerator, Instant.now());
+        Account.handle(openAccount, accountId, eventIdGenerator, Instant.now()).events();
     Account account = Account.rehydrate(openingEvents);
-    List<AccountEvent> debitEvents = account.handle(debitAccount, eventIdGenerator, Instant.now());
+    List<AccountEvent> debitEvents =
+        account.handle(debitAccount, eventIdGenerator, Instant.now()).events();
     List<AccountEvent> allEvents =
         Stream.concat(openingEvents.stream(), debitEvents.stream()).toList();
     Account accountAfterCredit = Account.rehydrate(allEvents);

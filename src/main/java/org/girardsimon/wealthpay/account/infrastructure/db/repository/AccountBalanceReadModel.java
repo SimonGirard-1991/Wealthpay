@@ -13,7 +13,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.exception.AccountBalanceNotFoundException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
@@ -52,9 +52,9 @@ public class AccountBalanceReadModel implements AccountBalanceProjector, Account
       case AccountClosed _ -> currentState.status = AccountStatus.CLOSED.name();
       case FundsReserved fundsReserved ->
           currentState.reserved = currentState.reserved.add(fundsReserved.money().amount());
-      case ReservationCancelled reservationCancelled ->
+      case ReservationCanceled reservationCanceled ->
           currentState.reserved =
-              currentState.reserved.subtract(reservationCancelled.money().amount());
+              currentState.reserved.subtract(reservationCanceled.money().amount());
       case ReservationCaptured reservationCaptured -> {
         currentState.reserved =
             currentState.reserved.subtract(reservationCaptured.money().amount());

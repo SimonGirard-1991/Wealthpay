@@ -16,7 +16,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
@@ -51,19 +51,23 @@ public class AccountEventDeserializer
         accountEventMeta, ReservationId.of(UUID.fromString(reservationId)), extractMoney(payload));
   }
 
-  private static ReservationCancelled mapReservationCancelled(
+  private static ReservationCanceled mapReservationCanceled(
       AccountEventMeta accountEventMeta, JsonNode payload) {
     String reservationId = getRequiredField(payload, RESERVATION_ID).asString();
-    return new ReservationCancelled(
+    return new ReservationCanceled(
         accountEventMeta, ReservationId.of(UUID.fromString(reservationId)), extractMoney(payload));
   }
 
   private static FundsReserved mapFundsReserved(
       AccountEventMeta accountEventMeta, JsonNode payload) {
+    String transactionId = getRequiredField(payload, TRANSACTION_ID).asString();
     String reservationId = getRequiredField(payload, RESERVATION_ID).asString();
     Money money = extractMoney(payload);
     return new FundsReserved(
-        accountEventMeta, ReservationId.of(UUID.fromString(reservationId)), money);
+        accountEventMeta,
+        TransactionId.of(UUID.fromString(transactionId)),
+        ReservationId.of(UUID.fromString(reservationId)),
+        money);
   }
 
   private static FundsDebited mapFundsDebited(AccountEventMeta accountEventMeta, JsonNode payload) {
@@ -110,7 +114,7 @@ public class AccountEventDeserializer
       case FUNDS_CREDITED -> mapFundsCredited(accountEventMeta, payload);
       case FUNDS_DEBITED -> mapFundsDebited(accountEventMeta, payload);
       case FUNDS_RESERVED -> mapFundsReserved(accountEventMeta, payload);
-      case RESERVATION_CANCELLED -> mapReservationCancelled(accountEventMeta, payload);
+      case RESERVATION_CANCELED -> mapReservationCanceled(accountEventMeta, payload);
       case RESERVATION_CAPTURED -> mapReservationCaptured(accountEventMeta, payload);
       case ACCOUNT_CLOSED -> new AccountClosed(accountEventMeta);
     };

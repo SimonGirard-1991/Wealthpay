@@ -25,6 +25,7 @@ import org.girardsimon.wealthpay.account.domain.model.EventId;
 import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationOutcome;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
@@ -45,21 +46,24 @@ class CaptureReservationTest {
     Money reservationAmount = Money.of(BigDecimal.valueOf(5L), currency);
     ReservationId reservationId = ReservationId.newId();
     AccountEventMeta meta2 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
-    FundsReserved fundsReserved = new FundsReserved(meta2, reservationId, reservationAmount);
+    FundsReserved fundsReserved =
+        new FundsReserved(meta2, TransactionId.newId(), reservationId, reservationAmount);
     List<AccountEvent> initEvents = List.of(accountOpened, fundsReserved);
     Account account = Account.rehydrate(initEvents);
     CaptureReservation captureReservation = new CaptureReservation(accountId, reservationId);
 
     // Act
-    List<AccountEvent> captureReservationEvents =
+    ReservationOutcome reservationOutcome =
         account.handle(captureReservation, eventIdGenerator, Instant.now());
     List<AccountEvent> allEvents =
-        Stream.concat(initEvents.stream(), captureReservationEvents.stream()).toList();
+        Stream.concat(initEvents.stream(), reservationOutcome.events().stream()).toList();
     Account accountAfterCapture = Account.rehydrate(allEvents);
 
     // Assert
     Money expectedBalance = Money.of(BigDecimal.valueOf(10L), currency);
     assertAll(
+        () -> assertThat(reservationOutcome.hasEffect()).isTrue(),
+        () -> assertThat(reservationOutcome.capturedMoney()).isEqualTo(reservationAmount),
         () -> assertThat(allEvents).hasSize(3),
         () -> assertThat(allEvents.getLast()).isInstanceOf(ReservationCaptured.class),
         () -> assertThat(allEvents.getLast().version()).isEqualTo(3L),
@@ -86,11 +90,12 @@ class CaptureReservationTest {
     CaptureReservation captureReservation = new CaptureReservation(accountId, reservationId);
 
     // Act
-    List<AccountEvent> captureReservationEvents =
+    ReservationOutcome reservationOutcome =
         account.handle(captureReservation, eventIdGenerator, Instant.now());
 
     // Assert
-    assertThat(captureReservationEvents).isEmpty();
+    assertThat(reservationOutcome.hasEffect()).isFalse();
+    assertThat(reservationOutcome.capturedMoney()).isNull();
   }
 
   @Test

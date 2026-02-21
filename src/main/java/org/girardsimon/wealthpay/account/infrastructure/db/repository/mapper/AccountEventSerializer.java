@@ -7,7 +7,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
-import org.girardsimon.wealthpay.account.domain.event.ReservationCancelled;
+import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.jooq.JSONB;
 import org.springframework.stereotype.Component;
@@ -30,15 +30,16 @@ public class AccountEventSerializer implements Function<AccountEvent, JSONB> {
     this.objectMapper = objectMapper;
   }
 
-  private static void mapReservationCancelledPayload(
-      ObjectNode root, ReservationCancelled reservationCancelled) {
-    root.putPOJO(RESERVATION_ID, reservationCancelled.reservationId().id().toString());
-    root.putPOJO(CURRENCY, reservationCancelled.money().currency().name());
-    root.putPOJO(AMOUNT, reservationCancelled.money().amount());
-    root.putPOJO(OCCURRED_AT, reservationCancelled.occurredAt().toString());
+  private static void mapReservationCanceledPayload(
+      ObjectNode root, ReservationCanceled reservationCanceled) {
+    root.putPOJO(RESERVATION_ID, reservationCanceled.reservationId().id().toString());
+    root.putPOJO(CURRENCY, reservationCanceled.money().currency().name());
+    root.putPOJO(AMOUNT, reservationCanceled.money().amount());
+    root.putPOJO(OCCURRED_AT, reservationCanceled.occurredAt().toString());
   }
 
   private static void mapFundsReservedPayload(ObjectNode root, FundsReserved fundsReserved) {
+    root.putPOJO(TRANSACTION_ID, fundsReserved.transactionId().id().toString());
     root.putPOJO(RESERVATION_ID, fundsReserved.reservationId().id().toString());
     root.putPOJO(CURRENCY, fundsReserved.money().currency().name());
     root.putPOJO(AMOUNT, fundsReserved.money().amount());
@@ -86,8 +87,8 @@ public class AccountEventSerializer implements Function<AccountEvent, JSONB> {
       case FundsCredited fundsCredited -> mapFundsCreditedPayload(root, fundsCredited);
       case FundsDebited fundsDebited -> mapFundsDebitedPayload(root, fundsDebited);
       case FundsReserved fundsReserved -> mapFundsReservedPayload(root, fundsReserved);
-      case ReservationCancelled reservationCancelled ->
-          mapReservationCancelledPayload(root, reservationCancelled);
+      case ReservationCanceled reservationCanceled ->
+          mapReservationCanceledPayload(root, reservationCanceled);
       case ReservationCaptured reservationCaptured ->
           mapReservationCapturedPayload(root, reservationCaptured);
     }

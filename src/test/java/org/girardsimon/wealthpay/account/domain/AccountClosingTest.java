@@ -47,7 +47,7 @@ class AccountClosingTest {
 
     // Act
     List<AccountEvent> closingEvents =
-        account.handle(closeAccount, eventIdGenerator, Instant.now());
+        account.handle(closeAccount, eventIdGenerator, Instant.now()).events();
     List<AccountEvent> allEvents =
         Stream.concat(initEvents.stream(), closingEvents.stream()).toList();
     Account accountAfterCredit = Account.rehydrate(allEvents);

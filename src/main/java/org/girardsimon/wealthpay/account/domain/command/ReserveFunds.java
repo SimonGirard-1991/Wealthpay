@@ -2,6 +2,14 @@ package org.girardsimon.wealthpay.account.domain.command;
 
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
-import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 
-public record ReserveFunds(AccountId accountId, ReservationId reservationId, Money money) {}
+public record ReserveFunds(TransactionId transactionId, AccountId accountId, Money money)
+    implements AccountTransaction {
+
+  public ReserveFunds {
+    if (transactionId == null || accountId == null || money == null) {
+      throw new IllegalArgumentException("transactionId, accountId and money must not be null");
+    }
+  }
+}

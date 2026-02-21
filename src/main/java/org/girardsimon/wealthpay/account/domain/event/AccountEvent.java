@@ -9,7 +9,7 @@ public sealed interface AccountEvent
         FundsCredited,
         FundsDebited,
         FundsReserved,
-        ReservationCancelled,
+        ReservationCanceled,
         AccountClosed,
         ReservationCaptured {
   AccountEventMeta meta();
