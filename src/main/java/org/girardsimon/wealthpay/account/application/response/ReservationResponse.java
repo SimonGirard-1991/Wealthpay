@@ -5,8 +5,8 @@ import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 
-public record CancelReservationResponse(
+public record ReservationResponse(
     AccountId accountId,
     ReservationId reservationId,
     Optional<Money> money,
-    CancelReservationStatus cancelReservationStatus) {}
+    ReservationResult reservationResult) {}

@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test;
 
 class ReserveFundsDtoToDomainMapperTest {
 
-  ReserveFundsDtoToDomainMapper mapper = new ReserveFundsDtoToDomainMapper();
+  ReserveFundsDtoToDomainMapper mapper =
+      new ReserveFundsDtoToDomainMapper(new MoneyDtoToDomainMapper());
 
   @Test
   void map_reserve_funds_dto_to_command() {

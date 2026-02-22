@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test;
 
 class CreditAccountDtoToDomainMapperTest {
 
-  CreditAccountDtoToDomainMapper mapper = new CreditAccountDtoToDomainMapper();
+  CreditAccountDtoToDomainMapper mapper =
+      new CreditAccountDtoToDomainMapper(new MoneyDtoToDomainMapper());
 
   @Test
   void map_credit_account_dto_to_command() {

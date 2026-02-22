@@ -68,15 +68,10 @@ class AccountExceptionHandlerTest {
   }
 
   private static Stream<Arguments> allConflictExceptions() {
-    ReservationId reservationId = ReservationId.newId();
     return Stream.of(
         Arguments.of(new AccountInactiveException(), "Account is inactive"),
-        Arguments.of(
-            new ReservationAlreadyCanceledException(reservationId),
-            "Reservation already canceled: " + reservationId),
-        Arguments.of(
-            new ReservationAlreadyCapturedException(reservationId),
-            "Reservation already captured: " + reservationId));
+        Arguments.of(new ReservationAlreadyCanceledException("message"), "message"),
+        Arguments.of(new ReservationAlreadyCapturedException("message"), "message"));
   }
 
   private static Stream<Arguments> allUnprocessableContentExceptions() {

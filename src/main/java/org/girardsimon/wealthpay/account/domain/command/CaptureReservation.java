@@ -3,7 +3,8 @@ package org.girardsimon.wealthpay.account.domain.command;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 
-public record CaptureReservation(AccountId accountId, ReservationId reservationId) {
+public record CaptureReservation(AccountId accountId, ReservationId reservationId)
+    implements ReservationCommand {
 
   public CaptureReservation {
     if (accountId == null || reservationId == null) {

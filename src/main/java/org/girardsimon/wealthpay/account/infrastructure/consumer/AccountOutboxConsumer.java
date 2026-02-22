@@ -41,7 +41,7 @@ public class AccountOutboxConsumer {
       AccountEvent event = accountEventDeserializer.apply(consumerRecord);
       accountBalanceProjector.project(List.of(event));
     } catch (UnsupportedCurrencyException e) {
-      log.warn("Ignoring unsupported event {}", consumerRecord.value());
+      log.warn("Unsupported event should be redirected to DLQ {}", consumerRecord.value());
       throw new IllegalArgumentException(e);
     }
   }

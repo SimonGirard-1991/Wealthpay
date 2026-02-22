@@ -63,7 +63,7 @@ class CaptureReservationTest {
     Money expectedBalance = Money.of(BigDecimal.valueOf(10L), currency);
     assertAll(
         () -> assertThat(reservationOutcome.hasEffect()).isTrue(),
-        () -> assertThat(reservationOutcome.capturedMoney()).isEqualTo(reservationAmount),
+        () -> assertThat(reservationOutcome.capturedMoney()).contains(reservationAmount),
         () -> assertThat(allEvents).hasSize(3),
         () -> assertThat(allEvents.getLast()).isInstanceOf(ReservationCaptured.class),
         () -> assertThat(allEvents.getLast().version()).isEqualTo(3L),
@@ -95,7 +95,7 @@ class CaptureReservationTest {
 
     // Assert
     assertThat(reservationOutcome.hasEffect()).isFalse();
-    assertThat(reservationOutcome.capturedMoney()).isNull();
+    assertThat(reservationOutcome.capturedMoney()).isEmpty();
   }
 
   @Test

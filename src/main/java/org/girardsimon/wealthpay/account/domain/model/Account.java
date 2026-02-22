@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.girardsimon.wealthpay.account.domain.command.CancelReservation;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
 import org.girardsimon.wealthpay.account.domain.command.CloseAccount;
@@ -143,7 +144,7 @@ public class Account {
     ensureAccountIdConsistency(cancelReservation.accountId());
     ensureActive();
     if (!this.reservations.containsKey(cancelReservation.reservationId())) {
-      return new ReservationOutcome(List.of(), null);
+      return new ReservationOutcome(List.of(), Optional.empty());
     }
     AccountEventMeta meta =
         AccountEventMeta.of(
@@ -152,7 +153,7 @@ public class Account {
     ReservationCanceled reservationCanceled =
         new ReservationCanceled(meta, cancelReservation.reservationId(), money);
     apply(reservationCanceled);
-    return new ReservationOutcome(List.of(reservationCanceled), money);
+    return new ReservationOutcome(List.of(reservationCanceled), Optional.of(money));
   }
 
   public HandleResult handle(
@@ -178,7 +179,7 @@ public class Account {
     ensureActive();
     Money money = this.reservations.get(captureReservation.reservationId());
     if (money == null) {
-      return new ReservationOutcome(List.of(), null);
+      return new ReservationOutcome(List.of(), Optional.empty());
     }
     AccountEventMeta meta =
         AccountEventMeta.of(
@@ -186,7 +187,7 @@ public class Account {
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(meta, captureReservation.reservationId(), money);
     apply(reservationCaptured);
-    return new ReservationOutcome(List.of(reservationCaptured), money);
+    return new ReservationOutcome(List.of(reservationCaptured), Optional.of(money));
   }
 
   private void ensureAccountIdConsistency(AccountId accountId) {

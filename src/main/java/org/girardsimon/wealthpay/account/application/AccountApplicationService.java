@@ -5,12 +5,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiFunction;
-import org.girardsimon.wealthpay.account.application.response.CancelReservationResponse;
-import org.girardsimon.wealthpay.account.application.response.CancelReservationStatus;
-import org.girardsimon.wealthpay.account.application.response.CaptureReservationResponse;
-import org.girardsimon.wealthpay.account.application.response.ReservationCaptureStatus;
+import java.util.function.Consumer;
+import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
+import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
-import org.girardsimon.wealthpay.account.application.response.ReserveFundsStatus;
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.AccountTransaction;
@@ -19,10 +17,9 @@ import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
 import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
 import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
+import org.girardsimon.wealthpay.account.domain.command.ReservationCommand;
 import org.girardsimon.wealthpay.account.domain.command.ReserveFunds;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
-import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
-import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
@@ -100,50 +97,14 @@ public class AccountApplicationService {
     return accountBalanceReader.getAccountBalance(accountId);
   }
 
-  private CaptureReservationResponse handleCaptureNoEffect(
-      AccountId accountId, ReservationId reservationId) {
-    Optional<ReservationPhase> lookup = processedReservationStore.lookup(accountId, reservationId);
-
-    if (lookup.isEmpty()) {
-      throw new ReservationNotFoundException(reservationId);
-    } else {
-      return switch (lookup.get()) {
-        case CANCELED -> throw new ReservationAlreadyCanceledException(reservationId);
-        case CAPTURED ->
-            new CaptureReservationResponse(
-                accountId, reservationId, ReservationCaptureStatus.NO_EFFECT, Optional.empty());
-        case RESERVED ->
-            throw new IllegalStateException(
-                "Should not happen: when reservation is reserved, capture should not return no effect.");
-      };
-    }
-  }
-
   @Transactional
-  public CaptureReservationResponse captureReservation(CaptureReservation captureReservation) {
-    AccountId accountId = captureReservation.accountId();
-    ReservationId reservationId = captureReservation.reservationId();
-    Instant occurredAt = Instant.now(clock);
-
-    Account account = loadAccount(accountId);
-    ReservationOutcome reservationOutcome =
-        account.handle(captureReservation, eventIdGenerator, occurredAt);
-
-    if (!reservationOutcome.hasEffect()) {
-      return handleCaptureNoEffect(accountId, reservationId);
-    }
-
-    List<AccountEvent> captureReservationEvents = reservationOutcome.events();
-
-    long versionBeforeEvents = versionBeforeEvents(account, captureReservationEvents);
-    saveEvents(versionBeforeEvents, captureReservationEvents, accountId);
-    processedReservationStore.updatePhase(
-        accountId, reservationId, ReservationPhase.CAPTURED, occurredAt);
-    return new CaptureReservationResponse(
-        accountId,
-        captureReservation.reservationId(),
-        ReservationCaptureStatus.CAPTURED,
-        Optional.of(reservationOutcome.capturedMoney()));
+  public ReservationResponse captureReservation(CaptureReservation captureReservation) {
+    return processReservation(
+        captureReservation,
+        ReservationPhase.CAPTURED,
+        ReservationResult.CAPTURED,
+        ReservationPhase::ensureCanCapture,
+        (account, now) -> account.handle(captureReservation, eventIdGenerator, now));
   }
 
   private TransactionStatus processTransaction(
@@ -182,7 +143,7 @@ public class AccountApplicationService {
 
     if (status == TransactionStatus.NO_EFFECT) {
       ReservationId reservationId = processedReservationStore.lookup(accountId, transactionId);
-      return new ReserveFundsResponse(reservationId, ReserveFundsStatus.NO_EFFECT);
+      return new ReserveFundsResponse(reservationId, ReservationResult.NO_EFFECT);
     } else {
       ReservationId reservationId = reservationIdGenerator.newId();
 
@@ -195,53 +156,61 @@ public class AccountApplicationService {
       processedReservationStore.register(
           accountId, transactionId, reservationId, ReservationPhase.RESERVED, now);
 
-      return new ReserveFundsResponse(reservationId, ReserveFundsStatus.RESERVED);
+      return new ReserveFundsResponse(reservationId, ReservationResult.RESERVED);
     }
   }
 
   @Transactional
-  public CancelReservationResponse cancelReservation(CancelReservation cancelReservation) {
-    AccountId accountId = cancelReservation.accountId();
-    ReservationId reservationId = cancelReservation.reservationId();
+  public ReservationResponse cancelReservation(CancelReservation cancelReservation) {
+    return processReservation(
+        cancelReservation,
+        ReservationPhase.CANCELED,
+        ReservationResult.CANCELED,
+        ReservationPhase::ensureCanCancel,
+        (account, now) -> account.handle(cancelReservation, eventIdGenerator, now));
+  }
+
+  private ReservationResponse processReservation(
+      ReservationCommand reservationCommand,
+      ReservationPhase targetPhase,
+      ReservationResult expectedResult,
+      Consumer<ReservationPhase> phaseValidator,
+      BiFunction<Account, Instant, ReservationOutcome> handler) {
+    AccountId accountId = reservationCommand.accountId();
+    ReservationId reservationId = reservationCommand.reservationId();
     Instant occurredAt = Instant.now(clock);
 
     Account account = loadAccount(accountId);
-    ReservationOutcome reservationOutcome =
-        account.handle(cancelReservation, eventIdGenerator, occurredAt);
+    ReservationOutcome reservationOutcome = handler.apply(account, occurredAt);
 
     if (!reservationOutcome.hasEffect()) {
-      return handleCancelNoEffect(accountId, reservationId);
+      return checkIdempotence(accountId, reservationId, phaseValidator);
     }
 
-    List<AccountEvent> cancelReservationEvents = reservationOutcome.events();
+    List<AccountEvent> events = reservationOutcome.events();
 
-    long versionBeforeEvents = versionBeforeEvents(account, cancelReservationEvents);
-    saveEvents(versionBeforeEvents, cancelReservationEvents, accountId);
-    processedReservationStore.updatePhase(
-        accountId, reservationId, ReservationPhase.CANCELED, occurredAt);
-    return new CancelReservationResponse(
-        accountId,
-        reservationId,
-        Optional.of(reservationOutcome.capturedMoney()),
-        CancelReservationStatus.CANCELED);
+    long versionBeforeEvents = versionBeforeEvents(account, events);
+    saveEvents(versionBeforeEvents, events, accountId);
+    processedReservationStore.updatePhase(accountId, reservationId, targetPhase, occurredAt);
+    return new ReservationResponse(
+        accountId, reservationId, reservationOutcome.capturedMoney(), expectedResult);
   }
 
-  private CancelReservationResponse handleCancelNoEffect(
-      AccountId accountId, ReservationId reservationId) {
-    Optional<ReservationPhase> lookup = processedReservationStore.lookup(accountId, reservationId);
+  private ReservationResponse checkIdempotence(
+      AccountId accountId, ReservationId reservationId, Consumer<ReservationPhase> phaseValidator) {
+    ReservationPhase reservationPhase =
+        processedReservationStore
+            .lookup(accountId, reservationId)
+            .orElseThrow(() -> new ReservationNotFoundException(reservationId));
 
-    if (lookup.isEmpty()) {
-      throw new ReservationNotFoundException(reservationId);
-    } else {
-      return switch (lookup.get()) {
-        case CANCELED ->
-            new CancelReservationResponse(
-                accountId, reservationId, Optional.empty(), CancelReservationStatus.NO_EFFECT);
-        case CAPTURED -> throw new ReservationAlreadyCapturedException(reservationId);
-        case RESERVED ->
-            throw new IllegalStateException(
-                "Should not happen: when reservation is reserved, cancel should not return no effect.");
-      };
+    if (reservationPhase == ReservationPhase.RESERVED) {
+      throw new IllegalStateException(
+          "Inconsistency: reservation %s is RESERVED in store but absent from aggregate"
+              .formatted(reservationId));
     }
+    phaseValidator.accept(reservationPhase);
+
+    return new ReservationResponse(
+        accountId, reservationId, Optional.empty(), ReservationResult.NO_EFFECT);
   }
 }

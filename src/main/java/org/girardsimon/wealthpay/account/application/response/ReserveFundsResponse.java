@@ -3,4 +3,4 @@ package org.girardsimon.wealthpay.account.application.response;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 
 public record ReserveFundsResponse(
-    ReservationId reservationId, ReserveFundsStatus reserveFundsStatus) {}
+    ReservationId reservationId, ReservationResult reservationResult) {}

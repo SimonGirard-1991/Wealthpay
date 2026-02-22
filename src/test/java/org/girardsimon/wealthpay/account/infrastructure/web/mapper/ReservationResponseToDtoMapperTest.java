@@ -5,19 +5,19 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 
 import java.math.BigDecimal;
 import java.util.Optional;
-import org.girardsimon.wealthpay.account.api.generated.model.ReservationCanceledStatusDto;
+import org.girardsimon.wealthpay.account.api.generated.model.ReservationResultDto;
 import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDto;
-import org.girardsimon.wealthpay.account.application.response.CancelReservationResponse;
-import org.girardsimon.wealthpay.account.application.response.CancelReservationStatus;
+import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
+import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.junit.jupiter.api.Test;
 
-class CancelReservationResponseToDtoMapperTest {
+class ReservationResponseToDtoMapperTest {
 
-  CancelReservationResponseToDtoMapper mapper = new CancelReservationResponseToDtoMapper();
+  ReservationResponseToDtoMapper mapper = new ReservationResponseToDtoMapper();
 
   @Test
   void map_cancel_reservation_response_to_dto() {
@@ -25,12 +25,12 @@ class CancelReservationResponseToDtoMapperTest {
     AccountId accountId = AccountId.newId();
     ReservationId reservationId = ReservationId.newId();
     Money money = Money.of(BigDecimal.valueOf(50.25), SupportedCurrency.USD);
-    CancelReservationResponse cancelReservationResponse =
-        new CancelReservationResponse(
-            accountId, reservationId, Optional.of(money), CancelReservationStatus.CANCELED);
+    ReservationResponse reservationResponse =
+        new ReservationResponse(
+            accountId, reservationId, Optional.of(money), ReservationResult.CANCELED);
 
     // Act
-    var cancelReservationResponseDto = mapper.apply(cancelReservationResponse);
+    var cancelReservationResponseDto = mapper.apply(reservationResponse);
 
     // Assert
     assertAll(
@@ -40,7 +40,7 @@ class CancelReservationResponseToDtoMapperTest {
                 .isEqualTo(reservationId.id()),
         () ->
             assertThat(cancelReservationResponseDto.getStatus())
-                .isEqualTo(ReservationCanceledStatusDto.CANCELED),
+                .isEqualTo(ReservationResultDto.CANCELED),
         () -> assertThat(cancelReservationResponseDto.getAmount()).isEqualByComparingTo("50.25"),
         () ->
             assertThat(cancelReservationResponseDto.getCurrency())
@@ -52,12 +52,12 @@ class CancelReservationResponseToDtoMapperTest {
     // Arrange
     AccountId accountId = AccountId.newId();
     ReservationId reservationId = ReservationId.newId();
-    CancelReservationResponse cancelReservationResponse =
-        new CancelReservationResponse(
-            accountId, reservationId, Optional.empty(), CancelReservationStatus.NO_EFFECT);
+    ReservationResponse reservationResponse =
+        new ReservationResponse(
+            accountId, reservationId, Optional.empty(), ReservationResult.NO_EFFECT);
 
     // Act
-    var cancelReservationResponseDto = mapper.apply(cancelReservationResponse);
+    var cancelReservationResponseDto = mapper.apply(reservationResponse);
 
     // Assert
     assertAll(
@@ -67,7 +67,7 @@ class CancelReservationResponseToDtoMapperTest {
                 .isEqualTo(reservationId.id()),
         () ->
             assertThat(cancelReservationResponseDto.getStatus())
-                .isEqualTo(ReservationCanceledStatusDto.NO_EFFECT),
+                .isEqualTo(ReservationResultDto.NO_EFFECT),
         () -> assertThat(cancelReservationResponseDto.getAmount()).isNull(),
         () -> assertThat(cancelReservationResponseDto.getCurrency()).isNull());
   }

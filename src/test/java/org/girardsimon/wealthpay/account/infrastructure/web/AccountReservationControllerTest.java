@@ -8,25 +8,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.util.UUID;
-import org.girardsimon.wealthpay.account.api.generated.model.CancelReservationResponseDto;
-import org.girardsimon.wealthpay.account.api.generated.model.CaptureReservationResponseDto;
-import org.girardsimon.wealthpay.account.api.generated.model.ReservationCanceledStatusDto;
-import org.girardsimon.wealthpay.account.api.generated.model.ReservationCaptureStatusDto;
+import org.girardsimon.wealthpay.account.api.generated.model.ReservationResponseDto;
+import org.girardsimon.wealthpay.account.api.generated.model.ReservationResultDto;
 import org.girardsimon.wealthpay.account.api.generated.model.ReserveFundsRequestDto;
 import org.girardsimon.wealthpay.account.api.generated.model.ReserveFundsResponseDto;
-import org.girardsimon.wealthpay.account.api.generated.model.ReserveFundsStatusDto;
 import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDto;
 import org.girardsimon.wealthpay.account.application.AccountApplicationService;
-import org.girardsimon.wealthpay.account.application.response.CancelReservationResponse;
-import org.girardsimon.wealthpay.account.application.response.CaptureReservationResponse;
+import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
 import org.girardsimon.wealthpay.account.domain.command.CancelReservation;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
 import org.girardsimon.wealthpay.account.domain.command.ReserveFunds;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CancelReservationDtoToDomainMapper;
-import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CancelReservationResponseToDtoMapper;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CaptureReservationDtoToDomainMapper;
-import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CaptureReservationResponseToDtoMapper;
+import org.girardsimon.wealthpay.account.infrastructure.web.mapper.ReservationResponseToDtoMapper;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.ReserveFundsDtoToDomainMapper;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.ReserveFundsResponseToDtoMapper;
 import org.girardsimon.wealthpay.shared.infrastructure.web.GlobalExceptionHandler;
@@ -51,11 +46,9 @@ class AccountReservationControllerTest {
 
   @MockitoBean CaptureReservationDtoToDomainMapper captureReservationDtoToDomainMapper;
 
-  @MockitoBean CaptureReservationResponseToDtoMapper captureReservationResponseToDtoMapper;
-
   @MockitoBean CancelReservationDtoToDomainMapper cancelReservationDtoToDomainMapper;
 
-  @MockitoBean CancelReservationResponseToDtoMapper cancelReservationResponseToDtoMapper;
+  @MockitoBean ReservationResponseToDtoMapper reservationResponseToDtoMapper;
 
   @Autowired MockMvc mockMvc;
 
@@ -80,7 +73,7 @@ class AccountReservationControllerTest {
         .thenReturn(
             new ReserveFundsResponseDto()
                 .reservationId(reservationId)
-                .status(ReserveFundsStatusDto.RESERVED));
+                .status(ReservationResultDto.RESERVED));
 
     // Act ... Assert
     mockMvc
@@ -100,17 +93,17 @@ class AccountReservationControllerTest {
     UUID accountId = UUID.randomUUID();
     UUID reservationId = UUID.randomUUID();
     CaptureReservation captureReservation = mock(CaptureReservation.class);
-    CaptureReservationResponse captureReservationResponse = mock(CaptureReservationResponse.class);
+    ReservationResponse captureReservationResponse = mock(ReservationResponse.class);
     when(captureReservationDtoToDomainMapper.apply(accountId, reservationId))
         .thenReturn(captureReservation);
     when(accountApplicationService.captureReservation(captureReservation))
         .thenReturn(captureReservationResponse);
-    when(captureReservationResponseToDtoMapper.apply(captureReservationResponse))
+    when(reservationResponseToDtoMapper.apply(captureReservationResponse))
         .thenReturn(
-            new CaptureReservationResponseDto()
+            new ReservationResponseDto()
                 .accountId(accountId)
                 .reservationId(reservationId)
-                .status(ReservationCaptureStatusDto.CAPTURED)
+                .status(ReservationResultDto.CAPTURED)
                 .amount(BigDecimal.valueOf(25.10))
                 .currency(SupportedCurrencyDto.USD));
 
@@ -132,17 +125,17 @@ class AccountReservationControllerTest {
     UUID accountId = UUID.randomUUID();
     UUID reservationId = UUID.randomUUID();
     CancelReservation cancelReservation = mock(CancelReservation.class);
-    CancelReservationResponse cancelReservationResponse = mock(CancelReservationResponse.class);
+    ReservationResponse reservationResponse = mock(ReservationResponse.class);
     when(cancelReservationDtoToDomainMapper.apply(accountId, reservationId))
         .thenReturn(cancelReservation);
     when(accountApplicationService.cancelReservation(cancelReservation))
-        .thenReturn(cancelReservationResponse);
-    when(cancelReservationResponseToDtoMapper.apply(cancelReservationResponse))
+        .thenReturn(reservationResponse);
+    when(reservationResponseToDtoMapper.apply(reservationResponse))
         .thenReturn(
-            new CancelReservationResponseDto()
+            new ReservationResponseDto()
                 .accountId(accountId)
                 .reservationId(reservationId)
-                .status(ReservationCanceledStatusDto.CANCELED)
+                .status(ReservationResultDto.CANCELED)
                 .amount(BigDecimal.valueOf(25.10))
                 .currency(SupportedCurrencyDto.USD));
 

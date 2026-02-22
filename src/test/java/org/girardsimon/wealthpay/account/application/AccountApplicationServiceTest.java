@@ -18,12 +18,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
-import org.girardsimon.wealthpay.account.application.response.CancelReservationResponse;
-import org.girardsimon.wealthpay.account.application.response.CancelReservationStatus;
-import org.girardsimon.wealthpay.account.application.response.CaptureReservationResponse;
-import org.girardsimon.wealthpay.account.application.response.ReservationCaptureStatus;
+import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
+import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
-import org.girardsimon.wealthpay.account.application.response.ReserveFundsStatus;
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.CancelReservation;
@@ -145,7 +142,7 @@ class AccountApplicationServiceTest {
     CaptureReservation captureReservation = new CaptureReservation(accountId, reservationId);
 
     // Act
-    CaptureReservationResponse captureReservationResponse =
+    ReservationResponse captureReservationResponse =
         accountApplicationService.captureReservation(captureReservation);
 
     // Assert
@@ -163,8 +160,8 @@ class AccountApplicationServiceTest {
         () -> assertThat(captureReservationResponse.accountId()).isEqualTo(accountId),
         () -> assertThat(captureReservationResponse.reservationId()).isEqualTo(reservationId),
         () ->
-            assertThat(captureReservationResponse.reservationCaptureStatus())
-                .isEqualTo(ReservationCaptureStatus.CAPTURED),
+            assertThat(captureReservationResponse.reservationResult())
+                .isEqualTo(ReservationResult.CAPTURED),
         () -> assertThat(captureReservationResponse.money()).contains(reservedAmount));
   }
 
@@ -190,7 +187,7 @@ class AccountApplicationServiceTest {
         .thenReturn(Optional.of(ReservationPhase.CAPTURED));
 
     // Act
-    CaptureReservationResponse captureReservationResponse =
+    ReservationResponse captureReservationResponse =
         accountApplicationService.captureReservation(captureReservation);
 
     // Assert
@@ -200,8 +197,8 @@ class AccountApplicationServiceTest {
         () -> assertThat(captureReservationResponse.accountId()).isEqualTo(accountId),
         () -> assertThat(captureReservationResponse.reservationId()).isEqualTo(otherReservationId),
         () ->
-            assertThat(captureReservationResponse.reservationCaptureStatus())
-                .isEqualTo(ReservationCaptureStatus.NO_EFFECT),
+            assertThat(captureReservationResponse.reservationResult())
+                .isEqualTo(ReservationResult.NO_EFFECT),
         () -> assertThat(captureReservationResponse.money()).isEmpty());
   }
 
@@ -288,7 +285,7 @@ class AccountApplicationServiceTest {
     CancelReservation cancelReservation = new CancelReservation(accountId, reservationId);
 
     // Act
-    CancelReservationResponse cancelReservationResponse =
+    ReservationResponse reservationResponse =
         accountApplicationService.cancelReservation(cancelReservation);
 
     // Assert
@@ -303,12 +300,12 @@ class AccountApplicationServiceTest {
         .verify(processedReservationStore)
         .updatePhase(accountId, reservationId, ReservationPhase.CANCELED, INSTANT_FOR_TESTS);
     assertAll(
-        () -> assertThat(cancelReservationResponse.accountId()).isEqualTo(accountId),
-        () -> assertThat(cancelReservationResponse.reservationId()).isEqualTo(reservationId),
+        () -> assertThat(reservationResponse.accountId()).isEqualTo(accountId),
+        () -> assertThat(reservationResponse.reservationId()).isEqualTo(reservationId),
         () ->
-            assertThat(cancelReservationResponse.cancelReservationStatus())
-                .isEqualTo(CancelReservationStatus.CANCELED),
-        () -> assertThat(cancelReservationResponse.money()).contains(reservedAmount));
+            assertThat(reservationResponse.reservationResult())
+                .isEqualTo(ReservationResult.CANCELED),
+        () -> assertThat(reservationResponse.money()).contains(reservedAmount));
   }
 
   @Test
@@ -332,7 +329,7 @@ class AccountApplicationServiceTest {
         .thenReturn(Optional.of(ReservationPhase.CANCELED));
 
     // Act
-    CancelReservationResponse cancelReservationResponse =
+    ReservationResponse reservationResponse =
         accountApplicationService.cancelReservation(cancelReservation);
 
     // Assert
@@ -340,12 +337,12 @@ class AccountApplicationServiceTest {
     verify(accountEventPublisher, never()).publish(any());
     verify(processedReservationStore, never()).updatePhase(any(), any(), any(), any());
     assertAll(
-        () -> assertThat(cancelReservationResponse.accountId()).isEqualTo(accountId),
-        () -> assertThat(cancelReservationResponse.reservationId()).isEqualTo(otherReservationId),
+        () -> assertThat(reservationResponse.accountId()).isEqualTo(accountId),
+        () -> assertThat(reservationResponse.reservationId()).isEqualTo(otherReservationId),
         () ->
-            assertThat(cancelReservationResponse.cancelReservationStatus())
-                .isEqualTo(CancelReservationStatus.NO_EFFECT),
-        () -> assertThat(cancelReservationResponse.money()).isEmpty());
+            assertThat(reservationResponse.reservationResult())
+                .isEqualTo(ReservationResult.NO_EFFECT),
+        () -> assertThat(reservationResponse.money()).isEmpty());
   }
 
   @Test
@@ -525,8 +522,8 @@ class AccountApplicationServiceTest {
     assertAll(
         () -> assertThat(reserveFundsResponse.reservationId()).isEqualTo(reservationId),
         () ->
-            assertThat(reserveFundsResponse.reserveFundsStatus())
-                .isEqualTo(ReserveFundsStatus.NO_EFFECT));
+            assertThat(reserveFundsResponse.reservationResult())
+                .isEqualTo(ReservationResult.NO_EFFECT));
   }
 
   @Test
@@ -563,7 +560,7 @@ class AccountApplicationServiceTest {
     assertAll(
         () -> assertThat(reserveFundsResponse.reservationId()).isEqualTo(reservationId),
         () ->
-            assertThat(reserveFundsResponse.reserveFundsStatus())
-                .isEqualTo(ReserveFundsStatus.RESERVED));
+            assertThat(reserveFundsResponse.reservationResult())
+                .isEqualTo(ReservationResult.RESERVED));
   }
 }

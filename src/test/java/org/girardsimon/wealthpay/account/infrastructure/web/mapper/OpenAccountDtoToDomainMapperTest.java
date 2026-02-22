@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test;
 
 class OpenAccountDtoToDomainMapperTest {
 
-  OpenAccountDtoToDomainMapper mapper = new OpenAccountDtoToDomainMapper();
+  OpenAccountDtoToDomainMapper mapper =
+      new OpenAccountDtoToDomainMapper(new MoneyDtoToDomainMapper());
 
   @Test
   void map_open_account_dto_to_command() {

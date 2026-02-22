@@ -182,7 +182,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CaptureReservationResponse'
+                $ref: '#/components/schemas/ReservationResponse'
 
   /accounts/{id}/reservations/{reservationId}/cancel:
     post:
@@ -211,7 +211,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CancelReservationResponse'
+                $ref: '#/components/schemas/ReservationResponse'
 components:
   schemas:
     OpenAccountRequest:
@@ -370,19 +370,12 @@ components:
         - reservationId
       properties:
         status:
-          $ref: '#/components/schemas/ReserveFundsStatus'
+          $ref: '#/components/schemas/ReservationResult'
         reservationId:
           type: string
           format: uuid
 
-    ReserveFundsStatus:
-      type: string
-      description: Reservation Status
-      enum:
-        - RESERVED
-        - NO_EFFECT
-
-    CaptureReservationResponse:
+    ReservationResponse:
       type: object
       required:
         - accountId
@@ -400,39 +393,13 @@ components:
         currency:
           $ref: '#/components/schemas/SupportedCurrency'
         status:
-          $ref: '#/components/schemas/ReservationCaptureStatus'
+          $ref: '#/components/schemas/ReservationResult'
 
-
-    ReservationCaptureStatus:
+    ReservationResult:
       type: string
-      description: Reservation Capture Status
-      enum:
-        - CAPTURED
-        - NO_EFFECT
-
-    CancelReservationResponse:
-      type: object
-      required:
-        - accountId
-        - reservationId
-        - status
-      properties:
-        accountId:
-          type: string
-          format: uuid
-        reservationId:
-          type: string
-          format: uuid
-        amount:
-          type: number
-        currency:
-          $ref: '#/components/schemas/SupportedCurrency'
-        status:
-          $ref: '#/components/schemas/ReservationCanceledStatus'
-
-    ReservationCanceledStatus:
-      type: string
-      description: Reservation Cancel Status
+      description: Reservation outcome
       enum:
         - CANCELED
+        - RESERVED
+        - CAPTURED
         - NO_EFFECT

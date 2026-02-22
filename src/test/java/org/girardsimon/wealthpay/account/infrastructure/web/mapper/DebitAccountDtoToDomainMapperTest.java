@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test;
 
 class DebitAccountDtoToDomainMapperTest {
 
-  DebitAccountDtoToDomainMapper mapper = new DebitAccountDtoToDomainMapper();
+  DebitAccountDtoToDomainMapper mapper =
+      new DebitAccountDtoToDomainMapper(new MoneyDtoToDomainMapper());
 
   @Test
   void map_debit_account_dto_to_command() {
