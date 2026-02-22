@@ -22,7 +22,6 @@ import org.girardsimon.wealthpay.account.application.response.ReservationRespons
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
-import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.CancelReservation;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
 import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
@@ -61,7 +60,6 @@ class AccountApplicationServiceTest {
 
   public static final Instant INSTANT_FOR_TESTS = Instant.parse("2025-11-16T15:00:00Z");
   AccountEventStore accountEventStore = mock(AccountEventStore.class);
-  AccountBalanceReader accountBalanceReader = mock(AccountBalanceReader.class);
   AccountEventPublisher accountEventPublisher = mock(AccountEventPublisher.class);
   ProcessedTransactionStore processedTransactionStore = mock(ProcessedTransactionStore.class);
   ProcessedReservationStore processedReservationStore = mock(ProcessedReservationStore.class);
@@ -79,7 +77,6 @@ class AccountApplicationServiceTest {
   AccountApplicationService accountApplicationService =
       new AccountApplicationService(
           accountEventStore,
-          accountBalanceReader,
           accountEventPublisher,
           processedTransactionStore,
           processedReservationStore,
@@ -106,21 +103,6 @@ class AccountApplicationServiceTest {
     InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
     inOrder.verify(accountEventStore).appendEvents(accountId, 0L, List.of(accountOpened));
     inOrder.verify(accountEventPublisher).publish(List.of(accountOpened));
-  }
-
-  @Test
-  void getAccountBalance_should_return_account_balance_view_for_given_id() {
-    // Arrange
-    AccountId uuid = AccountId.newId();
-    AccountBalanceView mock = mock(AccountBalanceView.class);
-    when(accountBalanceReader.getAccountBalance(uuid)).thenReturn(mock);
-
-    // Act
-    AccountBalanceView accountBalanceView = accountApplicationService.getAccountBalance(uuid);
-
-    // Assert
-    assertThat(accountBalanceView).isEqualTo(mock);
-    verifyNoInteractions(accountEventStore);
   }
 
   @Test

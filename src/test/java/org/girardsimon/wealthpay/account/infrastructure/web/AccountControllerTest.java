@@ -15,6 +15,7 @@ import org.girardsimon.wealthpay.account.api.generated.model.AccountStatusDto;
 import org.girardsimon.wealthpay.account.api.generated.model.OpenAccountRequestDto;
 import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDto;
 import org.girardsimon.wealthpay.account.application.AccountApplicationService;
+import org.girardsimon.wealthpay.account.application.AccountReadService;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
@@ -35,6 +36,8 @@ import tools.jackson.databind.ObjectMapper;
 class AccountControllerTest {
 
   @MockitoBean AccountApplicationService accountApplicationService;
+
+  @MockitoBean AccountReadService accountReadService;
 
   @MockitoBean OpenAccountDtoToDomainMapper openAccountDtoToDomainMapper;
 
@@ -97,7 +100,7 @@ class AccountControllerTest {
     // Arrange
     AccountId accountId = AccountId.newId();
     AccountBalanceView accountBalanceView = mock(AccountBalanceView.class);
-    when(accountApplicationService.getAccountBalance(accountId)).thenReturn(accountBalanceView);
+    when(accountReadService.getAccountBalance(accountId)).thenReturn(accountBalanceView);
     when(accountBalanceViewDomainToDtoMapper.apply(accountBalanceView))
         .thenReturn(
             new AccountResponseDto()

@@ -10,7 +10,6 @@ import org.girardsimon.wealthpay.account.application.response.ReservationRespons
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
-import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.AccountTransaction;
 import org.girardsimon.wealthpay.account.domain.command.CancelReservation;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
@@ -38,7 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccountApplicationService {
 
   private final AccountEventStore accountEventStore;
-  private final AccountBalanceReader accountBalanceReader;
   private final AccountEventPublisher accountEventPublisher;
   private final ProcessedTransactionStore processedTransactionStore;
   private final ProcessedReservationStore processedReservationStore;
@@ -49,7 +47,6 @@ public class AccountApplicationService {
 
   public AccountApplicationService(
       AccountEventStore accountEventStore,
-      AccountBalanceReader accountBalanceReader,
       AccountEventPublisher accountEventPublisher,
       ProcessedTransactionStore processedTransactionStore,
       ProcessedReservationStore processedReservationStore,
@@ -58,7 +55,6 @@ public class AccountApplicationService {
       EventIdGenerator eventIdGenerator,
       ReservationIdGenerator reservationIdGenerator) {
     this.accountEventStore = accountEventStore;
-    this.accountBalanceReader = accountBalanceReader;
     this.accountEventPublisher = accountEventPublisher;
     this.processedTransactionStore = processedTransactionStore;
     this.processedReservationStore = processedReservationStore;
@@ -90,11 +86,6 @@ public class AccountApplicationService {
         Account.handle(openAccount, accountId, eventIdGenerator, Instant.now(clock));
     saveEvents(0L, result.events(), accountId);
     return accountId;
-  }
-
-  @Transactional(readOnly = true)
-  public AccountBalanceView getAccountBalance(AccountId accountId) {
-    return accountBalanceReader.getAccountBalance(accountId);
   }
 
   @Transactional
