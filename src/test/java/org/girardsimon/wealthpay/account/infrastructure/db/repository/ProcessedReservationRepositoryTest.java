@@ -61,8 +61,9 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
             .and(PROCESSED_RESERVATIONS.RESERVATION_ID.eq(reservationId.id()))
             .fetchOne();
     Optional<ReservationPhase> phaseLookup =
-        processedReservationStore.lookup(accountId, reservationId);
-    ReservationId reservationLookup = processedReservationStore.lookup(accountId, transactionId);
+        processedReservationStore.lookupPhase(accountId, reservationId);
+    ReservationId reservationLookup =
+        processedReservationStore.lookupReservation(accountId, transactionId);
     assertAll(
         () -> assertThat(row).isNotNull(),
         () -> assertThat(row.getAccountId()).isEqualTo(accountId.id()),
@@ -76,13 +77,14 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
   }
 
   @Test
-  void lookup_by_reservation_id_should_return_empty_when_reservation_is_not_found() {
+  void lookup_Phase_by_reservation_id_should_return_empty_when_reservation_is_not_found() {
     // Arrange
     AccountId accountId = AccountId.newId();
     ReservationId reservationId = ReservationId.newId();
 
     // Act
-    Optional<ReservationPhase> lookup = processedReservationStore.lookup(accountId, reservationId);
+    Optional<ReservationPhase> lookup =
+        processedReservationStore.lookupPhase(accountId, reservationId);
 
     // Assert
     assertThat(lookup).isEmpty();
@@ -96,7 +98,7 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
 
     // Act ... Assert
     assertThatExceptionOfType(ReservationNotFoundException.class)
-        .isThrownBy(() -> processedReservationStore.lookup(accountId, transactionId))
+        .isThrownBy(() -> processedReservationStore.lookupReservation(accountId, transactionId))
         .withMessage("Reservation not found");
   }
 

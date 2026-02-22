@@ -77,7 +77,7 @@ public record Money(BigDecimal amount, SupportedCurrency currency) {
     return this.amount.compareTo(money.amount) > 0;
   }
 
-  public boolean isAmountZero() {
+  public boolean isZero() {
     return this.amount.compareTo(BigDecimal.ZERO) == 0;
   }
 

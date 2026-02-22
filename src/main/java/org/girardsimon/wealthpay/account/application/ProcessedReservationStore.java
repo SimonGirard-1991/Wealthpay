@@ -9,9 +9,9 @@ import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 
 public interface ProcessedReservationStore {
 
-  Optional<ReservationPhase> lookup(AccountId accountId, ReservationId reservationId);
+  Optional<ReservationPhase> lookupPhase(AccountId accountId, ReservationId reservationId);
 
-  ReservationId lookup(AccountId accountId, TransactionId transactionId);
+  ReservationId lookupReservation(AccountId accountId, TransactionId transactionId);
 
   void register(
       AccountId accountId,

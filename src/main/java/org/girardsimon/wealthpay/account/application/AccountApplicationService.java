@@ -142,7 +142,8 @@ public class AccountApplicationService {
     TransactionStatus status = processedTransactionStore.register(accountId, transactionId, now);
 
     if (status == TransactionStatus.NO_EFFECT) {
-      ReservationId reservationId = processedReservationStore.lookup(accountId, transactionId);
+      ReservationId reservationId =
+          processedReservationStore.lookupReservation(accountId, transactionId);
       return new ReserveFundsResponse(reservationId, ReservationResult.NO_EFFECT);
     } else {
       ReservationId reservationId = reservationIdGenerator.newId();
@@ -193,14 +194,14 @@ public class AccountApplicationService {
     saveEvents(versionBeforeEvents, events, accountId);
     processedReservationStore.updatePhase(accountId, reservationId, targetPhase, occurredAt);
     return new ReservationResponse(
-        accountId, reservationId, reservationOutcome.capturedMoney(), expectedResult);
+        accountId, reservationId, reservationOutcome.reservedAmount(), expectedResult);
   }
 
   private ReservationResponse checkIdempotence(
       AccountId accountId, ReservationId reservationId, Consumer<ReservationPhase> phaseValidator) {
     ReservationPhase reservationPhase =
         processedReservationStore
-            .lookup(accountId, reservationId)
+            .lookupPhase(accountId, reservationId)
             .orElseThrow(() -> new ReservationNotFoundException(reservationId));
 
     if (reservationPhase == ReservationPhase.RESERVED) {

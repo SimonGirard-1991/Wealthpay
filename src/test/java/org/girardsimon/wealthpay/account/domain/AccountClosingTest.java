@@ -57,7 +57,7 @@ class AccountClosingTest {
         () -> assertThat(allEvents).hasSize(3),
         () -> assertThat(allEvents.getLast()).isInstanceOf(AccountClosed.class),
         () -> assertThat(allEvents.getLast().version()).isEqualTo(3L),
-        () -> assertThat(accountAfterCredit.getBalance().isAmountZero()).isTrue(),
+        () -> assertThat(accountAfterCredit.getBalance().isZero()).isTrue(),
         () -> assertThat(accountAfterCredit.getStatus()).isEqualTo(AccountStatus.CLOSED),
         () -> assertThat(accountAfterCredit.getVersion()).isEqualTo(3L));
   }

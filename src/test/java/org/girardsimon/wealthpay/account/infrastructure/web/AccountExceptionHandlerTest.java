@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.util.stream.Stream;
 import org.girardsimon.wealthpay.account.domain.exception.AccountBalanceNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountCurrencyMismatchException;
-import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
+import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountIdMismatchException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountInactiveException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountNotEmptyException;
@@ -61,7 +61,7 @@ class AccountExceptionHandlerTest {
         Arguments.of(
             new ReservationNotFoundException(reservationId),
             "Reservation not found: " + reservationId),
-        Arguments.of(new AccountHistoryNotFound(), "Account history not found"),
+        Arguments.of(new AccountHistoryNotFoundException(), "Account history not found"),
         Arguments.of(
             new AccountBalanceNotFoundException(accountId),
             "No balance found for account " + accountId));

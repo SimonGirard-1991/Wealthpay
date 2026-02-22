@@ -37,7 +37,7 @@ import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
-import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
+import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
@@ -183,7 +183,7 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
     ReservationId otherReservationId = ReservationId.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
-    when(processedReservationStore.lookup(accountId, otherReservationId))
+    when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.of(ReservationPhase.CAPTURED));
 
     // Act
@@ -220,7 +220,7 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
     ReservationId otherReservationId = ReservationId.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
-    when(processedReservationStore.lookup(accountId, otherReservationId))
+    when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.empty());
 
     // Act ... Assert
@@ -247,7 +247,7 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
     ReservationId otherReservationId = ReservationId.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
-    when(processedReservationStore.lookup(accountId, otherReservationId))
+    when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.of(ReservationPhase.CANCELED));
 
     // Act ... Assert
@@ -263,7 +263,7 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(List.of());
 
     // Act ... Assert
-    assertThatExceptionOfType(AccountHistoryNotFound.class)
+    assertThatExceptionOfType(AccountHistoryNotFoundException.class)
         .isThrownBy(() -> accountApplicationService.captureReservation(captureReservation));
   }
 
@@ -325,7 +325,7 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
     ReservationId otherReservationId = ReservationId.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
-    when(processedReservationStore.lookup(accountId, otherReservationId))
+    when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.of(ReservationPhase.CANCELED));
 
     // Act
@@ -362,7 +362,7 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
     ReservationId otherReservationId = ReservationId.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
-    when(processedReservationStore.lookup(accountId, otherReservationId))
+    when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.empty());
 
     // Act ... Assert
@@ -388,7 +388,7 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
     ReservationId otherReservationId = ReservationId.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
-    when(processedReservationStore.lookup(accountId, otherReservationId))
+    when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.of(ReservationPhase.CAPTURED));
 
     // Act ... Assert
@@ -403,7 +403,7 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(List.of());
 
     // Act ... Assert
-    assertThatExceptionOfType(AccountHistoryNotFound.class)
+    assertThatExceptionOfType(AccountHistoryNotFoundException.class)
         .isThrownBy(() -> accountApplicationService.cancelReservation(cancelReservation));
   }
 
@@ -509,7 +509,8 @@ class AccountApplicationServiceTest {
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, money);
     when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
         .thenReturn(TransactionStatus.NO_EFFECT);
-    when(processedReservationStore.lookup(accountId, transactionId)).thenReturn(reservationId);
+    when(processedReservationStore.lookupReservation(accountId, transactionId))
+        .thenReturn(reservationId);
 
     // Act
     ReserveFundsResponse reserveFundsResponse =

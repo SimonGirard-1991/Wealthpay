@@ -28,7 +28,7 @@ public class ProcessedReservationRepository implements ProcessedReservationStore
   }
 
   @Override
-  public Optional<ReservationPhase> lookup(AccountId accountId, ReservationId reservationId) {
+  public Optional<ReservationPhase> lookupPhase(AccountId accountId, ReservationId reservationId) {
     return dslContext
         .select(PROCESSED_RESERVATIONS.PHASE)
         .from(PROCESSED_RESERVATIONS)
@@ -39,7 +39,7 @@ public class ProcessedReservationRepository implements ProcessedReservationStore
   }
 
   @Override
-  public ReservationId lookup(AccountId accountId, TransactionId transactionId) {
+  public ReservationId lookupReservation(AccountId accountId, TransactionId transactionId) {
     return dslContext
         .select(PROCESSED_RESERVATIONS.RESERVATION_ID)
         .from(PROCESSED_RESERVATIONS)

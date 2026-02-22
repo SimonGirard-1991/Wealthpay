@@ -2,7 +2,7 @@ package org.girardsimon.wealthpay.account.infrastructure.web;
 
 import org.girardsimon.wealthpay.account.domain.exception.AccountBalanceNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountCurrencyMismatchException;
-import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
+import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountIdMismatchException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountInactiveException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountNotEmptyException;
@@ -38,7 +38,7 @@ public class AccountExceptionHandler {
 
   @ExceptionHandler({
     ReservationNotFoundException.class,
-    AccountHistoryNotFound.class,
+    AccountHistoryNotFoundException.class,
     AccountBalanceNotFoundException.class
   })
   public ResponseEntity<ApiErrorDto> handleNotFoundException(Exception e) {

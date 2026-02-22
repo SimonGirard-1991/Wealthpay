@@ -9,7 +9,7 @@ import java.util.List;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.AccountEventMeta;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
-import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFound;
+import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.InvalidAccountEventStreamException;
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +36,7 @@ class AccountTest {
     List<AccountEvent> history = Collections.emptyList();
 
     // Act ... Assert
-    assertThatExceptionOfType(AccountHistoryNotFound.class)
+    assertThatExceptionOfType(AccountHistoryNotFoundException.class)
         .isThrownBy(() -> Account.rehydrate(history));
   }
 }
