@@ -1,8 +1,10 @@
 package org.girardsimon.wealthpay.account.infrastructure.db.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertAll;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -11,7 +13,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.girardsimon.wealthpay.account.application.ProcessedTransactionStore;
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
+import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
+import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
+import org.girardsimon.wealthpay.account.domain.exception.TransactionIdConflictException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.Money;
+import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.girardsimon.wealthpay.shared.config.TimeConfig;
 import org.junit.jupiter.api.Test;
@@ -57,8 +64,14 @@ class ProcessedTransactionRepositoryTest extends AbstractContainerTest {
 
                 txTemplate.execute(
                     _ -> {
+                      CreditAccount creditAccount =
+                          new CreditAccount(
+                              transactionId,
+                              accountId,
+                              Money.of(new BigDecimal("10.00"), SupportedCurrency.USD));
                       TransactionStatus transactionStatus =
-                          processedTransactionStore.register(accountId, transactionId, occurredAt);
+                          processedTransactionStore.register(
+                              accountId, transactionId, creditAccount.fingerprint(), occurredAt);
                       if (transactionStatus == TransactionStatus.COMMITTED) {
                         numberOfCommited.incrementAndGet();
                       } else {
@@ -86,5 +99,34 @@ class ProcessedTransactionRepositoryTest extends AbstractContainerTest {
         () -> assertThat(numberOfCommited.get()).isEqualTo(1),
         () -> assertThat(numberOfNoOp.get()).isEqualTo(threads - 1),
         () -> assertThat(failures.get()).isZero());
+  }
+
+  @Test
+  void register_should_throw_when_transaction_id_exists_with_different_fingerprint() {
+    // Arrange
+    AccountId accountId = AccountId.newId();
+    TransactionId transactionId = TransactionId.newId();
+    Instant occurredAt = Instant.now();
+    CreditAccount creditAccount =
+        new CreditAccount(
+            transactionId, accountId, Money.of(new BigDecimal("10.00"), SupportedCurrency.USD));
+    DebitAccount debitAccount =
+        new DebitAccount(
+            transactionId, accountId, Money.of(new BigDecimal("10.00"), SupportedCurrency.USD));
+
+    // Act
+    TransactionStatus firstStatus =
+        processedTransactionStore.register(
+            accountId, transactionId, creditAccount.fingerprint(), occurredAt);
+
+    // Assert
+    assertAll(
+        () -> assertThat(firstStatus).isEqualTo(TransactionStatus.COMMITTED),
+        () ->
+            assertThatThrownBy(
+                    () ->
+                        processedTransactionStore.register(
+                            accountId, transactionId, debitAccount.fingerprint(), occurredAt))
+                .isInstanceOf(TransactionIdConflictException.class));
   }
 }

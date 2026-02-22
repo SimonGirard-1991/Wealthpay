@@ -395,7 +395,8 @@ class AccountApplicationServiceTest {
     TransactionId transactionId = TransactionId.newId();
     Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.EUR);
     CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
-    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+    when(processedTransactionStore.register(
+            accountId, transactionId, creditAccount.fingerprint(), INSTANT_FOR_TESTS))
         .thenReturn(TransactionStatus.NO_EFFECT);
 
     // Act
@@ -411,8 +412,6 @@ class AccountApplicationServiceTest {
   void creditAccount_should_save_funds_credited_event_when_transaction_status_is_committed() {
     // Arrange
     TransactionId transactionId = TransactionId.newId();
-    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
-        .thenReturn(TransactionStatus.COMMITTED);
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
     AccountEventMeta accountEventMeta1 =
@@ -422,6 +421,9 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
     Money money = Money.of(new BigDecimal("50.00"), SupportedCurrency.USD);
     CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
+    when(processedTransactionStore.register(
+            accountId, transactionId, creditAccount.fingerprint(), INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.COMMITTED);
 
     // Act
     TransactionStatus transactionStatus = accountApplicationService.creditAccount(creditAccount);
@@ -442,7 +444,8 @@ class AccountApplicationServiceTest {
     TransactionId transactionId = TransactionId.newId();
     Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.EUR);
     DebitAccount debitAccount = new DebitAccount(transactionId, accountId, money);
-    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+    when(processedTransactionStore.register(
+            accountId, transactionId, debitAccount.fingerprint(), INSTANT_FOR_TESTS))
         .thenReturn(TransactionStatus.NO_EFFECT);
 
     // Act
@@ -458,8 +461,6 @@ class AccountApplicationServiceTest {
   void debitAccount_should_save_funds_debited_event_when_transaction_status_is_committed() {
     // Arrange
     TransactionId transactionId = TransactionId.newId();
-    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
-        .thenReturn(TransactionStatus.COMMITTED);
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
     AccountEventMeta accountEventMeta1 =
@@ -469,6 +470,9 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
     Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
     DebitAccount debitAccount = new DebitAccount(transactionId, accountId, money);
+    when(processedTransactionStore.register(
+            accountId, transactionId, debitAccount.fingerprint(), INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.COMMITTED);
 
     // Act
     TransactionStatus transactionStatus = accountApplicationService.debitAccount(debitAccount);
@@ -489,7 +493,8 @@ class AccountApplicationServiceTest {
     TransactionId transactionId = TransactionId.newId();
     Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.USD);
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, money);
-    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
+    when(processedTransactionStore.register(
+            accountId, transactionId, reserveFunds.fingerprint(), INSTANT_FOR_TESTS))
         .thenReturn(TransactionStatus.NO_EFFECT);
     when(processedReservationStore.lookupReservation(accountId, transactionId))
         .thenReturn(reservationId);
@@ -513,8 +518,6 @@ class AccountApplicationServiceTest {
   void reserveFunds_should_save_funds_reserved_event_when_transaction_status_is_committed() {
     // Arrange
     TransactionId transactionId = TransactionId.newId();
-    when(processedTransactionStore.register(accountId, transactionId, INSTANT_FOR_TESTS))
-        .thenReturn(TransactionStatus.COMMITTED);
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
     AccountEventMeta accountEventMeta1 =
@@ -523,6 +526,9 @@ class AccountApplicationServiceTest {
     when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened));
     Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, money);
+    when(processedTransactionStore.register(
+            accountId, transactionId, reserveFunds.fingerprint(), INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.COMMITTED);
 
     // Act
     ReserveFundsResponse reserveFundsResponse =

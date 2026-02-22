@@ -65,6 +65,11 @@ public class ProcessedTransactions extends TableImpl<ProcessedTransactionsRecord
      */
     public final TableField<ProcessedTransactionsRecord, OffsetDateTime> OCCURRED_AT = createField(DSL.name("occurred_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false), this, "");
 
+    /**
+     * The column <code>account.processed_transactions.fingerprint</code>.
+     */
+    public final TableField<ProcessedTransactionsRecord, String> FINGERPRINT = createField(DSL.name("fingerprint"), SQLDataType.CHAR(64), this, "");
+
     private ProcessedTransactions(Name alias, Table<ProcessedTransactionsRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }

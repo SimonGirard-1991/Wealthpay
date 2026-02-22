@@ -20,6 +20,7 @@ public class ProcessedTransactions implements Serializable {
     private UUID accountId;
     private UUID transactionId;
     private OffsetDateTime occurredAt;
+    private String fingerprint;
 
     public ProcessedTransactions() {}
 
@@ -27,16 +28,19 @@ public class ProcessedTransactions implements Serializable {
         this.accountId = value.accountId;
         this.transactionId = value.transactionId;
         this.occurredAt = value.occurredAt;
+        this.fingerprint = value.fingerprint;
     }
 
     public ProcessedTransactions(
         UUID accountId,
         UUID transactionId,
-        OffsetDateTime occurredAt
+        OffsetDateTime occurredAt,
+        String fingerprint
     ) {
         this.accountId = accountId;
         this.transactionId = transactionId;
         this.occurredAt = occurredAt;
+        this.fingerprint = fingerprint;
     }
 
     /**
@@ -81,6 +85,20 @@ public class ProcessedTransactions implements Serializable {
         this.occurredAt = occurredAt;
     }
 
+    /**
+     * Getter for <code>account.processed_transactions.fingerprint</code>.
+     */
+    public String getFingerprint() {
+        return this.fingerprint;
+    }
+
+    /**
+     * Setter for <code>account.processed_transactions.fingerprint</code>.
+     */
+    public void setFingerprint(String fingerprint) {
+        this.fingerprint = fingerprint;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
@@ -108,6 +126,12 @@ public class ProcessedTransactions implements Serializable {
         }
         else if (!this.occurredAt.equals(other.occurredAt))
             return false;
+        if (this.fingerprint == null) {
+            if (other.fingerprint != null)
+                return false;
+        }
+        else if (!this.fingerprint.equals(other.fingerprint))
+            return false;
         return true;
     }
 
@@ -118,6 +142,7 @@ public class ProcessedTransactions implements Serializable {
         result = prime * result + ((this.accountId == null) ? 0 : this.accountId.hashCode());
         result = prime * result + ((this.transactionId == null) ? 0 : this.transactionId.hashCode());
         result = prime * result + ((this.occurredAt == null) ? 0 : this.occurredAt.hashCode());
+        result = prime * result + ((this.fingerprint == null) ? 0 : this.fingerprint.hashCode());
         return result;
     }
 
@@ -128,6 +153,7 @@ public class ProcessedTransactions implements Serializable {
         sb.append(accountId);
         sb.append(", ").append(transactionId);
         sb.append(", ").append(occurredAt);
+        sb.append(", ").append(fingerprint);
 
         sb.append(")");
         return sb.toString();

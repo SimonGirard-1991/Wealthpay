@@ -6,5 +6,6 @@ import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 
 public interface ProcessedTransactionStore {
-  TransactionStatus register(AccountId accountId, TransactionId transactionId, Instant occurredAt);
+  TransactionStatus register(
+      AccountId accountId, TransactionId transactionId, String fingerprint, Instant occurredAt);
 }

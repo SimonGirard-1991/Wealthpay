@@ -62,6 +62,20 @@ public class ProcessedTransactionsRecord extends UpdatableRecordImpl<ProcessedTr
         return (OffsetDateTime) get(2);
     }
 
+    /**
+     * Setter for <code>account.processed_transactions.fingerprint</code>.
+     */
+    public void setFingerprint(String value) {
+        set(3, value);
+    }
+
+    /**
+     * Getter for <code>account.processed_transactions.fingerprint</code>.
+     */
+    public String getFingerprint() {
+        return (String) get(3);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -85,12 +99,13 @@ public class ProcessedTransactionsRecord extends UpdatableRecordImpl<ProcessedTr
     /**
      * Create a detached, initialised ProcessedTransactionsRecord
      */
-    public ProcessedTransactionsRecord(UUID accountId, UUID transactionId, OffsetDateTime occurredAt) {
+    public ProcessedTransactionsRecord(UUID accountId, UUID transactionId, OffsetDateTime occurredAt, String fingerprint) {
         super(ProcessedTransactions.PROCESSED_TRANSACTIONS);
 
         setAccountId(accountId);
         setTransactionId(transactionId);
         setOccurredAt(occurredAt);
+        setFingerprint(fingerprint);
         resetChangedOnNotNull();
     }
 
@@ -104,6 +119,7 @@ public class ProcessedTransactionsRecord extends UpdatableRecordImpl<ProcessedTr
             setAccountId(value.getAccountId());
             setTransactionId(value.getTransactionId());
             setOccurredAt(value.getOccurredAt());
+            setFingerprint(value.getFingerprint());
             resetChangedOnNotNull();
         }
     }

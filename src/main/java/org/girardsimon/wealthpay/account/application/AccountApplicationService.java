@@ -102,7 +102,8 @@ public class AccountApplicationService {
       AccountTransaction command, BiFunction<Account, Instant, HandleResult> handler) {
     Instant now = Instant.now(clock);
     TransactionStatus status =
-        processedTransactionStore.register(command.accountId(), command.transactionId(), now);
+        processedTransactionStore.register(
+            command.accountId(), command.transactionId(), command.fingerprint(), now);
     if (status == TransactionStatus.NO_EFFECT) {
       return status;
     }
@@ -130,7 +131,9 @@ public class AccountApplicationService {
     Instant now = Instant.now(clock);
     AccountId accountId = reserveFunds.accountId();
     TransactionId transactionId = reserveFunds.transactionId();
-    TransactionStatus status = processedTransactionStore.register(accountId, transactionId, now);
+    TransactionStatus status =
+        processedTransactionStore.register(
+            accountId, transactionId, reserveFunds.fingerprint(), now);
 
     if (status == TransactionStatus.NO_EFFECT) {
       ReservationId reservationId =
