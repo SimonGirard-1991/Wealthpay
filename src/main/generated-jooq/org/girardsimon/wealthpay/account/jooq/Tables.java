@@ -5,6 +5,7 @@ package org.girardsimon.wealthpay.account.jooq;
 
 
 import org.girardsimon.wealthpay.account.jooq.tables.AccountBalanceView;
+import org.girardsimon.wealthpay.account.jooq.tables.AccountSnapshot;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
@@ -22,6 +23,11 @@ public class Tables {
      * The table <code>account.account_balance_view</code>.
      */
     public static final AccountBalanceView ACCOUNT_BALANCE_VIEW = AccountBalanceView.ACCOUNT_BALANCE_VIEW;
+
+    /**
+     * The table <code>account.account_snapshot</code>.
+     */
+    public static final AccountSnapshot ACCOUNT_SNAPSHOT = AccountSnapshot.ACCOUNT_SNAPSHOT;
 
     /**
      * The table <code>account.event_store</code>.

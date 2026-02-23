@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.girardsimon.wealthpay.account.jooq.tables.AccountBalanceView;
+import org.girardsimon.wealthpay.account.jooq.tables.AccountSnapshot;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
@@ -35,6 +36,11 @@ public class Account extends SchemaImpl {
      * The table <code>account.account_balance_view</code>.
      */
     public final AccountBalanceView ACCOUNT_BALANCE_VIEW = AccountBalanceView.ACCOUNT_BALANCE_VIEW;
+
+    /**
+     * The table <code>account.account_snapshot</code>.
+     */
+    public final AccountSnapshot ACCOUNT_SNAPSHOT = AccountSnapshot.ACCOUNT_SNAPSHOT;
 
     /**
      * The table <code>account.event_store</code>.
@@ -78,6 +84,7 @@ public class Account extends SchemaImpl {
     public final List<Table<?>> getTables() {
         return Arrays.asList(
             AccountBalanceView.ACCOUNT_BALANCE_VIEW,
+            AccountSnapshot.ACCOUNT_SNAPSHOT,
             EventStore.EVENT_STORE,
             FlywaySchemaHistory.FLYWAY_SCHEMA_HISTORY,
             Outbox.OUTBOX,

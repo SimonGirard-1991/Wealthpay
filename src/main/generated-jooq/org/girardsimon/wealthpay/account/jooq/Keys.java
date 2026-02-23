@@ -5,12 +5,14 @@ package org.girardsimon.wealthpay.account.jooq;
 
 
 import org.girardsimon.wealthpay.account.jooq.tables.AccountBalanceView;
+import org.girardsimon.wealthpay.account.jooq.tables.AccountSnapshot;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
 import org.girardsimon.wealthpay.account.jooq.tables.ProcessedReservations;
 import org.girardsimon.wealthpay.account.jooq.tables.ProcessedTransactions;
 import org.girardsimon.wealthpay.account.jooq.tables.records.AccountBalanceViewRecord;
+import org.girardsimon.wealthpay.account.jooq.tables.records.AccountSnapshotRecord;
 import org.girardsimon.wealthpay.account.jooq.tables.records.EventStoreRecord;
 import org.girardsimon.wealthpay.account.jooq.tables.records.FlywaySchemaHistoryRecord;
 import org.girardsimon.wealthpay.account.jooq.tables.records.OutboxRecord;
@@ -34,6 +36,7 @@ public class Keys {
     // -------------------------------------------------------------------------
 
     public static final UniqueKey<AccountBalanceViewRecord> ACCOUNT_BALANCE_VIEW_PKEY = Internal.createUniqueKey(AccountBalanceView.ACCOUNT_BALANCE_VIEW, DSL.name("account_balance_view_pkey"), new TableField[] { AccountBalanceView.ACCOUNT_BALANCE_VIEW.ACCOUNT_ID }, true);
+    public static final UniqueKey<AccountSnapshotRecord> ACCOUNT_SNAPSHOT_PKEY = Internal.createUniqueKey(AccountSnapshot.ACCOUNT_SNAPSHOT, DSL.name("account_snapshot_pkey"), new TableField[] { AccountSnapshot.ACCOUNT_SNAPSHOT.ACCOUNT_ID }, true);
     public static final UniqueKey<EventStoreRecord> EVENT_STORE_PKEY = Internal.createUniqueKey(EventStore.EVENT_STORE, DSL.name("event_store_pkey"), new TableField[] { EventStore.EVENT_STORE.ID }, true);
     public static final UniqueKey<EventStoreRecord> UQ_EVENT_STORE_ACCOUNT_VERSION = Internal.createUniqueKey(EventStore.EVENT_STORE, DSL.name("uq_event_store_account_version"), new TableField[] { EventStore.EVENT_STORE.ACCOUNT_ID, EventStore.EVENT_STORE.VERSION }, true);
     public static final UniqueKey<FlywaySchemaHistoryRecord> FLYWAY_SCHEMA_HISTORY_PK = Internal.createUniqueKey(FlywaySchemaHistory.FLYWAY_SCHEMA_HISTORY, DSL.name("flyway_schema_history_pk"), new TableField[] { FlywaySchemaHistory.FLYWAY_SCHEMA_HISTORY.INSTALLED_RANK }, true);
