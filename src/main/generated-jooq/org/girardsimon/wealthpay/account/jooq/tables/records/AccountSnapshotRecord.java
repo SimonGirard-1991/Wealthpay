@@ -77,6 +77,20 @@ public class AccountSnapshotRecord extends UpdatableRecordImpl<AccountSnapshotRe
         return (OffsetDateTime) get(3);
     }
 
+    /**
+     * Setter for <code>account.account_snapshot.schema_version</code>.
+     */
+    public void setSchemaVersion(Long value) {
+        set(4, value);
+    }
+
+    /**
+     * Getter for <code>account.account_snapshot.schema_version</code>.
+     */
+    public Long getSchemaVersion() {
+        return (Long) get(4);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -100,13 +114,14 @@ public class AccountSnapshotRecord extends UpdatableRecordImpl<AccountSnapshotRe
     /**
      * Create a detached, initialised AccountSnapshotRecord
      */
-    public AccountSnapshotRecord(UUID accountId, JSONB state, Long version, OffsetDateTime lastUpdatedAt) {
+    public AccountSnapshotRecord(UUID accountId, JSONB state, Long version, OffsetDateTime lastUpdatedAt, Long schemaVersion) {
         super(AccountSnapshot.ACCOUNT_SNAPSHOT);
 
         setAccountId(accountId);
         setState(state);
         setVersion(version);
         setLastUpdatedAt(lastUpdatedAt);
+        setSchemaVersion(schemaVersion);
         resetChangedOnNotNull();
     }
 
@@ -121,6 +136,7 @@ public class AccountSnapshotRecord extends UpdatableRecordImpl<AccountSnapshotRe
             setState(value.getState());
             setVersion(value.getVersion());
             setLastUpdatedAt(value.getLastUpdatedAt());
+            setSchemaVersion(value.getSchemaVersion());
             resetChangedOnNotNull();
         }
     }

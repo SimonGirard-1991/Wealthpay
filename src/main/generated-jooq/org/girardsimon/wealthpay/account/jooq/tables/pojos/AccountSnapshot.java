@@ -23,6 +23,7 @@ public class AccountSnapshot implements Serializable {
     private JSONB state;
     private Long version;
     private OffsetDateTime lastUpdatedAt;
+    private Long schemaVersion;
 
     public AccountSnapshot() {}
 
@@ -31,18 +32,21 @@ public class AccountSnapshot implements Serializable {
         this.state = value.state;
         this.version = value.version;
         this.lastUpdatedAt = value.lastUpdatedAt;
+        this.schemaVersion = value.schemaVersion;
     }
 
     public AccountSnapshot(
         UUID accountId,
         JSONB state,
         Long version,
-        OffsetDateTime lastUpdatedAt
+        OffsetDateTime lastUpdatedAt,
+        Long schemaVersion
     ) {
         this.accountId = accountId;
         this.state = state;
         this.version = version;
         this.lastUpdatedAt = lastUpdatedAt;
+        this.schemaVersion = schemaVersion;
     }
 
     /**
@@ -101,6 +105,20 @@ public class AccountSnapshot implements Serializable {
         this.lastUpdatedAt = lastUpdatedAt;
     }
 
+    /**
+     * Getter for <code>account.account_snapshot.schema_version</code>.
+     */
+    public Long getSchemaVersion() {
+        return this.schemaVersion;
+    }
+
+    /**
+     * Setter for <code>account.account_snapshot.schema_version</code>.
+     */
+    public void setSchemaVersion(Long schemaVersion) {
+        this.schemaVersion = schemaVersion;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
@@ -134,6 +152,12 @@ public class AccountSnapshot implements Serializable {
         }
         else if (!this.lastUpdatedAt.equals(other.lastUpdatedAt))
             return false;
+        if (this.schemaVersion == null) {
+            if (other.schemaVersion != null)
+                return false;
+        }
+        else if (!this.schemaVersion.equals(other.schemaVersion))
+            return false;
         return true;
     }
 
@@ -145,6 +169,7 @@ public class AccountSnapshot implements Serializable {
         result = prime * result + ((this.state == null) ? 0 : this.state.hashCode());
         result = prime * result + ((this.version == null) ? 0 : this.version.hashCode());
         result = prime * result + ((this.lastUpdatedAt == null) ? 0 : this.lastUpdatedAt.hashCode());
+        result = prime * result + ((this.schemaVersion == null) ? 0 : this.schemaVersion.hashCode());
         return result;
     }
 
@@ -156,6 +181,7 @@ public class AccountSnapshot implements Serializable {
         sb.append(", ").append(state);
         sb.append(", ").append(version);
         sb.append(", ").append(lastUpdatedAt);
+        sb.append(", ").append(schemaVersion);
 
         sb.append(")");
         return sb.toString();

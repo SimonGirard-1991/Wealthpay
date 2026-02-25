@@ -35,6 +35,11 @@ public class AccountEventRepository implements AccountEventStore {
 
   @Override
   public List<AccountEvent> loadEvents(AccountId accountId) {
+    return loadEventsAfterVersion(accountId, 0L);
+  }
+
+  @Override
+  public List<AccountEvent> loadEventsAfterVersion(AccountId accountId, long version) {
     UUID accountUuid = accountId.id();
 
     List<EventStore> rows =
@@ -49,6 +54,7 @@ public class AccountEventRepository implements AccountEventStore {
                 EVENT_STORE.CREATED_AT)
             .from(EVENT_STORE)
             .where(EVENT_STORE.ACCOUNT_ID.eq(accountUuid))
+            .and(EVENT_STORE.VERSION.gt(version))
             .orderBy(EVENT_STORE.VERSION.asc())
             .fetchInto(EventStore.class);
 

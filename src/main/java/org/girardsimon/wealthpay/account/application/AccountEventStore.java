@@ -8,5 +8,7 @@ public interface AccountEventStore {
 
   List<AccountEvent> loadEvents(AccountId accountId);
 
+  List<AccountEvent> loadEventsAfterVersion(AccountId accountId, long version);
+
   void appendEvents(AccountId accountId, long expectedVersion, List<AccountEvent> events);
 }

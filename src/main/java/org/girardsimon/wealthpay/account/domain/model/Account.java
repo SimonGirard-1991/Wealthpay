@@ -70,6 +70,31 @@ public class Account {
     }
   }
 
+  public static Account rehydrateFromSnapshot(AccountSnapshot snapshot, List<AccountEvent> events) {
+    Account account = Account.fromSnapshot(snapshot);
+    events.forEach(account::apply);
+    return account;
+  }
+
+  private static Account fromSnapshot(AccountSnapshot snapshot) {
+    Account account = new Account(snapshot.accountId(), snapshot.currency());
+    account.balance = snapshot.balance();
+    account.status = snapshot.status();
+    account.version = snapshot.version();
+    account.reservations.putAll(snapshot.reservations());
+    return account;
+  }
+
+  public static AccountSnapshot toSnapshot(Account account) {
+    return new AccountSnapshot(
+        account.id,
+        account.currency,
+        account.balance,
+        account.status,
+        account.reservations,
+        account.version);
+  }
+
   public static Account rehydrate(List<AccountEvent> history) {
     if (history == null || history.isEmpty()) {
       throw new AccountHistoryNotFoundException();

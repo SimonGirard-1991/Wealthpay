@@ -30,38 +30,53 @@ import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.ReservationOutcome;
 import org.girardsimon.wealthpay.account.domain.model.ReservationPhase;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AccountApplicationService {
 
+  private static final Logger log = LoggerFactory.getLogger(AccountApplicationService.class);
+
   private final AccountEventStore accountEventStore;
   private final AccountEventPublisher accountEventPublisher;
   private final ProcessedTransactionStore processedTransactionStore;
   private final ProcessedReservationStore processedReservationStore;
+  private final AccountSnapshotStore accountSnapshotStore;
   private final Clock clock;
   private final AccountIdGenerator accountIdGenerator;
   private final EventIdGenerator eventIdGenerator;
   private final ReservationIdGenerator reservationIdGenerator;
+  private final int snapshotThreshold;
 
   public AccountApplicationService(
       AccountEventStore accountEventStore,
       AccountEventPublisher accountEventPublisher,
       ProcessedTransactionStore processedTransactionStore,
       ProcessedReservationStore processedReservationStore,
+      AccountSnapshotStore accountSnapshotStore,
       Clock clock,
       AccountIdGenerator accountIdGenerator,
       EventIdGenerator eventIdGenerator,
-      ReservationIdGenerator reservationIdGenerator) {
+      ReservationIdGenerator reservationIdGenerator,
+      @Value("${account-event.snapshot.threshold}") int snapshotThreshold) {
+    if (snapshotThreshold <= 0) {
+      throw new IllegalArgumentException(
+          "Property account-event.snapshot.threshold must be > 0 but was " + snapshotThreshold);
+    }
     this.accountEventStore = accountEventStore;
     this.accountEventPublisher = accountEventPublisher;
     this.processedTransactionStore = processedTransactionStore;
     this.processedReservationStore = processedReservationStore;
+    this.accountSnapshotStore = accountSnapshotStore;
     this.clock = clock;
     this.accountIdGenerator = accountIdGenerator;
     this.eventIdGenerator = eventIdGenerator;
     this.reservationIdGenerator = reservationIdGenerator;
+    this.snapshotThreshold = snapshotThreshold;
   }
 
   private static long versionBeforeEvents(Account account, List<AccountEvent> events) {
@@ -69,12 +84,31 @@ public class AccountApplicationService {
   }
 
   private Account loadAccount(AccountId accountId) {
-    List<AccountEvent> history = accountEventStore.loadEvents(accountId);
-    return Account.rehydrate(history);
+    return accountSnapshotStore
+        .load(accountId)
+        .map(
+            accountSnapshot -> {
+              List<AccountEvent> eventsAfterSnapshot =
+                  accountEventStore.loadEventsAfterVersion(accountId, accountSnapshot.version());
+              return Account.rehydrateFromSnapshot(accountSnapshot, eventsAfterSnapshot);
+            })
+        .orElseGet(() -> Account.rehydrate(accountEventStore.loadEvents(accountId)));
   }
 
-  private void saveEvents(
-      long expectedVersion, List<AccountEvent> accountEvents, AccountId accountId) {
+  private void saveEvents(Account account, long expectedVersion, List<AccountEvent> accountEvents) {
+    persistEvents(account.getId(), expectedVersion, accountEvents);
+    if (account.getVersion() / snapshotThreshold > expectedVersion / snapshotThreshold) {
+      try {
+        accountSnapshotStore.saveSnapshot(Account.toSnapshot(account));
+      } catch (RuntimeException e) {
+        // Snapshot is performance optimization and should not block a critical path
+        log.warn("Failed to save snapshot for account {}", account.getId(), e);
+      }
+    }
+  }
+
+  private void persistEvents(
+      AccountId accountId, long expectedVersion, List<AccountEvent> accountEvents) {
     accountEventStore.appendEvents(accountId, expectedVersion, accountEvents);
     accountEventPublisher.publish(accountEvents);
   }
@@ -84,7 +118,7 @@ public class AccountApplicationService {
     AccountId accountId = accountIdGenerator.newId();
     HandleResult result =
         Account.handle(openAccount, accountId, eventIdGenerator, Instant.now(clock));
-    saveEvents(0L, result.events(), accountId);
+    persistEvents(accountId, 0L, result.events());
     return accountId;
   }
 
@@ -110,7 +144,7 @@ public class AccountApplicationService {
     Account account = loadAccount(command.accountId());
     List<AccountEvent> events = handler.apply(account, now).events();
     long versionBeforeEvents = versionBeforeEvents(account, events);
-    saveEvents(versionBeforeEvents, events, command.accountId());
+    saveEvents(account, versionBeforeEvents, events);
     return status;
   }
 
@@ -146,7 +180,7 @@ public class AccountApplicationService {
       List<AccountEvent> reservationEvents =
           account.handle(reserveFunds, eventIdGenerator, reservationId, now).events();
       long versionBeforeEvents = versionBeforeEvents(account, reservationEvents);
-      saveEvents(versionBeforeEvents, reservationEvents, accountId);
+      saveEvents(account, versionBeforeEvents, reservationEvents);
 
       processedReservationStore.register(
           accountId, transactionId, reservationId, ReservationPhase.RESERVED, now);
@@ -185,7 +219,7 @@ public class AccountApplicationService {
     List<AccountEvent> events = reservationOutcome.events();
 
     long versionBeforeEvents = versionBeforeEvents(account, events);
-    saveEvents(versionBeforeEvents, events, accountId);
+    saveEvents(account, versionBeforeEvents, events);
     processedReservationStore.updatePhase(accountId, reservationId, targetPhase, occurredAt);
     return new ReservationResponse(
         accountId, reservationId, reservationOutcome.reservedAmount(), expectedResult);

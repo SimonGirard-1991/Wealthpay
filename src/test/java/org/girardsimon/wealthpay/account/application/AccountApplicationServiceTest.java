@@ -16,7 +16,9 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
@@ -42,6 +44,8 @@ import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapt
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
+import org.girardsimon.wealthpay.account.domain.model.AccountSnapshot;
+import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
 import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
@@ -52,6 +56,7 @@ import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -59,10 +64,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AccountApplicationServiceTest {
 
   public static final Instant INSTANT_FOR_TESTS = Instant.parse("2025-11-16T15:00:00Z");
+  public static final int SNAPSHOT_THRESHOLD = 100;
   AccountEventStore accountEventStore = mock(AccountEventStore.class);
   AccountEventPublisher accountEventPublisher = mock(AccountEventPublisher.class);
   ProcessedTransactionStore processedTransactionStore = mock(ProcessedTransactionStore.class);
   ProcessedReservationStore processedReservationStore = mock(ProcessedReservationStore.class);
+  AccountSnapshotStore accountSnapshotStore = mock(AccountSnapshotStore.class);
 
   Clock clock = Clock.fixed(INSTANT_FOR_TESTS, ZoneOffset.UTC);
 
@@ -80,10 +87,32 @@ class AccountApplicationServiceTest {
           accountEventPublisher,
           processedTransactionStore,
           processedReservationStore,
+          accountSnapshotStore,
           clock,
           accountIdGenerator,
           eventIdGenerator,
-          reservationIdGenerator);
+          reservationIdGenerator,
+          SNAPSHOT_THRESHOLD);
+
+  @Test
+  void constructor_should_throw_when_snapshot_threshold_is_not_positive() {
+    assertThatExceptionOfType(IllegalArgumentException.class)
+        .isThrownBy(
+            () ->
+                new AccountApplicationService(
+                    accountEventStore,
+                    accountEventPublisher,
+                    processedTransactionStore,
+                    processedReservationStore,
+                    accountSnapshotStore,
+                    clock,
+                    accountIdGenerator,
+                    eventIdGenerator,
+                    reservationIdGenerator,
+                    0))
+        .withMessageContaining("account-event.snapshot.threshold")
+        .withMessageContaining("> 0");
+  }
 
   @Test
   void openAccount_saves_event_AccountOpened_when_account_does_not_exist() {
@@ -91,7 +120,6 @@ class AccountApplicationServiceTest {
     SupportedCurrency currency = SupportedCurrency.USD;
     Money initialBalance = new Money(BigDecimal.valueOf(10L), currency);
     OpenAccount openAccount = new OpenAccount(currency, initialBalance);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of());
 
     // Act
     accountApplicationService.openAccount(openAccount);
@@ -103,6 +131,7 @@ class AccountApplicationServiceTest {
     InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
     inOrder.verify(accountEventStore).appendEvents(accountId, 0L, List.of(accountOpened));
     inOrder.verify(accountEventPublisher).publish(List.of(accountOpened));
+    verify(accountSnapshotStore, never()).saveSnapshot(any());
   }
 
   @Test
@@ -122,6 +151,7 @@ class AccountApplicationServiceTest {
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
     CaptureReservation captureReservation = new CaptureReservation(accountId, reservationId);
+    when(accountSnapshotStore.load(accountId)).thenReturn(Optional.empty());
 
     // Act
     ReservationResponse captureReservationResponse =
@@ -439,6 +469,78 @@ class AccountApplicationServiceTest {
   }
 
   @Test
+  void
+      creditAccount_should_load_from_snapshot_without_saving_new_snapshot_when_threshold_not_crossed() {
+    // Arrange
+    TransactionId transactionId = TransactionId.newId();
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(new BigDecimal("250.00"), usd);
+    AccountSnapshot accountSnapshot =
+        new AccountSnapshot(accountId, usd, initialBalance, AccountStatus.OPENED, Map.of(), 100L);
+    when(accountSnapshotStore.load(accountId)).thenReturn(Optional.of(accountSnapshot));
+    when(accountEventStore.loadEventsAfterVersion(accountId, 100L)).thenReturn(List.of());
+    Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
+    CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
+    when(processedTransactionStore.register(
+            accountId, transactionId, creditAccount.fingerprint(), INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.COMMITTED);
+
+    // Act
+    TransactionStatus transactionStatus = accountApplicationService.creditAccount(creditAccount);
+
+    // Assert
+    AccountEventMeta accountEventMeta =
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 101L);
+    FundsCredited fundsCredited = new FundsCredited(accountEventMeta, transactionId, money);
+    InOrder inOrder = inOrder(accountSnapshotStore, accountEventStore, accountEventPublisher);
+    inOrder.verify(accountSnapshotStore).load(accountId);
+    inOrder.verify(accountEventStore).loadEventsAfterVersion(accountId, 100L);
+    inOrder.verify(accountEventStore).appendEvents(accountId, 100L, List.of(fundsCredited));
+    inOrder.verify(accountEventPublisher).publish(List.of(fundsCredited));
+    verify(accountSnapshotStore, never()).saveSnapshot(any());
+    assertThat(transactionStatus).isEqualTo(TransactionStatus.COMMITTED);
+    verify(accountEventStore, never()).loadEvents(accountId);
+  }
+
+  @Test
+  void creditAccount_should_save_snapshot_when_threshold_is_crossed_without_initial_snapshot() {
+    // Arrange
+    TransactionId transactionId = TransactionId.newId();
+    SupportedCurrency usd = SupportedCurrency.USD;
+    List<AccountEvent> historyUntilVersion99 =
+        buildHistory(accountId, usd, SNAPSHOT_THRESHOLD - 1L);
+    when(accountSnapshotStore.load(accountId)).thenReturn(Optional.empty());
+    when(accountEventStore.loadEvents(accountId)).thenReturn(historyUntilVersion99);
+    Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
+    CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
+    when(processedTransactionStore.register(
+            accountId, transactionId, creditAccount.fingerprint(), INSTANT_FOR_TESTS))
+        .thenReturn(TransactionStatus.COMMITTED);
+
+    // Act
+    TransactionStatus transactionStatus = accountApplicationService.creditAccount(creditAccount);
+
+    // Assert
+    AccountEventMeta accountEventMeta =
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 100L);
+    FundsCredited fundsCredited = new FundsCredited(accountEventMeta, transactionId, money);
+    ArgumentCaptor<AccountSnapshot> accountCaptor = ArgumentCaptor.forClass(AccountSnapshot.class);
+    InOrder inOrder = inOrder(accountSnapshotStore, accountEventStore, accountEventPublisher);
+    inOrder.verify(accountSnapshotStore).load(accountId);
+    inOrder.verify(accountEventStore).loadEvents(accountId);
+    inOrder.verify(accountEventStore).appendEvents(accountId, 99L, List.of(fundsCredited));
+    inOrder.verify(accountEventPublisher).publish(List.of(fundsCredited));
+    inOrder.verify(accountSnapshotStore).saveSnapshot(accountCaptor.capture());
+    assertAll(
+        () -> assertThat(transactionStatus).isEqualTo(TransactionStatus.COMMITTED),
+        () -> assertThat(accountCaptor.getValue().version()).isEqualTo(100L),
+        () ->
+            assertThat(accountCaptor.getValue().balance())
+                .isEqualTo(Money.of(new BigDecimal("113.00"), usd)));
+    verify(accountEventStore, never()).loadEventsAfterVersion(any(), anyLong());
+  }
+
+  @Test
   void debitAccount_should_not_persist_event_when_transaction_status_is_no_effect() {
     // Arrange
     TransactionId transactionId = TransactionId.newId();
@@ -551,5 +653,25 @@ class AccountApplicationServiceTest {
         () ->
             assertThat(reserveFundsResponse.reservationResult())
                 .isEqualTo(ReservationResult.RESERVED));
+  }
+
+  private List<AccountEvent> buildHistory(
+      AccountId accountId, SupportedCurrency currency, Long numberOfEvents) {
+    List<AccountEvent> events = new ArrayList<>();
+
+    Money initialBalance = Money.of(new BigDecimal("10.00"), currency);
+    AccountEventMeta accountOpenedMeta =
+        AccountEventMeta.of(EventId.newId(), accountId, INSTANT_FOR_TESTS.minusSeconds(99L), 1L);
+    events.add(new AccountOpened(accountOpenedMeta, currency, initialBalance));
+
+    Money historicalCreditAmount = Money.of(BigDecimal.ONE, currency);
+    for (long version = 2L; version <= numberOfEvents; version++) {
+      AccountEventMeta fundsCreditedMeta =
+          AccountEventMeta.of(
+              EventId.newId(), accountId, INSTANT_FOR_TESTS.minusSeconds(100L - version), version);
+      events.add(
+          new FundsCredited(fundsCreditedMeta, TransactionId.newId(), historicalCreditAmount));
+    }
+    return events;
   }
 }

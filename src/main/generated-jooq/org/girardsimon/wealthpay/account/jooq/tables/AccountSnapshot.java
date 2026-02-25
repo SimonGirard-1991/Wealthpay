@@ -71,6 +71,11 @@ public class AccountSnapshot extends TableImpl<AccountSnapshotRecord> {
      */
     public final TableField<AccountSnapshotRecord, OffsetDateTime> LAST_UPDATED_AT = createField(DSL.name("last_updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
 
+    /**
+     * The column <code>account.account_snapshot.schema_version</code>.
+     */
+    public final TableField<AccountSnapshotRecord, Long> SCHEMA_VERSION = createField(DSL.name("schema_version"), SQLDataType.BIGINT.nullable(false), this, "");
+
     private AccountSnapshot(Name alias, Table<AccountSnapshotRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
