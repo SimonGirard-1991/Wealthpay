@@ -228,6 +228,17 @@ Error handling:
 - Architecture rules enforced with Spring Modulith tests
 - Integration tests using real PostgreSQL via Testcontainers
 - Kafka consumer integration tests using `@EmbeddedKafka`
+- **Mutation testing** with PITest (80% mutation score threshold enforced)
+
+### Mutation Testing
+
+[PITest](https://pitest.org/) is used to verify that tests actually detect code changes (mutations). It targets domain, application, and utility classes — infrastructure is excluded since those tests require Docker containers.
+
+```bash
+mvn pitest:mutationCoverage
+```
+
+The HTML report is generated at `target/pit-reports/index.html`.
 
 ---
 

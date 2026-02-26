@@ -51,6 +51,8 @@
         <spotless-maven-plugin.version>3.2.1</spotless-maven-plugin.version>
         <google-java-format.version>1.34.1</google-java-format.version>
         <confluent.version>8.1.1</confluent.version>
+        <pitest-maven-plugin.version>1.22.1</pitest-maven-plugin.version>
+        <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
     </properties>
     <dependencies>
         <dependency>
@@ -305,6 +307,49 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>${pitest-maven-plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>${pitest-junit5-plugin.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <parseSurefireArgLine>false</parseSurefireArgLine>
+                    <targetClasses>
+                        <param>org.girardsimon.wealthpay.account.*</param>
+                        <param>org.girardsimon.wealthpay.shared.*</param>
+                    </targetClasses>
+                    <excludedClasses>
+                        <param>org.girardsimon.wealthpay.account.jooq.*</param>
+                        <param>org.girardsimon.wealthpay.account.api.generated.*</param>
+                        <param>org.girardsimon.wealthpay.shared.api.generated.*</param>
+                        <param>org.girardsimon.wealthpay.account.infrastructure.*</param>
+                        <param>org.girardsimon.wealthpay.shared.infrastructure.*</param>
+                        <param>org.girardsimon.wealthpay.shared.config.*</param>
+                    </excludedClasses>
+                    <excludedTestClasses>
+                        <param>org.girardsimon.wealthpay.account.infrastructure.db.repository.*</param>
+                        <param>org.girardsimon.wealthpay.account.infrastructure.consumer.*</param>
+                        <param>org.girardsimon.wealthpay.account.infrastructure.web.*</param>
+                        <param>org.girardsimon.wealthpay.shared.infrastructure.web.*</param>
+                        <param>org.girardsimon.wealthpay.account.ArchitectureTests</param>
+                    </excludedTestClasses>
+                    <jvmArgs>
+                        <jvmArg>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</jvmArg>
+                    </jvmArgs>
+                    <mutationThreshold>80</mutationThreshold>
+                    <outputFormats>
+                        <outputFormat>HTML</outputFormat>
+                        <outputFormat>XML</outputFormat>
+                    </outputFormats>
+                    <timestampedReports>false</timestampedReports>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
