@@ -20,11 +20,13 @@ import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceE
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
+import org.girardsimon.wealthpay.account.domain.exception.TransactionIdConflictException;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.girardsimon.wealthpay.shared.infrastructure.web.FakeController;
 import org.girardsimon.wealthpay.shared.infrastructure.web.FakeService;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -68,10 +70,16 @@ class AccountExceptionHandlerTest {
   }
 
   private static Stream<Arguments> allConflictExceptions() {
+    AccountId accountId = AccountId.newId();
+    TransactionId transactionId = TransactionId.newId();
     return Stream.of(
         Arguments.of(new AccountInactiveException(), "Account is inactive"),
         Arguments.of(new ReservationAlreadyCanceledException("message"), "message"),
-        Arguments.of(new ReservationAlreadyCapturedException("message"), "message"));
+        Arguments.of(new ReservationAlreadyCapturedException("message"), "message"),
+        Arguments.of(
+            new TransactionIdConflictException(accountId, transactionId),
+            "Transaction id conflict for account %s and transaction %s"
+                .formatted(accountId, transactionId)));
   }
 
   private static Stream<Arguments> allUnprocessableContentExceptions() {

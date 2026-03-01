@@ -13,6 +13,7 @@ import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceE
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
+import org.girardsimon.wealthpay.account.domain.exception.TransactionIdConflictException;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.shared.api.generated.model.ApiErrorDto;
 import org.slf4j.Logger;
@@ -52,7 +53,8 @@ public class AccountExceptionHandler {
   @ExceptionHandler({
     AccountInactiveException.class,
     ReservationAlreadyCanceledException.class,
-    ReservationAlreadyCapturedException.class
+    ReservationAlreadyCapturedException.class,
+    TransactionIdConflictException.class
   })
   public ResponseEntity<ApiErrorDto> handleConflictException(Exception e) {
     log.warn("Conflict exception: ", e);
