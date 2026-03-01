@@ -33,7 +33,7 @@ cancel reservation, close account) using techniques common in real financial sys
 - Every state change is captured as an immutable domain event
 - Aggregate state is rebuilt through event replay (`rehydrate`)
 - Event store backed by **PostgreSQL** (`event_store` table + JSONB payloads)
-- Snapshot support planned for large histories
+- Snapshot threshold configurable via `ACCOUNT_SNAPSHOT_THRESHOLD` env var (default to 100)
 
 ### ✔ CQRS
 
@@ -232,7 +232,8 @@ Error handling:
 
 ### Mutation Testing
 
-[PITest](https://pitest.org/) is used to verify that tests actually detect code changes (mutations). It targets domain, application, and utility classes — infrastructure is excluded since those tests require Docker containers.
+[PITest](https://pitest.org/) is used to verify that tests actually detect code changes (mutations). It targets domain,
+application, and utility classes — infrastructure is excluded since those tests require Docker containers.
 
 ```bash
 mvn pitest:mutationCoverage

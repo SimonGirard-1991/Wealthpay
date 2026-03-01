@@ -66,7 +66,7 @@ We adopt an event-sourced domain model for the Account aggregate.
 
 - Higher conceptual complexity compared to CRUD
 - Requires careful discipline in aggregate design
-- Rehydration cost grows with event history (mitigated later via snapshots if needed)
+- Rehydration cost grows with event history (mitigated with snapshot)
 
 ### Constraints and Invariants
 
