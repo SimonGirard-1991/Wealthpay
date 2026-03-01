@@ -253,7 +253,7 @@ This project is both:
     - DDD & tactical patterns
     - Event Sourcing & consistency handling
     - Hexagonal + modular monolith
-    - Spring Boot 3.3+, JOOQ, Flyway, Postgres, Kafka, Debezium
+    - Spring Boot 4.0+, JOOQ, Flyway, Postgres, Kafka, Debezium
     - OpenAPI contract-first API design
     - Strong testing practices
 
