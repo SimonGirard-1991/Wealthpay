@@ -51,6 +51,7 @@ public class AccountApplicationService {
   private final EventIdGenerator eventIdGenerator;
   private final ReservationIdGenerator reservationIdGenerator;
   private final int snapshotThreshold;
+  private final AccountLoader accountLoader;
 
   public AccountApplicationService(
       AccountEventStore accountEventStore,
@@ -62,7 +63,8 @@ public class AccountApplicationService {
       AccountIdGenerator accountIdGenerator,
       EventIdGenerator eventIdGenerator,
       ReservationIdGenerator reservationIdGenerator,
-      @Value("${account-event.snapshot.threshold}") int snapshotThreshold) {
+      @Value("${account-event.snapshot.threshold}") int snapshotThreshold,
+      AccountLoader accountLoader) {
     if (snapshotThreshold <= 0) {
       throw new IllegalArgumentException(
           "Property account-event.snapshot.threshold must be > 0 but was " + snapshotThreshold);
@@ -77,22 +79,11 @@ public class AccountApplicationService {
     this.eventIdGenerator = eventIdGenerator;
     this.reservationIdGenerator = reservationIdGenerator;
     this.snapshotThreshold = snapshotThreshold;
+    this.accountLoader = accountLoader;
   }
 
   private static long versionBeforeEvents(Account account, List<AccountEvent> events) {
     return account.getVersion() - events.size();
-  }
-
-  private Account loadAccount(AccountId accountId) {
-    return accountSnapshotStore
-        .load(accountId)
-        .map(
-            accountSnapshot -> {
-              List<AccountEvent> eventsAfterSnapshot =
-                  accountEventStore.loadEventsAfterVersion(accountId, accountSnapshot.version());
-              return Account.rehydrateFromSnapshot(accountSnapshot, eventsAfterSnapshot);
-            })
-        .orElseGet(() -> Account.rehydrate(accountEventStore.loadEvents(accountId)));
   }
 
   private void saveEvents(Account account, long expectedVersion, List<AccountEvent> accountEvents) {
@@ -141,7 +132,7 @@ public class AccountApplicationService {
     if (status == TransactionStatus.NO_EFFECT) {
       return status;
     }
-    Account account = loadAccount(command.accountId());
+    Account account = accountLoader.loadAccount(command.accountId());
     List<AccountEvent> events = handler.apply(account, now).events();
     long versionBeforeEvents = versionBeforeEvents(account, events);
     saveEvents(account, versionBeforeEvents, events);
@@ -176,7 +167,7 @@ public class AccountApplicationService {
     } else {
       ReservationId reservationId = reservationIdGenerator.newId();
 
-      Account account = loadAccount(accountId);
+      Account account = accountLoader.loadAccount(accountId);
       List<AccountEvent> reservationEvents =
           account.handle(reserveFunds, eventIdGenerator, reservationId, now).events();
       long versionBeforeEvents = versionBeforeEvents(account, reservationEvents);
@@ -209,7 +200,7 @@ public class AccountApplicationService {
     ReservationId reservationId = reservationCommand.reservationId();
     Instant occurredAt = Instant.now(clock);
 
-    Account account = loadAccount(accountId);
+    Account account = accountLoader.loadAccount(accountId);
     ReservationOutcome reservationOutcome = handler.apply(account, occurredAt);
 
     if (!reservationOutcome.hasEffect()) {

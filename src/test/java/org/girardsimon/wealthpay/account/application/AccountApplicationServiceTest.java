@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
@@ -38,14 +37,13 @@ import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
-import org.girardsimon.wealthpay.account.domain.exception.AccountHistoryNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
+import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.AccountSnapshot;
-import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
 import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
@@ -70,6 +68,7 @@ class AccountApplicationServiceTest {
   ProcessedTransactionStore processedTransactionStore = mock(ProcessedTransactionStore.class);
   ProcessedReservationStore processedReservationStore = mock(ProcessedReservationStore.class);
   AccountSnapshotStore accountSnapshotStore = mock(AccountSnapshotStore.class);
+  AccountLoader accountLoader = mock(AccountLoader.class);
 
   Clock clock = Clock.fixed(INSTANT_FOR_TESTS, ZoneOffset.UTC);
 
@@ -92,7 +91,8 @@ class AccountApplicationServiceTest {
           accountIdGenerator,
           eventIdGenerator,
           reservationIdGenerator,
-          SNAPSHOT_THRESHOLD);
+          SNAPSHOT_THRESHOLD,
+          accountLoader);
 
   @Test
   void constructor_should_throw_when_snapshot_threshold_is_not_positive() {
@@ -109,7 +109,8 @@ class AccountApplicationServiceTest {
                     accountIdGenerator,
                     eventIdGenerator,
                     reservationIdGenerator,
-                    0))
+                    0,
+                    accountLoader))
         .withMessageContaining("account-event.snapshot.threshold")
         .withMessageContaining("> 0");
   }
@@ -149,9 +150,8 @@ class AccountApplicationServiceTest {
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     CaptureReservation captureReservation = new CaptureReservation(accountId, reservationId);
-    when(accountSnapshotStore.load(accountId)).thenReturn(Optional.empty());
 
     // Act
     ReservationResponse captureReservationResponse =
@@ -192,7 +192,7 @@ class AccountApplicationServiceTest {
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     ReservationId otherReservationId = ReservationId.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
@@ -229,7 +229,7 @@ class AccountApplicationServiceTest {
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     ReservationId otherReservationId = ReservationId.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
@@ -256,7 +256,7 @@ class AccountApplicationServiceTest {
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     ReservationId otherReservationId = ReservationId.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
@@ -264,18 +264,6 @@ class AccountApplicationServiceTest {
 
     // Act ... Assert
     assertThatExceptionOfType(ReservationAlreadyCanceledException.class)
-        .isThrownBy(() -> accountApplicationService.captureReservation(captureReservation));
-  }
-
-  @Test
-  void captureReservation_should_throw_account_history_not_found_when_no_corresponding_account() {
-    // Arrange
-    CaptureReservation captureReservation =
-        new CaptureReservation(accountId, ReservationId.newId());
-    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of());
-
-    // Act ... Assert
-    assertThatExceptionOfType(AccountHistoryNotFoundException.class)
         .isThrownBy(() -> accountApplicationService.captureReservation(captureReservation));
   }
 
@@ -293,7 +281,8 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
+    List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     CancelReservation cancelReservation = new CancelReservation(accountId, reservationId);
 
     // Act
@@ -334,7 +323,8 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
+    List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     ReservationId otherReservationId = ReservationId.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
@@ -371,7 +361,8 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
+    List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     ReservationId otherReservationId = ReservationId.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
@@ -397,7 +388,8 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened, fundsReserved));
+    List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     ReservationId otherReservationId = ReservationId.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
@@ -405,17 +397,6 @@ class AccountApplicationServiceTest {
 
     // Act ... Assert
     assertThatExceptionOfType(ReservationAlreadyCapturedException.class)
-        .isThrownBy(() -> accountApplicationService.cancelReservation(cancelReservation));
-  }
-
-  @Test
-  void cancelReservation_should_throw_account_history_not_found_when_no_corresponding_account() {
-    // Arrange
-    CancelReservation cancelReservation = new CancelReservation(accountId, ReservationId.newId());
-    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of());
-
-    // Act ... Assert
-    assertThatExceptionOfType(AccountHistoryNotFoundException.class)
         .isThrownBy(() -> accountApplicationService.cancelReservation(cancelReservation));
   }
 
@@ -448,7 +429,7 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     List<AccountEvent> accountEvents = List.of(accountOpened);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     Money money = Money.of(new BigDecimal("50.00"), SupportedCurrency.USD);
     CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
     when(processedTransactionStore.register(
@@ -469,48 +450,13 @@ class AccountApplicationServiceTest {
   }
 
   @Test
-  void
-      creditAccount_should_load_from_snapshot_without_saving_new_snapshot_when_threshold_not_crossed() {
-    // Arrange
-    TransactionId transactionId = TransactionId.newId();
-    SupportedCurrency usd = SupportedCurrency.USD;
-    Money initialBalance = Money.of(new BigDecimal("250.00"), usd);
-    AccountSnapshot accountSnapshot =
-        new AccountSnapshot(accountId, usd, initialBalance, AccountStatus.OPENED, Map.of(), 100L);
-    when(accountSnapshotStore.load(accountId)).thenReturn(Optional.of(accountSnapshot));
-    when(accountEventStore.loadEventsAfterVersion(accountId, 100L)).thenReturn(List.of());
-    Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
-    CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
-    when(processedTransactionStore.register(
-            accountId, transactionId, creditAccount.fingerprint(), INSTANT_FOR_TESTS))
-        .thenReturn(TransactionStatus.COMMITTED);
-
-    // Act
-    TransactionStatus transactionStatus = accountApplicationService.creditAccount(creditAccount);
-
-    // Assert
-    AccountEventMeta accountEventMeta =
-        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 101L);
-    FundsCredited fundsCredited = new FundsCredited(accountEventMeta, transactionId, money);
-    InOrder inOrder = inOrder(accountSnapshotStore, accountEventStore, accountEventPublisher);
-    inOrder.verify(accountSnapshotStore).load(accountId);
-    inOrder.verify(accountEventStore).loadEventsAfterVersion(accountId, 100L);
-    inOrder.verify(accountEventStore).appendEvents(accountId, 100L, List.of(fundsCredited));
-    inOrder.verify(accountEventPublisher).publish(List.of(fundsCredited));
-    verify(accountSnapshotStore, never()).saveSnapshot(any());
-    assertThat(transactionStatus).isEqualTo(TransactionStatus.COMMITTED);
-    verify(accountEventStore, never()).loadEvents(accountId);
-  }
-
-  @Test
   void creditAccount_should_save_snapshot_when_threshold_is_crossed_without_initial_snapshot() {
     // Arrange
     TransactionId transactionId = TransactionId.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     List<AccountEvent> historyUntilVersion99 =
         buildHistory(accountId, usd, SNAPSHOT_THRESHOLD - 1L);
-    when(accountSnapshotStore.load(accountId)).thenReturn(Optional.empty());
-    when(accountEventStore.loadEvents(accountId)).thenReturn(historyUntilVersion99);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(historyUntilVersion99));
     Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
     CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
     when(processedTransactionStore.register(
@@ -525,9 +471,9 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 100L);
     FundsCredited fundsCredited = new FundsCredited(accountEventMeta, transactionId, money);
     ArgumentCaptor<AccountSnapshot> accountCaptor = ArgumentCaptor.forClass(AccountSnapshot.class);
-    InOrder inOrder = inOrder(accountSnapshotStore, accountEventStore, accountEventPublisher);
-    inOrder.verify(accountSnapshotStore).load(accountId);
-    inOrder.verify(accountEventStore).loadEvents(accountId);
+    InOrder inOrder =
+        inOrder(accountLoader, accountEventStore, accountEventPublisher, accountSnapshotStore);
+    inOrder.verify(accountLoader).loadAccount(accountId);
     inOrder.verify(accountEventStore).appendEvents(accountId, 99L, List.of(fundsCredited));
     inOrder.verify(accountEventPublisher).publish(List.of(fundsCredited));
     inOrder.verify(accountSnapshotStore).saveSnapshot(accountCaptor.capture());
@@ -569,7 +515,7 @@ class AccountApplicationServiceTest {
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     List<AccountEvent> accountEvents = List.of(accountOpened);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(accountEvents);
+    when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
     Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
     DebitAccount debitAccount = new DebitAccount(transactionId, accountId, money);
     when(processedTransactionStore.register(
@@ -625,7 +571,8 @@ class AccountApplicationServiceTest {
     AccountEventMeta accountEventMeta1 =
         AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
-    when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened));
+    when(accountLoader.loadAccount(accountId))
+        .thenReturn(Account.rehydrate(List.of(accountOpened)));
     Money money = Money.of(new BigDecimal("5.00"), SupportedCurrency.USD);
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, money);
     when(processedTransactionStore.register(
