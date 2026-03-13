@@ -96,11 +96,20 @@ This ensures `spotless:check` runs before each commit, preventing unformatted co
 
 ### 1. Start Infrastructure (Docker)
 
-Use the provided `docker-compose.local.yml`:
+macOS / Linux:
 
 ```bash
-docker compose -f docker-compose.local.yml up -d
+./scripts/infra.sh
 ```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\infra.ps1
+```
+
+The Unix script adds `docker-compose.local.linux.yml` automatically on native Linux and uses only
+`docker-compose.local.yml` on macOS.
 
 ### 2. Register the Debezium Connector
 
