@@ -231,9 +231,27 @@ services:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
 
+  grafana:
+    image: grafana/grafana:12.3
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./docker/grafana/grafana.yml:/etc/grafana/provisioning/datasources/datasource.yaml
+      - ./docker/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: password
+    depends_on:
+      - prometheus
+
 volumes:
   pg_data:
   kafka_1_data:
   kafka_2_data:
   kafka_3_data:
   prometheus_data:
+  grafana_data:

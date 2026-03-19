@@ -1,0 +1,254 @@
+{
+  "uid": "wealthpay",
+  "title": "WealthPay",
+  "tags": ["wealthpay", "spring-boot"],
+  "timezone": "browser",
+  "refresh": "15s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"wealthpay\", uri!=\"/actuator/prometheus\"}[5m])) by (uri, method)",
+          "legendFormat": "{{method}} {{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HTTP Request Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"wealthpay\", uri!=\"/actuator/prometheus\"}[5m])) by (le, uri, method))",
+          "legendFormat": "p95 {{method}} {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"wealthpay\", uri!=\"/actuator/prometheus\"}[5m])) by (le, uri, method))",
+          "legendFormat": "p99 {{method}} {{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Account Load Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(account_load_seconds_bucket{job=\"wealthpay\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(account_load_seconds_bucket{job=\"wealthpay\"}[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Account Load Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(account_load_seconds_count{job=\"wealthpay\"}[5m]))",
+          "legendFormat": "loads/s"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP Errors (4xx / 5xx)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"wealthpay\", status=~\"4..\"}[5m])) by (status, uri)",
+          "legendFormat": "{{status}} {{uri}}"
+        },
+        {
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"wealthpay\", status=~\"5..\"}[5m])) by (status, uri)",
+          "legendFormat": "{{status}} {{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "JVM Heap Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{job=\"wealthpay\", area=\"heap\"}) by (id)",
+          "legendFormat": "{{id}}"
+        },
+        {
+          "expr": "sum(jvm_memory_max_bytes{job=\"wealthpay\", area=\"heap\"})",
+          "legendFormat": "max"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "GC Pause Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"wealthpay\"}[5m])",
+          "legendFormat": "{{action}} ({{cause}})"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "JVM Threads",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "jvm_threads_live_threads{job=\"wealthpay\"}",
+          "legendFormat": "live"
+        },
+        {
+          "expr": "jvm_threads_peak_threads{job=\"wealthpay\"}",
+          "legendFormat": "peak"
+        },
+        {
+          "expr": "jvm_threads_daemon_threads{job=\"wealthpay\"}",
+          "legendFormat": "daemon"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "DB Connection Pool",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active{job=\"wealthpay\"}",
+          "legendFormat": "active"
+        },
+        {
+          "expr": "hikaricp_connections_idle{job=\"wealthpay\"}",
+          "legendFormat": "idle"
+        },
+        {
+          "expr": "hikaricp_connections_pending{job=\"wealthpay\"}",
+          "legendFormat": "pending"
+        },
+        {
+          "expr": "hikaricp_connections_max{job=\"wealthpay\"}",
+          "legendFormat": "max"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Process CPU Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "process_cpu_usage{job=\"wealthpay\"}",
+          "legendFormat": "process"
+        },
+        {
+          "expr": "system_cpu_usage{job=\"wealthpay\"}",
+          "legendFormat": "system"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus (Main)", "value": "Prometheus (Main)" }
+      }
+    ]
+  },
+  "schemaVersion": 39
+}
