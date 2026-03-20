@@ -527,8 +527,8 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Rejected — 422', function () {",
-                  "    pm.response.to.have.status(422);",
+                  "pm.test('Rejected — 400', function () {",
+                  "    pm.response.to.have.status(400);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -571,8 +571,8 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Rejected — 422', function () {",
-                  "    pm.response.to.have.status(422);",
+                  "pm.test('Rejected — 400', function () {",
+                  "    pm.response.to.have.status(400);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -791,8 +791,8 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Rejected — 422', function () {",
-                  "    pm.response.to.have.status(422);",
+                  "pm.test('Rejected — 400', function () {",
+                  "    pm.response.to.have.status(400);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -979,8 +979,8 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Rejected — 422', function () {",
-                  "    pm.response.to.have.status(422);",
+                  "pm.test('Rejected — 400', function () {",
+                  "    pm.response.to.have.status(400);",
                   "});"
                 ],
                 "type": "text/javascript"
