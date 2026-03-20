@@ -184,7 +184,9 @@ public class Account {
   public HandleResult handle(
       CloseAccount closeAccount, EventIdGenerator eventIdGenerator, Instant occurredAt) {
     ensureAccountIdConsistency(closeAccount.accountId());
-    ensureActive();
+    if (this.status == AccountStatus.CLOSED) {
+      return new SimpleCommandResult(List.of());
+    }
     if (!this.balance.isZero() || !this.reservations.isEmpty()) {
       throw new AccountNotEmptyException();
     }

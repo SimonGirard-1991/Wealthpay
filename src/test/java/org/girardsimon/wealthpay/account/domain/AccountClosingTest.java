@@ -15,12 +15,12 @@ import org.girardsimon.wealthpay.account.domain.event.AccountEventMeta;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.exception.AccountIdMismatchException;
-import org.girardsimon.wealthpay.account.domain.exception.AccountInactiveException;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
 import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
+import org.girardsimon.wealthpay.account.domain.model.HandleResult;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
@@ -83,7 +83,7 @@ class AccountClosingTest {
   }
 
   @Test
-  void closeAccount_requires_account_to_be_opened() {
+  void closeAccount_should_be_idempotent_if_account_is_already_closed() {
     // Arrange
     AccountId accountId = AccountId.newId();
     SupportedCurrency currency = SupportedCurrency.USD;
@@ -97,9 +97,10 @@ class AccountClosingTest {
     Account closedAccount = Account.rehydrate(List.of(opened, debited, closed));
     CloseAccount closeAccount = new CloseAccount(accountId);
 
-    // Act ... Assert
-    Instant occurredAt = Instant.now();
-    assertThatExceptionOfType(AccountInactiveException.class)
-        .isThrownBy(() -> closedAccount.handle(closeAccount, eventIdGenerator, occurredAt));
+    // Act
+    HandleResult handleResult = closedAccount.handle(closeAccount, eventIdGenerator, Instant.now());
+
+    // Assert
+    assertThat(handleResult.hasEffect()).isFalse();
   }
 }

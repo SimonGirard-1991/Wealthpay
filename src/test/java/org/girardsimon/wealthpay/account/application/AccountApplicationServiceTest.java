@@ -25,10 +25,12 @@ import org.girardsimon.wealthpay.account.application.response.ReserveFundsRespon
 import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.domain.command.CancelReservation;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
+import org.girardsimon.wealthpay.account.domain.command.CloseAccount;
 import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
 import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.command.ReserveFunds;
+import org.girardsimon.wealthpay.account.domain.event.AccountClosed;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.event.AccountEventMeta;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
@@ -600,6 +602,55 @@ class AccountApplicationServiceTest {
         () ->
             assertThat(reserveFundsResponse.reservationResult())
                 .isEqualTo(ReservationResult.RESERVED));
+  }
+
+  @Test
+  void closeAccount_should_return_NO_EFFECT_when_account_is_already_closed() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.ZERO, usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    AccountEventMeta accountEventMeta2 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    AccountClosed accountClosed = new AccountClosed(accountEventMeta2);
+    Account accountAlreadyClosed = Account.rehydrate(List.of(accountOpened, accountClosed));
+    when(accountLoader.loadAccount(accountId)).thenReturn(accountAlreadyClosed);
+    CloseAccount closeAccount = new CloseAccount(accountId);
+
+    // Act
+    TransactionStatus transactionStatus = accountApplicationService.closeAccount(closeAccount);
+
+    // Assert
+    verifyNoInteractions(accountEventStore);
+    verifyNoInteractions(accountEventPublisher);
+    assertThat(transactionStatus).isEqualTo(TransactionStatus.NO_EFFECT);
+  }
+
+  @Test
+  void closeAccount_should_return_COMMITED_and_persists_events_account_is_ready_to_be_closed() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.ZERO, usd);
+    AccountEventMeta accountEventMeta1 =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
+    Account accountToBeClosed = Account.rehydrate(List.of(accountOpened));
+    when(accountLoader.loadAccount(accountId)).thenReturn(accountToBeClosed);
+    CloseAccount closeAccount = new CloseAccount(accountId);
+
+    // Act
+    TransactionStatus transactionStatus = accountApplicationService.closeAccount(closeAccount);
+
+    // Assert
+    AccountEventMeta accountEventMetaCloseAccount =
+        AccountEventMeta.of(eventId, accountId, INSTANT_FOR_TESTS, 2L);
+    AccountClosed accountClosed = new AccountClosed(accountEventMetaCloseAccount);
+    InOrder inOrder = inOrder(accountEventStore, accountEventPublisher);
+    inOrder.verify(accountEventStore).appendEvents(accountId, 1L, List.of(accountClosed));
+    inOrder.verify(accountEventPublisher).publish(List.of(accountClosed));
+    assertThat(transactionStatus).isEqualTo(TransactionStatus.COMMITTED);
   }
 
   private List<AccountEvent> buildHistory(

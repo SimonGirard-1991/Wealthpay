@@ -13,6 +13,7 @@ import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.domain.command.AccountTransaction;
 import org.girardsimon.wealthpay.account.domain.command.CancelReservation;
 import org.girardsimon.wealthpay.account.domain.command.CaptureReservation;
+import org.girardsimon.wealthpay.account.domain.command.CloseAccount;
 import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
 import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
@@ -111,6 +112,21 @@ public class AccountApplicationService {
         Account.handle(openAccount, accountId, eventIdGenerator, Instant.now(clock));
     persistEvents(accountId, 0L, result.events());
     return accountId;
+  }
+
+  @Transactional
+  public TransactionStatus closeAccount(CloseAccount closeAccount) {
+    Account account = accountLoader.loadAccount(closeAccount.accountId());
+
+    HandleResult handleResult = account.handle(closeAccount, eventIdGenerator, Instant.now(clock));
+
+    if (!handleResult.hasEffect()) {
+      return TransactionStatus.NO_EFFECT;
+    }
+    List<AccountEvent> events = handleResult.events();
+    long versionBeforeEvents = versionBeforeEvents(account, events);
+    saveEvents(account, versionBeforeEvents, events);
+    return TransactionStatus.COMMITTED;
   }
 
   @Transactional

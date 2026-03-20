@@ -50,6 +50,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountResponse'
+
+  /accounts/{id}/close:
+    post:
+      tags:
+        - Account
+      summary: Close an account
+      operationId: closeAccount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique account identifier (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Close Account Result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseAccountResponse'
+
   /accounts/{id}/deposits:
     post:
       tags:
@@ -403,3 +426,11 @@ components:
         - RESERVED
         - CAPTURED
         - NO_EFFECT
+
+    CloseAccountResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/TransactionStatus'

@@ -10,16 +10,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.UUID;
 import org.girardsimon.wealthpay.account.api.generated.model.AccountResponseDto;
 import org.girardsimon.wealthpay.account.api.generated.model.AccountStatusDto;
+import org.girardsimon.wealthpay.account.api.generated.model.CloseAccountResponseDto;
 import org.girardsimon.wealthpay.account.api.generated.model.OpenAccountRequestDto;
 import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDto;
+import org.girardsimon.wealthpay.account.api.generated.model.TransactionStatusDto;
 import org.girardsimon.wealthpay.account.application.AccountApplicationService;
 import org.girardsimon.wealthpay.account.application.AccountReadService;
+import org.girardsimon.wealthpay.account.application.response.TransactionStatus;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
+import org.girardsimon.wealthpay.account.domain.command.CloseAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.AccountBalanceViewDomainToDtoMapper;
+import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CloseAccountDtoToDomainMapper;
+import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CloseAccountResponseToDtoMapper;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.OpenAccountDtoToDomainMapper;
 import org.girardsimon.wealthpay.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
@@ -41,7 +48,11 @@ class AccountControllerTest {
 
   @MockitoBean OpenAccountDtoToDomainMapper openAccountDtoToDomainMapper;
 
+  @MockitoBean CloseAccountDtoToDomainMapper closeAccountDtoToDomainMapper;
+
   @MockitoBean AccountBalanceViewDomainToDtoMapper accountBalanceViewDomainToDtoMapper;
+
+  @MockitoBean CloseAccountResponseToDtoMapper closeAccountResponseToDtoMapper;
 
   @Autowired MockMvc mockMvc;
 
@@ -69,6 +80,24 @@ class AccountControllerTest {
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "http://localhost/accounts/" + accountId.id()))
         .andExpect(jsonPath("$.accountId").value(accountId.id().toString()));
+  }
+
+  @Test
+  void closeAccount_returns_200_with_transaction_status() throws Exception {
+    // Arrange
+    UUID accountId = UUID.randomUUID();
+    CloseAccount closeAccount = new CloseAccount(AccountId.of(accountId));
+    when(closeAccountDtoToDomainMapper.apply(accountId)).thenReturn(closeAccount);
+    when(accountApplicationService.closeAccount(closeAccount))
+        .thenReturn(TransactionStatus.COMMITTED);
+    when(closeAccountResponseToDtoMapper.apply(TransactionStatus.COMMITTED))
+        .thenReturn(new CloseAccountResponseDto().status(TransactionStatusDto.COMMITTED));
+
+    // Act ... Assert
+    mockMvc
+        .perform(post("/accounts/{id}/close", accountId).contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("COMMITTED"));
   }
 
   @Test
