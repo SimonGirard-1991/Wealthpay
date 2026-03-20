@@ -1,7 +1,10 @@
 {
   "uid": "kafka-consumer",
   "title": "WealthPay — Kafka Consumer",
-  "tags": ["wealthpay", "kafka"],
+  "tags": [
+    "wealthpay",
+    "kafka"
+  ],
   "timezone": "browser",
   "refresh": "15s",
   "time": {
@@ -14,64 +17,95 @@
       "title": "Consumer Lag (max)",
       "description": "If this grows, the read projection is falling behind the event store",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "kafka_consumer_fetch_manager_records_lag_max{job=\"wealthpay\"}",
-          "legendFormat": "lag max"
+          "expr": "kafka_consumer_fetch_manager_records_lag_max{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} lag max"
         },
         {
-          "expr": "kafka_consumer_fetch_manager_records_lag{job=\"wealthpay\"}",
-          "legendFormat": "lag {{topic}}-{{partition}}"
+          "expr": "kafka_consumer_fetch_manager_records_lag{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} lag {{topic}}-{{partition}}"
         }
       ]
     },
     {
       "id": 2,
       "title": "Records Consumed Rate",
+      "description": "Correlate with consumer lag — if rate drops while lag grows, the consumer is stuck",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "kafka_consumer_fetch_manager_records_consumed_rate{job=\"wealthpay\"}",
-          "legendFormat": "records/s"
+          "expr": "sum(kafka_consumer_fetch_manager_records_consumed_rate{job=\"wealthpay\", instance=~\"$instance\"}) by (instance)",
+          "legendFormat": "{{instance}}"
         }
       ]
     },
     {
       "id": 3,
       "title": "Spring Kafka Listener Duration",
-      "description": "How long the projection handler takes per event batch",
+      "description": "How long the projection handler takes per event batch — if avg climbs, check for slow DB writes in the projection",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "max(spring_kafka_listener_seconds_max{job=\"wealthpay\"}) by (name)",
+          "expr": "max(spring_kafka_listener_seconds_max{job=\"wealthpay\", instance=~\"$instance\"}) by (name)",
           "legendFormat": "max {{name}}"
         },
         {
-          "expr": "sum(rate(spring_kafka_listener_seconds_sum{job=\"wealthpay\"}[5m])) by (name) / sum(rate(spring_kafka_listener_seconds_count{job=\"wealthpay\"}[5m])) by (name)",
+          "expr": "sum(rate(spring_kafka_listener_seconds_sum{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (name) / sum(rate(spring_kafka_listener_seconds_count{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (name)",
           "legendFormat": "avg {{name}}"
         }
       ]
@@ -79,18 +113,29 @@
     {
       "id": 4,
       "title": "Listener Invocations",
+      "description": "Rate of listener calls — a drop to zero means the consumer stopped polling",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "sum(rate(spring_kafka_listener_seconds_count{job=\"wealthpay\"}[5m])) by (name)",
+          "expr": "sum(rate(spring_kafka_listener_seconds_count{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (name)",
           "legendFormat": "{{name}}"
         }
       ]
@@ -98,46 +143,68 @@
     {
       "id": 5,
       "title": "Fetch Latency",
+      "description": "Time to fetch a batch from the broker — high values suggest broker or network issues",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "kafka_consumer_fetch_manager_fetch_latency_avg{job=\"wealthpay\"}",
-          "legendFormat": "avg"
+          "expr": "kafka_consumer_fetch_manager_fetch_latency_avg{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} avg"
         },
         {
-          "expr": "kafka_consumer_fetch_manager_fetch_latency_max{job=\"wealthpay\"}",
-          "legendFormat": "max"
+          "expr": "kafka_consumer_fetch_manager_fetch_latency_max{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} max"
         }
       ]
     },
     {
       "id": 6,
       "title": "Commit Latency",
+      "description": "Time to commit offsets — spikes may indicate coordinator instability",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "kafka_consumer_coordinator_commit_latency_avg{job=\"wealthpay\"}",
-          "legendFormat": "avg"
+          "expr": "kafka_consumer_coordinator_commit_latency_avg{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} avg"
         },
         {
-          "expr": "kafka_consumer_coordinator_commit_latency_max{job=\"wealthpay\"}",
-          "legendFormat": "max"
+          "expr": "kafka_consumer_coordinator_commit_latency_max{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} max"
         }
       ]
     },
@@ -146,45 +213,66 @@
       "title": "Rebalances",
       "description": "Frequent rebalances indicate consumer instability",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "increase(kafka_consumer_coordinator_rebalance_total{job=\"wealthpay\"}[5m])",
-          "legendFormat": "total rebalances"
+          "expr": "increase(kafka_consumer_coordinator_rebalance_total{job=\"wealthpay\", instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} total"
         },
         {
-          "expr": "increase(kafka_consumer_coordinator_failed_rebalance_total{job=\"wealthpay\"}[5m])",
-          "legendFormat": "failed rebalances"
+          "expr": "increase(kafka_consumer_coordinator_failed_rebalance_total{job=\"wealthpay\", instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} failed"
         }
       ]
     },
     {
       "id": 8,
       "title": "Consumer Connections",
+      "description": "Connections to brokers and assigned partitions — a sudden drop signals a broker disconnect",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "kafka_consumer_connection_count{job=\"wealthpay\"}",
-          "legendFormat": "active connections"
+          "expr": "kafka_consumer_connection_count{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} connections"
         },
         {
-          "expr": "kafka_consumer_coordinator_assigned_partitions{job=\"wealthpay\"}",
-          "legendFormat": "assigned partitions"
+          "expr": "kafka_consumer_coordinator_assigned_partitions{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} partitions"
         }
       ]
     },
@@ -193,39 +281,60 @@
       "title": "Consumer Poll Idle Ratio",
       "description": "Close to 1.0 = consumer is idle most of the time. Close to 0 = consumer is busy processing",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "custom": { "fillOpacity": 15 },
+          "custom": {
+            "fillOpacity": 15
+          },
           "min": 0,
           "max": 1
         }
       },
       "targets": [
         {
-          "expr": "kafka_consumer_poll_idle_ratio_avg{job=\"wealthpay\"}",
-          "legendFormat": "poll idle ratio"
+          "expr": "kafka_consumer_poll_idle_ratio_avg{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}"
         }
       ]
     },
     {
       "id": 10,
       "title": "Bytes Consumed Rate",
+      "description": "Network throughput from brokers — correlate with records consumed rate to spot large messages",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "Bps",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "kafka_consumer_fetch_manager_bytes_consumed_rate{job=\"wealthpay\"}",
-          "legendFormat": "bytes/s"
+          "expr": "kafka_consumer_fetch_manager_bytes_consumed_rate{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}"
         }
       ]
     }
@@ -236,7 +345,25 @@
         "name": "DS_PROMETHEUS",
         "type": "datasource",
         "query": "prometheus",
-        "current": { "text": "Prometheus (Main)", "value": "Prometheus (Main)" }
+        "current": {
+          "text": "Prometheus (Main)",
+          "value": "Prometheus (Main)"
+        }
+      },
+      {
+        "name": "instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(up{job=\"wealthpay\"}, instance)",
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
       }
     ]
   },

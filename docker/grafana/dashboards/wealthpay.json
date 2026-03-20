@@ -1,7 +1,10 @@
 {
   "uid": "wealthpay",
   "title": "WealthPay",
-  "tags": ["wealthpay", "spring-boot"],
+  "tags": [
+    "wealthpay",
+    "spring-boot"
+  ],
   "timezone": "browser",
   "refresh": "15s",
   "time": {
@@ -12,18 +15,29 @@
     {
       "id": 1,
       "title": "HTTP Request Rate",
+      "description": "Traffic breakdown by endpoint — a sudden drop may indicate an upstream issue",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"wealthpay\", uri!=\"/actuator/prometheus\"}[5m])) by (uri, method)",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"wealthpay\", instance=~\"$instance\", uri!=\"/actuator/prometheus\"}[5m])) by (uri, method)",
           "legendFormat": "{{method}} {{uri}}"
         }
       ]
@@ -31,22 +45,33 @@
     {
       "id": 2,
       "title": "HTTP Request Duration",
+      "description": "p95/p99 latency per endpoint — look for outliers after deploys",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"wealthpay\", uri!=\"/actuator/prometheus\"}[5m])) by (le, uri, method))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\", uri!=\"/actuator/prometheus\"}[5m])) by (le, uri, method))",
           "legendFormat": "p95 {{method}} {{uri}}"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"wealthpay\", uri!=\"/actuator/prometheus\"}[5m])) by (le, uri, method))",
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\", uri!=\"/actuator/prometheus\"}[5m])) by (le, uri, method))",
           "legendFormat": "p99 {{method}} {{uri}}"
         }
       ]
@@ -54,22 +79,33 @@
     {
       "id": 3,
       "title": "Account Load Duration",
+      "description": "p95/p99 latency for rehydrating an account from the event store — growth signals snapshotting misfunction",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(account_load_seconds_bucket{job=\"wealthpay\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(account_load_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (le))",
           "legendFormat": "p95"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(account_load_seconds_bucket{job=\"wealthpay\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(account_load_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (le))",
           "legendFormat": "p99"
         }
       ]
@@ -77,18 +113,29 @@
     {
       "id": 4,
       "title": "Account Load Rate",
+      "description": "Throughput of account rehydrations — correlate with HTTP request rate",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "sum(rate(account_load_seconds_count{job=\"wealthpay\"}[5m]))",
+          "expr": "sum(rate(account_load_seconds_count{job=\"wealthpay\", instance=~\"$instance\"}[5m]))",
           "legendFormat": "loads/s"
         }
       ]
@@ -96,22 +143,33 @@
     {
       "id": 5,
       "title": "HTTP Errors (4xx / 5xx)",
+      "description": "Spike in 5xx requires immediate investigation",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "sum(increase(http_server_requests_seconds_count{job=\"wealthpay\", status=~\"4..\"}[5m])) by (status, uri)",
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"wealthpay\", instance=~\"$instance\", status=~\"4..\"}[5m])) by (status, uri)",
           "legendFormat": "{{status}} {{uri}}"
         },
         {
-          "expr": "sum(increase(http_server_requests_seconds_count{job=\"wealthpay\", status=~\"5..\"}[5m])) by (status, uri)",
+          "expr": "sum(increase(http_server_requests_seconds_count{job=\"wealthpay\", instance=~\"$instance\", status=~\"5..\"}[5m])) by (status, uri)",
           "legendFormat": "{{status}} {{uri}}"
         }
       ]
@@ -119,123 +177,180 @@
     {
       "id": 6,
       "title": "JVM Heap Memory",
+      "description": "Used vs max heap — if used approaches max, expect GC pressure and latency spikes",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "sum(jvm_memory_used_bytes{job=\"wealthpay\", area=\"heap\"}) by (id)",
-          "legendFormat": "{{id}}"
+          "expr": "sum(jvm_memory_used_bytes{job=\"wealthpay\", instance=~\"$instance\", area=\"heap\"}) by (instance, id)",
+          "legendFormat": "{{instance}} {{id}}"
         },
         {
-          "expr": "sum(jvm_memory_max_bytes{job=\"wealthpay\", area=\"heap\"})",
-          "legendFormat": "max"
+          "expr": "sum(jvm_memory_max_bytes{job=\"wealthpay\", instance=~\"$instance\", area=\"heap\"}) by (instance)",
+          "legendFormat": "{{instance}} max"
         }
       ]
     },
     {
       "id": 7,
       "title": "GC Pause Duration",
+      "description": "Average pause per GC event — sustained high values signal heap pressure",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"wealthpay\"}[5m])",
-          "legendFormat": "{{action}} ({{cause}})"
+          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"wealthpay\", instance=~\"$instance\"}[5m])/(rate(jvm_gc_pause_seconds_count{job=\"wealthpay\", instance=~\"$instance\"}[5m]) > 0)",
+          "legendFormat": "{{instance}} {{action}} ({{cause}})"
         }
       ]
     },
     {
       "id": 8,
       "title": "JVM Threads",
+      "description": "Live thread count — a steady climb may indicate a thread leak",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "jvm_threads_live_threads{job=\"wealthpay\"}",
-          "legendFormat": "live"
+          "expr": "jvm_threads_live_threads{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} live"
         },
         {
-          "expr": "jvm_threads_peak_threads{job=\"wealthpay\"}",
-          "legendFormat": "peak"
+          "expr": "jvm_threads_peak_threads{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} peak"
         },
         {
-          "expr": "jvm_threads_daemon_threads{job=\"wealthpay\"}",
-          "legendFormat": "daemon"
+          "expr": "jvm_threads_daemon_threads{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} daemon"
         }
       ]
     },
     {
       "id": 9,
       "title": "DB Connection Pool",
+      "description": "pending > 0 means threads are waiting for a connection",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          }
         }
       },
       "targets": [
         {
-          "expr": "hikaricp_connections_active{job=\"wealthpay\"}",
-          "legendFormat": "active"
+          "expr": "hikaricp_connections_active{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} active"
         },
         {
-          "expr": "hikaricp_connections_idle{job=\"wealthpay\"}",
-          "legendFormat": "idle"
+          "expr": "hikaricp_connections_idle{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} idle"
         },
         {
-          "expr": "hikaricp_connections_pending{job=\"wealthpay\"}",
-          "legendFormat": "pending"
+          "expr": "hikaricp_connections_pending{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} pending"
         },
         {
-          "expr": "hikaricp_connections_max{job=\"wealthpay\"}",
-          "legendFormat": "max"
+          "expr": "hikaricp_connections_max{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} max"
         }
       ]
     },
     {
       "id": 10,
       "title": "Process CPU Usage",
+      "description": "Process vs system CPU — high system CPU may indicate excessive context switching",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "custom": { "fillOpacity": 15 }
+          "custom": {
+            "fillOpacity": 15
+          },
+          "min": 0,
+          "max": 1
         }
       },
       "targets": [
         {
-          "expr": "process_cpu_usage{job=\"wealthpay\"}",
-          "legendFormat": "process"
+          "expr": "process_cpu_usage{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} process"
         },
         {
-          "expr": "system_cpu_usage{job=\"wealthpay\"}",
-          "legendFormat": "system"
+          "expr": "system_cpu_usage{job=\"wealthpay\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} system"
         }
       ]
     }
@@ -246,7 +361,25 @@
         "name": "DS_PROMETHEUS",
         "type": "datasource",
         "query": "prometheus",
-        "current": { "text": "Prometheus (Main)", "value": "Prometheus (Main)" }
+        "current": {
+          "text": "Prometheus (Main)",
+          "value": "Prometheus (Main)"
+        }
+      },
+      {
+        "name": "instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(up{job=\"wealthpay\"}, instance)",
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
       }
     ]
   },
