@@ -15,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -24,7 +25,8 @@ public class GlobalExceptionHandler {
   @ExceptionHandler({
     IllegalArgumentException.class,
     HttpMessageNotReadableException.class,
-    MissingRequestHeaderException.class
+    MissingRequestHeaderException.class,
+    MethodArgumentTypeMismatchException.class
   })
   public ResponseEntity<ApiErrorDto> handleBadRequestException(Exception e) {
     log.warn("Bad Request exception: ", e);

@@ -1,5 +1,6 @@
 package org.girardsimon.wealthpay.shared.infrastructure.web;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -7,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.io.InputStream;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -20,6 +20,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @WebMvcTest(FakeController.class)
 @ActiveProfiles("test")
@@ -51,6 +52,18 @@ class GlobalExceptionHandlerTest {
 
   public static Stream<Arguments> allConflictExceptions() {
     return Stream.of(Arguments.of(new OptimisticLockingFailureException("message"), "message"));
+  }
+
+  public static Stream<Arguments> allRequestHeaderBindingBadRequestExceptions() {
+    return Stream.of(
+        Arguments.of(
+            get("/fake-with-required-header"),
+            new String[] {
+              "Required request header 'Required-Header' for method parameter type UUID is not present"
+            }),
+        Arguments.of(
+            get("/fake-with-required-header").header("Required-Header", "not-a-uuid"),
+            new String[] {"Required-Header", "UUID", "not-a-uuid"}));
   }
 
   public static Stream<Arguments> allInternalServerErrorExceptions() {
@@ -85,17 +98,20 @@ class GlobalExceptionHandlerTest {
         .andExpect(jsonPath("$.message").value(expectedMessage));
   }
 
-  @Test
-  void missing_required_header_returns_bad_request() throws Exception {
+  @ParameterizedTest
+  @MethodSource("allRequestHeaderBindingBadRequestExceptions")
+  void all_request_header_binding_bad_request_exceptions(
+      MockHttpServletRequestBuilder requestBuilder, String[] expectedMessageFragments)
+      throws Exception {
     // Act ... Assert
-    mockMvc
-        .perform(get("/fake-with-required-header"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.status").value(400))
-        .andExpect(
-            jsonPath("$.message")
-                .value(
-                    "Required request header 'Required-Header' for method parameter type UUID is not present"));
+    var resultActions =
+        mockMvc
+            .perform(requestBuilder)
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400));
+    for (String expectedMessageFragment : expectedMessageFragments) {
+      resultActions.andExpect(jsonPath("$.message", containsString(expectedMessageFragment)));
+    }
   }
 
   @ParameterizedTest
