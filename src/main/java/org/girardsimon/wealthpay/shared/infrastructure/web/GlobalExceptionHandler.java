@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -20,7 +21,11 @@ public class GlobalExceptionHandler {
 
   private final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-  @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class})
+  @ExceptionHandler({
+    IllegalArgumentException.class,
+    HttpMessageNotReadableException.class,
+    MissingRequestHeaderException.class
+  })
   public ResponseEntity<ApiErrorDto> handleBadRequestException(Exception e) {
     log.warn("Bad Request exception: ", e);
     ApiErrorDto apiErrorDto =

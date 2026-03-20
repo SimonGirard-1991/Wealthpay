@@ -1,0 +1,1681 @@
+{
+  "info": {
+    "_postman_id": "wealthpay-collection",
+    "name": "WealthPay API",
+    "description": "Complete test collection for WealthPay banking API.\n\nWorkflow:\n1. Health Check\n2. Open Account\n3. Deposit / Withdraw\n4. Reserve / Capture / Cancel\n5. Close Account\n\nCollection variables are automatically populated by test scripts so requests can be chained in order.\n\nNote: This app is event-sourced with Kafka projections. The first GET after account creation includes automatic retry logic (up to 5 retries with 500ms delay) to wait for the read model to catch up.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "accountId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "reservationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "retryCount",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "maxRetries",
+      "value": "5",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health check returns 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account",
+      "item": [
+        {
+          "name": "Open Account — EUR with EUR deposit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Account created — 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response contains accountId', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.accountId).to.be.a('string');",
+                  "    pm.collectionVariables.set('accountId', json.accountId);",
+                  "    // Reset retry counter for upcoming GET",
+                  "    pm.collectionVariables.set('retryCount', '0');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountCurrency\": \"EUR\",\n  \"initialAmount\": 1000,\n  \"initialAmountCurrency\": \"EUR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Open Account — FAIL — cross-currency initial deposit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — currency mismatch — 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountCurrency\": \"USD\",\n  \"initialAmount\": 500,\n  \"initialAmountCurrency\": \"EUR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Open Account — zero initial amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Account created with zero balance — 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountCurrency\": \"GBP\",\n  \"initialAmount\": 0,\n  \"initialAmountCurrency\": \"GBP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Open Account — FAIL — negative initial amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountCurrency\": \"EUR\",\n  \"initialAmount\": -100,\n  \"initialAmountCurrency\": \"EUR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Open Account — FAIL — missing fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Account Details",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Wait 500ms before each attempt to let Kafka projection catch up",
+                  "const delay = 500;",
+                  "const start = Date.now();",
+                  "while (Date.now() - start < delay) {",
+                  "    // busy-wait",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var retryCount = parseInt(pm.collectionVariables.get('retryCount') || '0');",
+                  "var maxRetries = parseInt(pm.collectionVariables.get('maxRetries') || '5');",
+                  "",
+                  "if (pm.response.code === 404 && retryCount < maxRetries) {",
+                  "    pm.collectionVariables.set('retryCount', String(retryCount + 1));",
+                  "    postman.setNextRequest('Get Account Details');",
+                  "    return;",
+                  "}",
+                  "",
+                  "pm.collectionVariables.set('retryCount', '0');",
+                  "",
+                  "pm.test('Account retrieved — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has expected fields', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.be.a('string');",
+                  "    pm.expect(json.balanceAmount).to.be.a('number');",
+                  "    pm.expect(json.currency).to.be.a('string');",
+                  "    pm.expect(json.reservedAmount).to.be.a('number');",
+                  "    pm.expect(json.status).to.eql('OPENED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Account — FAIL — not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Not found — 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "Deposit — same currency",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Deposit accepted — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Status is COMMITTED', function () {",
+                  "    pm.expect(pm.response.json().status).to.eql('COMMITTED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 250.50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/deposits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "deposits"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deposit — FAIL — currency mismatch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — currency mismatch — 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"USD\",\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/deposits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "deposits"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deposit — idempotency (replay same Transaction-Id)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Use a fixed UUID to test idempotency — run this twice",
+                  "var fixedId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';",
+                  "pm.collectionVariables.set('idempotentTxId', fixedId);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Idempotent deposit — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns COMMITTED or NO_EFFECT', function () {",
+                  "    var status = pm.response.json().status;",
+                  "    pm.expect(['COMMITTED', 'NO_EFFECT']).to.include(status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{idempotentTxId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/deposits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "deposits"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deposit — FAIL — zero amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/deposits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "deposits"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deposit — FAIL — negative amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": -50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/deposits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "deposits"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deposit — FAIL — missing Transaction-Id header",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/deposits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "deposits"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Withdrawal — same currency",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Withdrawal accepted — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Status is COMMITTED', function () {",
+                  "    pm.expect(pm.response.json().status).to.eql('COMMITTED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/withdrawals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "withdrawals"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Withdrawal — FAIL — currency mismatch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — currency mismatch — 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"USD\",\n  \"amount\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/withdrawals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "withdrawals"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Withdrawal — FAIL — insufficient funds",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — insufficient funds', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 9999999\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/withdrawals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "withdrawals"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Withdrawal — FAIL — zero amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/withdrawals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "withdrawals"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reservations",
+      "item": [
+        {
+          "name": "Reserve Funds — same currency",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Reservation created — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Status is RESERVED and reservationId returned', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql('RESERVED');",
+                  "    pm.expect(json.reservationId).to.be.a('string');",
+                  "    pm.collectionVariables.set('reservationId', json.reservationId);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 200\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reserve Funds — FAIL — currency mismatch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — currency mismatch — 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"USD\",\n  \"amount\": 75\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reserve Funds — FAIL — insufficient funds",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — insufficient funds', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 9999999\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reserve Funds — FAIL — zero amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Account — verify reserved amount increased",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const delay = 500;",
+                  "const start = Date.now();",
+                  "while (Date.now() - start < delay) {",
+                  "    // busy-wait for projection",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var retryCount = parseInt(pm.collectionVariables.get('retryCount') || '0');",
+                  "var maxRetries = parseInt(pm.collectionVariables.get('maxRetries') || '5');",
+                  "",
+                  "if (pm.response.code === 200 && pm.response.json().reservedAmount === 0 && retryCount < maxRetries) {",
+                  "    pm.collectionVariables.set('retryCount', String(retryCount + 1));",
+                  "    postman.setNextRequest('Get Account — verify reserved amount increased');",
+                  "    return;",
+                  "}",
+                  "",
+                  "pm.collectionVariables.set('retryCount', '0');",
+                  "",
+                  "pm.test('Account retrieved — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Reserved amount is > 0', function () {",
+                  "    pm.expect(pm.response.json().reservedAmount).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Capture Reservation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Capture accepted — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Status is CAPTURED', function () {",
+                  "    pm.expect(pm.response.json().status).to.eql('CAPTURED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations/{{reservationId}}/capture",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations",
+                "{{reservationId}}",
+                "capture"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Capture Reservation — Idempotent — already captured",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Already captured — idempotent', function () {",
+                  "    var status = pm.response.json().status;",
+                  "    pm.expect(['CAPTURED', 'NO_EFFECT']).to.include(status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations/{{reservationId}}/capture",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations",
+                "{{reservationId}}",
+                "capture"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reserve Funds — for cancel test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Reservation created — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Save reservationId for cancel', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('reservationId', json.reservationId);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 150\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Reservation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cancel accepted — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Status is CANCELED', function () {",
+                  "    pm.expect(pm.response.json().status).to.eql('CANCELED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations/{{reservationId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations",
+                "{{reservationId}}",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Reservation — Idempotent — already canceled",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Already canceled — idempotent', function () {",
+                  "    var status = pm.response.json().status;",
+                  "    pm.expect(['CANCELED', 'NO_EFFECT']).to.include(status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations/{{reservationId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations",
+                "{{reservationId}}",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Capture Reservation — FAIL — not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Not found — 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations/00000000-0000-0000-0000-000000000000/capture",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations",
+                "00000000-0000-0000-0000-000000000000",
+                "capture"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Close Account",
+      "item": [
+        {
+          "name": "Get Account — read balance before close",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Account retrieved — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Save current balance', function () {",
+                  "    var balance = pm.response.json().balanceAmount;",
+                  "    pm.collectionVariables.set('currentBalance', String(balance));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Withdraw all funds — prepare for close",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const delay = 500;",
+                  "const start = Date.now();",
+                  "while (Date.now() - start < delay) {",
+                  "    // busy-wait for projection",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var balance = parseFloat(pm.collectionVariables.get('currentBalance'));",
+                  "",
+                  "if (balance === 0) {",
+                  "    pm.test('Balance already zero — skip', function () {",
+                  "        pm.expect(true).to.be.true;",
+                  "    });",
+                  "} else if (pm.response.code === 422) {",
+                  "    // Projected balance was stale — re-read and retry",
+                  "    var retryCount = parseInt(pm.collectionVariables.get('retryCount') || '0');",
+                  "    var maxRetries = parseInt(pm.collectionVariables.get('maxRetries') || '5');",
+                  "    if (retryCount < maxRetries) {",
+                  "        pm.collectionVariables.set('retryCount', String(retryCount + 1));",
+                  "        postman.setNextRequest('Get Account — read balance before close');",
+                  "        return;",
+                  "    }",
+                  "} else {",
+                  "    pm.collectionVariables.set('retryCount', '0');",
+                  "",
+                  "    pm.test('Withdrawal accepted — 200', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "    });",
+                  "",
+                  "    pm.test('Status is COMMITTED', function () {",
+                  "        pm.expect(pm.response.json().status).to.eql('COMMITTED');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": {{currentBalance}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/withdrawals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "withdrawals"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Close Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Account closed — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Status is COMMITTED', function () {",
+                  "    pm.expect(pm.response.json().status).to.eql('COMMITTED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "close"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Close Account — Idempotent — already closed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Already closed — idempotent', function () {",
+                  "    var status = pm.response.json().status;",
+                  "    pm.expect(['COMMITTED', 'NO_EFFECT']).to.include(status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "close"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Account — verify status CLOSED",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const delay = 500;",
+                  "const start = Date.now();",
+                  "while (Date.now() - start < delay) {",
+                  "    // busy-wait for projection",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var retryCount = parseInt(pm.collectionVariables.get('retryCount') || '0');",
+                  "var maxRetries = parseInt(pm.collectionVariables.get('maxRetries') || '5');",
+                  "",
+                  "if (pm.response.code === 200 && pm.response.json().status !== 'CLOSED' && retryCount < maxRetries) {",
+                  "    pm.collectionVariables.set('retryCount', String(retryCount + 1));",
+                  "    postman.setNextRequest('Get Account — verify status CLOSED');",
+                  "    return;",
+                  "}",
+                  "",
+                  "pm.collectionVariables.set('retryCount', '0');",
+                  "",
+                  "pm.test('Account retrieved — 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Status is CLOSED', function () {",
+                  "    pm.expect(pm.response.json().status).to.eql('CLOSED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deposit on closed account — FAIL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — cannot deposit on closed account', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/deposits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "deposits"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Withdrawal on closed account — FAIL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — cannot withdraw from closed account', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/withdrawals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "withdrawals"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reserve on closed account — FAIL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejected — cannot reserve on closed account', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Transaction-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currency\": \"EUR\",\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/accounts/{{accountId}}/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "{{accountId}}",
+                "reservations"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

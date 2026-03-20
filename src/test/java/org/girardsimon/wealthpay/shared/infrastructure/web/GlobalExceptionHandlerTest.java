@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.io.InputStream;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -82,6 +83,19 @@ class GlobalExceptionHandlerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.status").value(409))
         .andExpect(jsonPath("$.message").value(expectedMessage));
+  }
+
+  @Test
+  void missing_required_header_returns_bad_request() throws Exception {
+    // Act ... Assert
+    mockMvc
+        .perform(get("/fake-with-required-header"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(
+            jsonPath("$.message")
+                .value(
+                    "Required request header 'Required-Header' for method parameter type UUID is not present"));
   }
 
   @ParameterizedTest

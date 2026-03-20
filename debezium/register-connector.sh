@@ -16,6 +16,7 @@ curl -X POST http://localhost:8083/connectors \
         "topic.creation.enable": "true",
         "topic.creation.default.replication.factor": "3",
         "topic.creation.default.partitions": "3",
+        "poll.interval.ms": "100",
 
         "schema.include.list": "account",
         "table.include.list": "account.outbox",
