@@ -227,9 +227,42 @@ services:
     restart: unless-stopped
     ports:
       - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-lifecycle'
     volumes:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./docker/prometheus/rules:/etc/prometheus/rules
       - prometheus_data:/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.31.1
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9095:9093"
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    volumes:
+      - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    depends_on:
+      alertmanager-discord:
+        condition: service_healthy
+
+  alertmanager-discord:
+    build:
+      context: docker/alertmanager-discord
+    container_name: alertmanager-discord
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:9096/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    environment:
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+      DISCORD_WEBHOOK_CRITICAL_URL: ${DISCORD_WEBHOOK_CRITICAL_URL}
 
   grafana:
     image: grafana/grafana:12.3
@@ -255,3 +288,4 @@ volumes:
   kafka_3_data:
   prometheus_data:
   grafana_data:
+  alertmanager_data:

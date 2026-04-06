@@ -1,0 +1,164 @@
+groups:
+  - name: watcher
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Heartbeat — alerting pipeline is functional"
+
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0 or absent(up{job="alertmanager"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager is unreachable"
+  # ---------------------------------------------------------------------------
+  #  HTTP / Application
+  # ---------------------------------------------------------------------------
+  - name: wealthpay-http
+    rules:
+      - alert: HighHttp5xxRate
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job="wealthpay", status=~"5.."}[5m]))
+            /
+            (sum(rate(http_server_requests_seconds_count{job="wealthpay"}[5m])) > 0)
+          ) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP 5xx error rate above 1%"
+          description: "5xx error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      - alert: HighHttpLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket{job="wealthpay", uri!="/actuator/prometheus"}[5m])) by (le)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP p95 latency above 500 ms"
+          description: "p95 is {{ $value | humanizeDuration }}."
+
+      - alert: HighAccountLoadDuration
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(account_load_seconds_bucket{job="wealthpay"}[5m])) by (le)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Account load p95 latency above 100 ms"
+          description: "p95 rehydration time is {{ $value | humanizeDuration }}. Snapshotting may be malfunctioning."
+
+      - alert: HttpRequestRateDrop
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job="wealthpay", uri!="/actuator/prometheus"}[5m]))
+            /
+            (sum(rate(http_server_requests_seconds_count{job="wealthpay", uri!="/actuator/prometheus"}[5m] offset 10m)) > 0)
+          ) < 0.5
+          and (sum(rate(http_server_requests_seconds_count{job="wealthpay", uri!="/actuator/prometheus"}[5m] offset 10m)) > 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP request rate dropped by more than 50%"
+          description: "Current rate is {{ $value | humanizePercentage }} of what it was 10 minutes ago."
+
+  # ---------------------------------------------------------------------------
+  #  JVM
+  # ---------------------------------------------------------------------------
+  - name: wealthpay-jvm
+    rules:
+      - alert: HighHeapUsage
+        expr: |
+          sum(jvm_memory_used_bytes{job="wealthpay", area="heap"}) by (instance)
+          /
+          sum(jvm_memory_max_bytes{job="wealthpay", area="heap"}) by (instance)
+          > 0.90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM heap usage above 90% on {{ $labels.instance }}"
+          description: "Heap is at {{ $value | humanizePercentage }}. Expect GC pressure and latency spikes."
+
+      - alert: HighGcPauseDuration
+        expr: |
+          rate(jvm_gc_pause_seconds_sum{job="wealthpay"}[5m])
+          /
+          (rate(jvm_gc_pause_seconds_count{job="wealthpay"}[5m]) > 0)
+          > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GC average pause above 200 ms on {{ $labels.instance }}"
+          description: "Average GC pause is {{ $value | humanizeDuration }}."
+
+      - alert: HighThreadCount
+        expr: jvm_threads_live_threads{job="wealthpay"} > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Live thread count above 300 on {{ $labels.instance }}"
+          description: "{{ $value }} live threads. A steady climb may indicate a thread leak."
+
+      - alert: InstanceDown
+        expr: up{job="wealthpay"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is down"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} for over 1 minute."
+
+  # ---------------------------------------------------------------------------
+  #  Infrastructure (DB pool, CPU)
+  # ---------------------------------------------------------------------------
+  - name: wealthpay-infra
+    rules:
+      - alert: DbConnectionPoolPending
+        expr: hikaricp_connections_pending{job="wealthpay"} > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Threads waiting for a DB connection on {{ $labels.instance }}"
+          description: "{{ $value }} pending connection(s) for pool {{ $labels.pool }}."
+
+      - alert: DbConnectionPoolTimeouts
+        expr: increase(hikaricp_connections_timeout_total{job="wealthpay"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HikariCP connection timeouts on {{ $labels.instance }}"
+          description: "{{ $value }} timeout(s) in the last 5 minutes for pool {{ $labels.pool }}."
+
+      - alert: HighProcessCpuUsage
+        expr: process_cpu_usage{job="wealthpay"} > 0.70
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Process CPU usage above 70% on {{ $labels.instance }}"
+          description: "Process CPU at {{ $value | humanizePercentage }}."
+
+      - alert: HighSystemCpuUsage
+        expr: system_cpu_usage{job="wealthpay"} > 0.70
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "System CPU usage above 70% on {{ $labels.instance }}"
+          description: "System CPU at {{ $value | humanizePercentage }}. May indicate excessive context switching."

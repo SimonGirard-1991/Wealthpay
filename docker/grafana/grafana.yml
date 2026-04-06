@@ -4,3 +4,9 @@ datasources:
     type: prometheus
     url: http://prometheus:9090
     isDefault: true
+
+  - name: Alertmanager
+    type: alertmanager
+    url: http://alertmanager:9093
+    jsonData:
+      implementation: prometheus

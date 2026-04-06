@@ -1,0 +1,92 @@
+groups:
+  # ---------------------------------------------------------------------------
+  #  Kafka Consumer
+  # ---------------------------------------------------------------------------
+  - name: wealthpay-kafka-consumer
+    rules:
+      - alert: HighConsumerLag
+        expr: kafka_consumer_fetch_manager_records_lag_max{job="wealthpay"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer lag above 1000 on {{ $labels.instance }}"
+          description: "Max lag is {{ $value }}. The read projection is falling behind the event store."
+
+      - alert: ConsumerBacklogNotDraining
+        expr: |
+          (
+            max(kafka_consumer_fetch_manager_records_lag_max{job="wealthpay"}) by (instance) > 0
+          )
+          and on(instance)
+          (
+            sum(rate(kafka_consumer_fetch_manager_records_consumed_total{job="wealthpay"}[5m])) by (instance) == 0
+          )
+          and on(instance)
+          (
+            up{job="wealthpay"} == 1
+          )
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consumer backlog is not draining on {{ $labels.instance }}"
+          description: "The consumer has lag but has not consumed any records for 5 minutes."
+
+      - alert: HighListenerDuration
+        expr: |
+          sum(rate(spring_kafka_listener_seconds_sum{job="wealthpay"}[5m])) by (name)
+          /
+          (sum(rate(spring_kafka_listener_seconds_count{job="wealthpay"}[5m])) by (name) > 0)
+          > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka listener '{{ $labels.name }}' average duration above 500 ms"
+          description: "Average listener duration is {{ $value | humanizeDuration }}. Check for slow DB writes in the projection."
+
+      - alert: HighFetchLatency
+        expr: kafka_consumer_fetch_manager_fetch_latency_avg{job="wealthpay"} > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka fetch latency above 500 ms on {{ $labels.instance }}"
+          description: "Average fetch latency is {{ $value }} ms. Possible broker or network issue."
+
+      - alert: HighCommitLatency
+        expr: kafka_consumer_coordinator_commit_latency_avg{job="wealthpay"} > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka commit latency above 500 ms on {{ $labels.instance }}"
+          description: "Average commit latency is {{ $value }} ms. Possible coordinator instability."
+
+      - alert: FrequentRebalances
+        expr: increase(kafka_consumer_coordinator_rebalance_total{job="wealthpay"}[10m]) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frequent consumer rebalances on {{ $labels.instance }}"
+          description: "{{ $value }} rebalances in the last 10 minutes."
+
+      - alert: FailedRebalance
+        expr: increase(kafka_consumer_coordinator_failed_rebalance_total{job="wealthpay"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Failed consumer rebalance on {{ $labels.instance }}"
+          description: "{{ $value }} failed rebalance(s) in the last 5 minutes."
+
+      - alert: ConsumerSaturated
+        expr: kafka_consumer_poll_idle_ratio_avg{job="wealthpay"} < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer poll idle ratio below 10% on {{ $labels.instance }}"
+          description: "Idle ratio is {{ $value | humanizePercentage }}. Consumer is spending 90%+ of its time processing."
