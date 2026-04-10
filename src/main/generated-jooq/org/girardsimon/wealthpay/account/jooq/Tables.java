@@ -9,6 +9,7 @@ import org.girardsimon.wealthpay.account.jooq.tables.AccountSnapshot;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
+import org.girardsimon.wealthpay.account.jooq.tables.OutboxCleanupLog;
 import org.girardsimon.wealthpay.account.jooq.tables.ProcessedReservations;
 import org.girardsimon.wealthpay.account.jooq.tables.ProcessedTransactions;
 
@@ -43,6 +44,11 @@ public class Tables {
      * The table <code>account.outbox</code>.
      */
     public static final Outbox OUTBOX = Outbox.OUTBOX;
+
+    /**
+     * The table <code>account.outbox_cleanup_log</code>.
+     */
+    public static final OutboxCleanupLog OUTBOX_CLEANUP_LOG = OutboxCleanupLog.OUTBOX_CLEANUP_LOG;
 
     /**
      * The table <code>account.processed_reservations</code>.

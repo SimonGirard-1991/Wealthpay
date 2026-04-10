@@ -141,13 +141,8 @@ public class Outbox extends TableImpl<OutboxRecord> {
     }
 
     @Override
-    public UniqueKey<OutboxRecord> getPrimaryKey() {
-        return Keys.OUTBOX_PKEY;
-    }
-
-    @Override
     public List<UniqueKey<OutboxRecord>> getUniqueKeys() {
-        return Arrays.asList(Keys.OUTBOX_EVENT_ID_KEY);
+        return Arrays.asList(Keys.OUTBOX_EVENT_ID_OCCURRED_AT_KEY);
     }
 
     @Override

@@ -162,3 +162,23 @@ groups:
         annotations:
           summary: "System CPU usage above 70% on {{ $labels.instance }}"
           description: "System CPU at {{ $value | humanizePercentage }}. May indicate excessive context switching."
+
+      - alert: OutboxTableGrowing
+        expr: outbox_row_count_estimate{job="wealthpay"} > 500000
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox table exceeds 500k rows on {{ $labels.instance }}"
+          description: "Estimated {{ $value }} rows. Partition cleanup may have failed."
+
+      - alert: OutboxCleanupStale
+        expr: |
+          max(outbox_cleanup_last_run_seconds{job="wealthpay"}) > 0
+          and time() - max(outbox_cleanup_last_run_seconds{job="wealthpay"}) > 129600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox cleanup has not run in over 36 hours"
+          description: "Last cleanup was {{ $value | humanizeDuration }} ago."

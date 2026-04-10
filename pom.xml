@@ -467,6 +467,11 @@
                                         <database>
                                             <name>org.jooq.meta.postgres.PostgresDatabase</name>
                                             <inputSchema>account</inputSchema>
+                                            <!-- Exclude ephemeral range-partition children of account.outbox.
+                                                 Only the parent partitioned table is needed for queries;
+                                                 child partitions (outbox_YYYY_MM_DD, outbox_default) are
+                                                 created/dropped daily by manage_outbox_partitions(). -->
+                                            <excludes>outbox_\d{4}_\d{2}_\d{2}|outbox_default</excludes>
                                         </database>
                                         <generate>
                                             <daos>false</daos>

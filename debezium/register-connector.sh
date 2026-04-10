@@ -1,4 +1,5 @@
 #!/bin/bash
+curl -s -o /dev/null -X DELETE http://localhost:8083/connectors/wealthpay-outbox-connector 2>/dev/null || true
 curl -X POST http://localhost:8083/connectors \
   -H "Content-Type: application/json" \
   -d '{
