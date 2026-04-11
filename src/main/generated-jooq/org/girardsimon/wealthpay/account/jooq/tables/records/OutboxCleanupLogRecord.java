@@ -74,6 +74,62 @@ public class OutboxCleanupLogRecord extends TableRecordImpl<OutboxCleanupLogReco
         return (Integer) get(3);
     }
 
+    /**
+     * Setter for <code>account.outbox_cleanup_log.status</code>.
+     */
+    public void setStatus(String value) {
+        set(4, value);
+    }
+
+    /**
+     * Getter for <code>account.outbox_cleanup_log.status</code>.
+     */
+    public String getStatus() {
+        return (String) get(4);
+    }
+
+    /**
+     * Setter for <code>account.outbox_cleanup_log.started_at</code>.
+     */
+    public void setStartedAt(OffsetDateTime value) {
+        set(5, value);
+    }
+
+    /**
+     * Getter for <code>account.outbox_cleanup_log.started_at</code>.
+     */
+    public OffsetDateTime getStartedAt() {
+        return (OffsetDateTime) get(5);
+    }
+
+    /**
+     * Setter for <code>account.outbox_cleanup_log.completed_at</code>.
+     */
+    public void setCompletedAt(OffsetDateTime value) {
+        set(6, value);
+    }
+
+    /**
+     * Getter for <code>account.outbox_cleanup_log.completed_at</code>.
+     */
+    public OffsetDateTime getCompletedAt() {
+        return (OffsetDateTime) get(6);
+    }
+
+    /**
+     * Setter for <code>account.outbox_cleanup_log.error_message</code>.
+     */
+    public void setErrorMessage(String value) {
+        set(7, value);
+    }
+
+    /**
+     * Getter for <code>account.outbox_cleanup_log.error_message</code>.
+     */
+    public String getErrorMessage() {
+        return (String) get(7);
+    }
+
     // -------------------------------------------------------------------------
     // Constructors
     // -------------------------------------------------------------------------
@@ -88,13 +144,17 @@ public class OutboxCleanupLogRecord extends TableRecordImpl<OutboxCleanupLogReco
     /**
      * Create a detached, initialised OutboxCleanupLogRecord
      */
-    public OutboxCleanupLogRecord(OffsetDateTime runAt, Integer partitionsCreated, Integer partitionsDropped, Integer remainingPartitions) {
+    public OutboxCleanupLogRecord(OffsetDateTime runAt, Integer partitionsCreated, Integer partitionsDropped, Integer remainingPartitions, String status, OffsetDateTime startedAt, OffsetDateTime completedAt, String errorMessage) {
         super(OutboxCleanupLog.OUTBOX_CLEANUP_LOG);
 
         setRunAt(runAt);
         setPartitionsCreated(partitionsCreated);
         setPartitionsDropped(partitionsDropped);
         setRemainingPartitions(remainingPartitions);
+        setStatus(status);
+        setStartedAt(startedAt);
+        setCompletedAt(completedAt);
+        setErrorMessage(errorMessage);
         resetChangedOnNotNull();
     }
 
@@ -109,6 +169,10 @@ public class OutboxCleanupLogRecord extends TableRecordImpl<OutboxCleanupLogReco
             setPartitionsCreated(value.getPartitionsCreated());
             setPartitionsDropped(value.getPartitionsDropped());
             setRemainingPartitions(value.getRemainingPartitions());
+            setStatus(value.getStatus());
+            setStartedAt(value.getStartedAt());
+            setCompletedAt(value.getCompletedAt());
+            setErrorMessage(value.getErrorMessage());
             resetChangedOnNotNull();
         }
     }

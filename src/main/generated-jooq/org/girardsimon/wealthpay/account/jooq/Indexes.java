@@ -7,6 +7,7 @@ package org.girardsimon.wealthpay.account.jooq;
 import org.girardsimon.wealthpay.account.jooq.tables.EventStore;
 import org.girardsimon.wealthpay.account.jooq.tables.FlywaySchemaHistory;
 import org.girardsimon.wealthpay.account.jooq.tables.Outbox;
+import org.girardsimon.wealthpay.account.jooq.tables.OutboxCleanupLog;
 import org.girardsimon.wealthpay.account.jooq.tables.ProcessedReservations;
 import org.jooq.Index;
 import org.jooq.OrderField;
@@ -27,6 +28,8 @@ public class Indexes {
     public static final Index FLYWAY_SCHEMA_HISTORY_S_IDX = Internal.createIndex(DSL.name("flyway_schema_history_s_idx"), FlywaySchemaHistory.FLYWAY_SCHEMA_HISTORY, new OrderField[] { FlywaySchemaHistory.FLYWAY_SCHEMA_HISTORY.SUCCESS }, false);
     public static final Index IDX_EVENT_STORE_ACCOUNT_ID_VERSION = Internal.createIndex(DSL.name("idx_event_store_account_id_version"), EventStore.EVENT_STORE, new OrderField[] { EventStore.EVENT_STORE.ACCOUNT_ID, EventStore.EVENT_STORE.VERSION }, false);
     public static final Index IDX_EVENT_STORE_EVENT_ID = Internal.createIndex(DSL.name("idx_event_store_event_id"), EventStore.EVENT_STORE, new OrderField[] { EventStore.EVENT_STORE.EVENT_ID }, true);
+    public static final Index IDX_OUTBOX_CLEANUP_LOG_COMPLETED_AT_SUCCESS = Internal.createIndex(DSL.name("idx_outbox_cleanup_log_completed_at_success"), OutboxCleanupLog.OUTBOX_CLEANUP_LOG, new OrderField[] { OutboxCleanupLog.OUTBOX_CLEANUP_LOG.COMPLETED_AT.desc() }, false);
+    public static final Index IDX_OUTBOX_CLEANUP_LOG_RUN_AT_DESC = Internal.createIndex(DSL.name("idx_outbox_cleanup_log_run_at_desc"), OutboxCleanupLog.OUTBOX_CLEANUP_LOG, new OrderField[] { OutboxCleanupLog.OUTBOX_CLEANUP_LOG.RUN_AT.desc() }, false);
     public static final Index OUTBOX_AGGREGATE_ORDER_IDX = Internal.createIndex(DSL.name("outbox_aggregate_order_idx"), Outbox.OUTBOX, new OrderField[] { Outbox.OUTBOX.AGGREGATE_ID, Outbox.OUTBOX.AGGREGATE_VERSION }, false);
     public static final Index PROCESSED_RESERVATIONS_OCCURRED_AT_IDX = Internal.createIndex(DSL.name("processed_reservations_occurred_at_idx"), ProcessedReservations.PROCESSED_RESERVATIONS, new OrderField[] { ProcessedReservations.PROCESSED_RESERVATIONS.OCCURRED_AT }, false);
 }

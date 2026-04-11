@@ -20,6 +20,10 @@ public class OutboxCleanupLog implements Serializable {
     private Integer partitionsCreated;
     private Integer partitionsDropped;
     private Integer remainingPartitions;
+    private String status;
+    private OffsetDateTime startedAt;
+    private OffsetDateTime completedAt;
+    private String errorMessage;
 
     public OutboxCleanupLog() {}
 
@@ -28,18 +32,30 @@ public class OutboxCleanupLog implements Serializable {
         this.partitionsCreated = value.partitionsCreated;
         this.partitionsDropped = value.partitionsDropped;
         this.remainingPartitions = value.remainingPartitions;
+        this.status = value.status;
+        this.startedAt = value.startedAt;
+        this.completedAt = value.completedAt;
+        this.errorMessage = value.errorMessage;
     }
 
     public OutboxCleanupLog(
         OffsetDateTime runAt,
         Integer partitionsCreated,
         Integer partitionsDropped,
-        Integer remainingPartitions
+        Integer remainingPartitions,
+        String status,
+        OffsetDateTime startedAt,
+        OffsetDateTime completedAt,
+        String errorMessage
     ) {
         this.runAt = runAt;
         this.partitionsCreated = partitionsCreated;
         this.partitionsDropped = partitionsDropped;
         this.remainingPartitions = remainingPartitions;
+        this.status = status;
+        this.startedAt = startedAt;
+        this.completedAt = completedAt;
+        this.errorMessage = errorMessage;
     }
 
     /**
@@ -98,6 +114,62 @@ public class OutboxCleanupLog implements Serializable {
         this.remainingPartitions = remainingPartitions;
     }
 
+    /**
+     * Getter for <code>account.outbox_cleanup_log.status</code>.
+     */
+    public String getStatus() {
+        return this.status;
+    }
+
+    /**
+     * Setter for <code>account.outbox_cleanup_log.status</code>.
+     */
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    /**
+     * Getter for <code>account.outbox_cleanup_log.started_at</code>.
+     */
+    public OffsetDateTime getStartedAt() {
+        return this.startedAt;
+    }
+
+    /**
+     * Setter for <code>account.outbox_cleanup_log.started_at</code>.
+     */
+    public void setStartedAt(OffsetDateTime startedAt) {
+        this.startedAt = startedAt;
+    }
+
+    /**
+     * Getter for <code>account.outbox_cleanup_log.completed_at</code>.
+     */
+    public OffsetDateTime getCompletedAt() {
+        return this.completedAt;
+    }
+
+    /**
+     * Setter for <code>account.outbox_cleanup_log.completed_at</code>.
+     */
+    public void setCompletedAt(OffsetDateTime completedAt) {
+        this.completedAt = completedAt;
+    }
+
+    /**
+     * Getter for <code>account.outbox_cleanup_log.error_message</code>.
+     */
+    public String getErrorMessage() {
+        return this.errorMessage;
+    }
+
+    /**
+     * Setter for <code>account.outbox_cleanup_log.error_message</code>.
+     */
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
@@ -131,6 +203,30 @@ public class OutboxCleanupLog implements Serializable {
         }
         else if (!this.remainingPartitions.equals(other.remainingPartitions))
             return false;
+        if (this.status == null) {
+            if (other.status != null)
+                return false;
+        }
+        else if (!this.status.equals(other.status))
+            return false;
+        if (this.startedAt == null) {
+            if (other.startedAt != null)
+                return false;
+        }
+        else if (!this.startedAt.equals(other.startedAt))
+            return false;
+        if (this.completedAt == null) {
+            if (other.completedAt != null)
+                return false;
+        }
+        else if (!this.completedAt.equals(other.completedAt))
+            return false;
+        if (this.errorMessage == null) {
+            if (other.errorMessage != null)
+                return false;
+        }
+        else if (!this.errorMessage.equals(other.errorMessage))
+            return false;
         return true;
     }
 
@@ -142,6 +238,10 @@ public class OutboxCleanupLog implements Serializable {
         result = prime * result + ((this.partitionsCreated == null) ? 0 : this.partitionsCreated.hashCode());
         result = prime * result + ((this.partitionsDropped == null) ? 0 : this.partitionsDropped.hashCode());
         result = prime * result + ((this.remainingPartitions == null) ? 0 : this.remainingPartitions.hashCode());
+        result = prime * result + ((this.status == null) ? 0 : this.status.hashCode());
+        result = prime * result + ((this.startedAt == null) ? 0 : this.startedAt.hashCode());
+        result = prime * result + ((this.completedAt == null) ? 0 : this.completedAt.hashCode());
+        result = prime * result + ((this.errorMessage == null) ? 0 : this.errorMessage.hashCode());
         return result;
     }
 
@@ -153,6 +253,10 @@ public class OutboxCleanupLog implements Serializable {
         sb.append(", ").append(partitionsCreated);
         sb.append(", ").append(partitionsDropped);
         sb.append(", ").append(remainingPartitions);
+        sb.append(", ").append(status);
+        sb.append(", ").append(startedAt);
+        sb.append(", ").append(completedAt);
+        sb.append(", ").append(errorMessage);
 
         sb.append(")");
         return sb.toString();

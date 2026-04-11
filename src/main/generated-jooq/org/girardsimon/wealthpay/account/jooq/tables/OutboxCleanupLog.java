@@ -5,12 +5,17 @@ package org.girardsimon.wealthpay.account.jooq.tables;
 
 
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 import org.girardsimon.wealthpay.account.jooq.Account;
+import org.girardsimon.wealthpay.account.jooq.Indexes;
 import org.girardsimon.wealthpay.account.jooq.tables.records.OutboxCleanupLogRecord;
+import org.jooq.Check;
 import org.jooq.Condition;
 import org.jooq.Field;
+import org.jooq.Index;
 import org.jooq.Name;
 import org.jooq.PlainSQL;
 import org.jooq.QueryPart;
@@ -22,6 +27,7 @@ import org.jooq.Table;
 import org.jooq.TableField;
 import org.jooq.TableOptions;
 import org.jooq.impl.DSL;
+import org.jooq.impl.Internal;
 import org.jooq.impl.SQLDataType;
 import org.jooq.impl.TableImpl;
 
@@ -67,6 +73,26 @@ public class OutboxCleanupLog extends TableImpl<OutboxCleanupLogRecord> {
      */
     public final TableField<OutboxCleanupLogRecord, Integer> REMAINING_PARTITIONS = createField(DSL.name("remaining_partitions"), SQLDataType.INTEGER.nullable(false), this, "");
 
+    /**
+     * The column <code>account.outbox_cleanup_log.status</code>.
+     */
+    public final TableField<OutboxCleanupLogRecord, String> STATUS = createField(DSL.name("status"), SQLDataType.CLOB.nullable(false).defaultValue(DSL.field(DSL.raw("'success'::text"), SQLDataType.CLOB)), this, "");
+
+    /**
+     * The column <code>account.outbox_cleanup_log.started_at</code>.
+     */
+    public final TableField<OutboxCleanupLogRecord, OffsetDateTime> STARTED_AT = createField(DSL.name("started_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
+
+    /**
+     * The column <code>account.outbox_cleanup_log.completed_at</code>.
+     */
+    public final TableField<OutboxCleanupLogRecord, OffsetDateTime> COMPLETED_AT = createField(DSL.name("completed_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
+
+    /**
+     * The column <code>account.outbox_cleanup_log.error_message</code>.
+     */
+    public final TableField<OutboxCleanupLogRecord, String> ERROR_MESSAGE = createField(DSL.name("error_message"), SQLDataType.CLOB, this, "");
+
     private OutboxCleanupLog(Name alias, Table<OutboxCleanupLogRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
@@ -99,6 +125,18 @@ public class OutboxCleanupLog extends TableImpl<OutboxCleanupLogRecord> {
     @Override
     public Schema getSchema() {
         return aliased() ? null : Account.ACCOUNT;
+    }
+
+    @Override
+    public List<Index> getIndexes() {
+        return Arrays.asList(Indexes.IDX_OUTBOX_CLEANUP_LOG_COMPLETED_AT_SUCCESS, Indexes.IDX_OUTBOX_CLEANUP_LOG_RUN_AT_DESC);
+    }
+
+    @Override
+    public List<Check<OutboxCleanupLogRecord>> getChecks() {
+        return Arrays.asList(
+            Internal.createCheck(this, DSL.name("outbox_cleanup_log_status_check"), "((status = ANY (ARRAY['success'::text, 'failure'::text])))", true)
+        );
     }
 
     @Override

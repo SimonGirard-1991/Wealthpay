@@ -172,6 +172,15 @@ groups:
           summary: "Outbox table exceeds 500k rows on {{ $labels.instance }}"
           description: "Estimated {{ $value }} rows. Partition cleanup may have failed."
 
+      - alert: OutboxCleanupFailed
+        expr: outbox_cleanup_last_status{job="wealthpay"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Last outbox cleanup run was a failure"
+          description: "The most recent outbox partition cleanup recorded a failure status."
+
       - alert: OutboxCleanupStale
         expr: |
           max(outbox_cleanup_last_run_seconds{job="wealthpay"}) > 0

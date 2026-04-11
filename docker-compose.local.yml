@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgres:16
+    build:
+      context: ./docker/postgres
     container_name: wealthpay-postgres
     environment:
       POSTGRES_USER: user
@@ -18,11 +19,39 @@ services:
       - "max_replication_slots=10"
       - "-c"
       - "max_wal_senders=12"
+      - "-c"
+      - "shared_preload_libraries=pg_cron"
+      - "-c"
+      - "cron.database_name=wealthpay"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U user -d wealthpay" ]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  postgres-bootstrap:
+    image: postgres:16
+    container_name: wealthpay-postgres-bootstrap
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: password
+      POSTGRES_USER: user
+      POSTGRES_DB: wealthpay
+    volumes:
+      - ./docker/postgres/bootstrap:/bootstrap:ro
+    restart: "no"
+    entrypoint:
+      - "bash"
+      - "-lc"
+      - |
+        set -Eeuo pipefail
+        for f in /bootstrap/*.sql; do
+          [ -e "$$f" ] || continue
+          echo "Running $$f"
+          psql -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f "$$f"
+        done
 
   kafka-1:
     image: confluentinc/cp-kafka:8.1.1
