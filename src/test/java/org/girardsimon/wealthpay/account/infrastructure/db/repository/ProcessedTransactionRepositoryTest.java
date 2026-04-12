@@ -120,13 +120,14 @@ class ProcessedTransactionRepositoryTest extends AbstractContainerTest {
             accountId, transactionId, creditAccount.fingerprint(), occurredAt);
 
     // Assert
+    String fingerprint = debitAccount.fingerprint();
     assertAll(
         () -> assertThat(firstStatus).isEqualTo(TransactionStatus.COMMITTED),
         () ->
             assertThatThrownBy(
                     () ->
                         processedTransactionStore.register(
-                            accountId, transactionId, debitAccount.fingerprint(), occurredAt))
+                            accountId, transactionId, fingerprint, occurredAt))
                 .isInstanceOf(TransactionIdConflictException.class));
   }
 }

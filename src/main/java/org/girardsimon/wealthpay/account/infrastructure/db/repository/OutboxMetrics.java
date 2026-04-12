@@ -44,7 +44,7 @@ public class OutboxMetrics {
   private double fetchEstimate() {
     try {
       return Optional.ofNullable(dslContext.fetchOne(ESTIMATE_QUERY))
-          .map(record -> record.get(0, Number.class))
+          .map(row -> row.get(0, Number.class))
           .map(Number::doubleValue)
           .orElse(0.0);
     } catch (DataAccessException e) {
