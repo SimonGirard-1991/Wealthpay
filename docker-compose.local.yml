@@ -42,6 +42,12 @@ services:
     volumes:
       - ./docker/postgres/bootstrap:/bootstrap:ro
     restart: "no"
+    # CONTRACT: this service is a barrier that other services (e.g.,
+    # postgres-exporter) wait on via `service_completed_successfully`.
+    # Every bootstrap SQL file MUST be idempotent (safe on re-runs over
+    # an existing pg_data volume) and MUST propagate failures via the
+    # `set -Eeuo pipefail` guard + psql's `ON_ERROR_STOP=1`. Breaking
+    # this contract will silently break any downstream dependency.
     entrypoint:
       - "bash"
       - "-lc"
@@ -52,6 +58,27 @@ services:
           echo "Running $$f"
           psql -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f "$$f"
         done
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
+    container_name: wealthpay-postgres-exporter
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-bootstrap:
+        condition: service_completed_successfully
+    ports:
+      - "9187:9187"
+    # LOCAL-ONLY CREDENTIALS. In a non-local deployment, route through
+    # Docker/K8s secrets and use DATA_SOURCE_PASS_FILE / DATA_SOURCE_URI_FILE.
+    # Single-DB scrape: we intentionally do NOT enable auto-discovery, so
+    # PG_EXPORTER_EXCLUDE_DATABASES is not set — it only applies when
+    # PG_EXPORTER_AUTO_DISCOVER_DATABASES=true.
+    environment:
+      DATA_SOURCE_URI: "postgres:5432/wealthpay?sslmode=disable"
+      DATA_SOURCE_USER: monitoring
+      DATA_SOURCE_PASS: monitoring
 
   kafka-1:
     image: confluentinc/cp-kafka:8.1.1
