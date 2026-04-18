@@ -1,0 +1,219 @@
+---
+# pg_wal_io — gap-filler collector.
+#
+# Fills two gaps left by postgres_exporter v0.19.1's built-in collectors:
+#
+#   1. pg_stat_wal (PG14+) — WAL production rate AND backpressure signals
+#      (wal_buffers_full, wal_write_time, wal_sync_time). For a banking
+#      stack running Debezium CDC off a logical replication slot, these
+#      are the early-warning signals for "WAL is about to fill the disk".
+#      rate(pg_wal_size_bytes) from the built-in collector is a crude
+#      proxy that misses the stall/backpressure dimensions entirely.
+#
+#   2. pg_stat_io (PG16+) — per-backend-type I/O attribution. Answers
+#      "who is driving the reads under load — client backends, the
+#      background writer, or autovacuum?". No built-in collector emits
+#      this view, and it's the single most useful source for I/O
+#      forensics during a latency incident.
+#
+# Cardinality budget:
+#   pg_stat_wal   -> 1 row  × 8 metrics = 8  series
+#   pg_stat_io    -> ~23 rows × 13 metrics = ~300 series (bounded by
+#     backend_type × object × context, all enum-valued — PG prunes
+#     impossible combinations like `walsender` + `vacuum` context)
+#
+# All metrics are TYPE counter (cumulative since stats_reset). Use
+# rate()/increase() in PromQL — never the raw value.
+
+collector_name: pg_wal_io
+
+queries:
+  # Shared query blocks referenced by multiple metric definitions below.
+  # Declaring them once keeps the SQL executed per scrape to exactly
+  # TWO statements, regardless of how many metrics we derive.
+  - query_name: pg_stat_wal
+    # wal_bytes is NUMERIC server-side; casting to double precision is
+    # technically lossy past 2^53 bytes (~9 PB cumulative WAL since
+    # stats_reset) — unreachable in practice. The cast is kept
+    # deliberately because Prometheus samples are float64 regardless:
+    # sql_exporter would perform this conversion internally anyway, and
+    # doing it in SQL keeps the type explicit. Do NOT "optimize" this away.
+    query: |
+      SELECT
+        wal_records,
+        wal_fpi,
+        wal_bytes::double precision AS wal_bytes,
+        wal_buffers_full,
+        wal_write,
+        wal_sync,
+        wal_write_time,
+        wal_sync_time
+      FROM pg_stat_wal
+  - query_name: pg_stat_io
+    query: |
+      SELECT
+        backend_type,
+        object,
+        context,
+        reads,
+        read_time,
+        writes,
+        write_time,
+        writebacks,
+        writeback_time,
+        extends,
+        extend_time,
+        hits,
+        evictions,
+        reuses,
+        fsyncs,
+        fsync_time
+      FROM pg_stat_io
+
+metrics:
+  # ---------------------------------------------------------------------
+  # pg_stat_wal — one row, eight counters. Labels-free (server-wide).
+  # ---------------------------------------------------------------------
+  - metric_name: pg_wal_stat_records_total
+    type: counter
+    help: "Total number of WAL records generated."
+    values: [wal_records]
+    query_ref: pg_stat_wal
+
+  - metric_name: pg_wal_stat_fpi_total
+    type: counter
+    help: "Total number of WAL full-page images generated."
+    values: [wal_fpi]
+    query_ref: pg_stat_wal
+
+  - metric_name: pg_wal_stat_bytes_total
+    type: counter
+    help: "Total bytes of WAL generated."
+    values: [wal_bytes]
+    query_ref: pg_stat_wal
+
+  - metric_name: pg_wal_stat_buffers_full_total
+    type: counter
+    help: "Number of times WAL data was written to disk because WAL buffers became full. Sustained growth indicates wal_buffers is undersized."
+    values: [wal_buffers_full]
+    query_ref: pg_stat_wal
+
+  - metric_name: pg_wal_stat_write_total
+    type: counter
+    help: "Number of times WAL was written to disk. Pair with pg_wal_stat_write_time_milliseconds_total to compute avg ms per WAL write (rate(time)/rate(count))."
+    values: [wal_write]
+    query_ref: pg_stat_wal
+
+  - metric_name: pg_wal_stat_sync_total
+    type: counter
+    help: "Number of WAL fsync operations issued. Pair with pg_wal_stat_sync_time_milliseconds_total to compute avg ms per WAL fsync."
+    values: [wal_sync]
+    query_ref: pg_stat_wal
+
+  - metric_name: pg_wal_stat_write_time_milliseconds_total
+    type: counter
+    help: "Total time spent writing WAL buffers to disk, in milliseconds. Only non-zero when track_wal_io_timing is on."
+    values: [wal_write_time]
+    query_ref: pg_stat_wal
+
+  - metric_name: pg_wal_stat_sync_time_milliseconds_total
+    type: counter
+    help: "Total time spent syncing WAL files to disk, in milliseconds. Only non-zero when track_wal_io_timing is on. Rising values indicate fsync pressure on the WAL device."
+    values: [wal_sync_time]
+    query_ref: pg_stat_wal
+
+  # ---------------------------------------------------------------------
+  # pg_stat_io — ~23 rows (matches the top-of-file cardinality budget;
+  # empirically 302 series / 13 metrics = 23.2 rows on this stack).
+  # Keyed by (backend_type, object, context).
+  # ---------------------------------------------------------------------
+  - metric_name: pg_io_stat_reads_total
+    type: counter
+    help: "Block reads attributed to the backend_type/object/context tuple."
+    key_labels: [backend_type, object, context]
+    values: [reads]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_read_time_milliseconds_total
+    type: counter
+    help: "Time spent reading blocks, in milliseconds. Non-zero only when track_io_timing=on."
+    key_labels: [backend_type, object, context]
+    values: [read_time]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_writes_total
+    type: counter
+    help: "Block writes attributed to the backend_type/object/context tuple."
+    key_labels: [backend_type, object, context]
+    values: [writes]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_write_time_milliseconds_total
+    type: counter
+    help: "Time spent writing blocks, in milliseconds. Non-zero only when track_io_timing=on."
+    key_labels: [backend_type, object, context]
+    values: [write_time]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_writebacks_total
+    type: counter
+    help: "Blocks written back via writeback hints (bgwriter/checkpointer pressure signal)."
+    key_labels: [backend_type, object, context]
+    values: [writebacks]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_writeback_time_milliseconds_total
+    type: counter
+    help: "Time spent processing writeback requests, in milliseconds. Non-zero only when track_io_timing=on."
+    key_labels: [backend_type, object, context]
+    values: [writeback_time]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_extends_total
+    type: counter
+    help: "Relation extend operations. Sustained growth in `client backend` + `normal` context indicates write pressure outpacing autovacuum."
+    key_labels: [backend_type, object, context]
+    values: [extends]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_extend_time_milliseconds_total
+    type: counter
+    help: "Time spent extending relations, in milliseconds. Non-zero only when track_io_timing=on. Useful for diagnosing file-growth contention."
+    key_labels: [backend_type, object, context]
+    values: [extend_time]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_hits_total
+    type: counter
+    help: "Shared-buffer hits. Use with reads to compute per-backend hit ratio."
+    key_labels: [backend_type, object, context]
+    values: [hits]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_evictions_total
+    type: counter
+    help: "Buffer evictions. High eviction rate from `client backend` means the working set exceeds shared_buffers."
+    key_labels: [backend_type, object, context]
+    values: [evictions]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_reuses_total
+    type: counter
+    help: "Buffer reuses in the ring buffer used by sequential scans and similar bulk operations."
+    key_labels: [backend_type, object, context]
+    values: [reuses]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_fsyncs_total
+    type: counter
+    help: "fsync calls issued. Attribution is useful for isolating whether checkpointer or a backend is driving fsync load."
+    key_labels: [backend_type, object, context]
+    values: [fsyncs]
+    query_ref: pg_stat_io
+
+  - metric_name: pg_io_stat_fsync_time_milliseconds_total
+    type: counter
+    help: "Time spent in fsync, in milliseconds. Non-zero only when track_io_timing=on."
+    key_labels: [backend_type, object, context]
+    values: [fsync_time]
+    query_ref: pg_stat_io

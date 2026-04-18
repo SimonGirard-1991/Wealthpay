@@ -1,0 +1,50 @@
+---
+# sql_exporter — top-level config. Pins the target DB and points at
+# collector files. Owned by the Wealthpay local stack.
+#
+# WHY THIS TOOL EXISTS IN THE STACK: postgres_exporter deprecated its
+# `--extend.query-path` custom-query feature in v0.13.0 (June 2023) and
+# explicitly redirects users to sql_exporter for gap-filling queries.
+# See docker-compose.local.yml `sql-exporter` service comment for the
+# full rationale. Scope here is kept deliberately narrow: two queries
+# that fill genuine built-in-collector gaps (pg_stat_wal, pg_stat_io).
+# Do not grow this into a second general-purpose exporter.
+#
+# LOCAL-ONLY CREDENTIALS: the DSN below hard-codes the monitoring/
+# monitoring credentials from docker/postgres/bootstrap/02-monitoring-role.sql.
+# When lifting this to a non-local environment, switch to a file-sourced
+# DSN (sql_exporter supports environment-variable expansion) backed by
+# Docker/K8s secrets or Vault — do NOT copy this file verbatim.
+
+global:
+  # Cap queries so a pathological query on the DB side can't starve the
+  # scrape pipeline. Must be < Prometheus scrape_timeout (default 10s).
+  scrape_timeout: 8s
+  # Don't re-run a collector more often than this even if Prometheus
+  # scrapes faster. Aligns with Prometheus global scrape_interval (15s)
+  # so we don't pay for queries whose output nobody will see.
+  min_interval: 15s
+  # Single DB, two lightweight queries — one connection is enough. Keeps
+  # the footprint on the monitored server minimal. If this exporter ever
+  # grows beyond the pg_stat_wal / pg_stat_io scope (which the collector
+  # file's top comment explicitly prohibits), revisit this in concert
+  # with scrape_timeout: a scrape that ever approaches 8s would contend
+  # with the next scrape 15s later under max_connections=1.
+  max_connections: 1
+
+target:
+  # DSN driver prefix must match the name used by sql_exporter's
+  # registered driver. `postgresql://` is the canonical form for the
+  # pgx-backed driver.
+  data_source_name: "postgresql://monitoring:monitoring@postgres:5432/wealthpay?sslmode=disable&connect_timeout=5"
+  # Lightweight SELECT 1 on every scrape; surfaces connection health as
+  # the `up` metric independently from postgres_exporter's `pg_up`.
+  enable_ping: true
+  collectors:
+    - pg_wal_io
+
+collector_files:
+  # Explicit list, NOT a glob. The collector file's top comment forbids
+  # growing this exporter; a glob would silently onboard rogue files
+  # dropped into the mount. Add entries here consciously.
+  - wal-io.collector.yml
