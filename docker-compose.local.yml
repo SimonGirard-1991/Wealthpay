@@ -20,9 +20,25 @@ services:
       - "-c"
       - "max_wal_senders=12"
       - "-c"
-      - "shared_preload_libraries=pg_cron"
+      - "shared_preload_libraries=pg_cron,pg_stat_statements"
       - "-c"
       - "cron.database_name=wealthpay"
+      # track_io_timing is required for pg_stat_statements I/O columns
+      # (blk_read_time, blk_write_time, temp_blk_read_time, temp_blk_write_time)
+      # to carry non-zero values. Without it they silently return 0.
+      # On modern Linux with TSC clocksource this is effectively free; on
+      # non-TSC clocksources (some virtualization, older kernels) it can be
+      # measurably expensive. For non-local environments, run `pg_test_timing`
+      # first to confirm overhead is acceptable before copying this line.
+      - "-c"
+      - "track_io_timing=on"
+      # These match the PG16 defaults as of 2026; restated here so a future
+      # upstream change doesn't silently move our pg_stat_statements budget.
+      # Not "tuned" — just pinned.
+      - "-c"
+      - "pg_stat_statements.max=5000"
+      - "-c"
+      - "pg_stat_statements.track=top"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U user -d wealthpay" ]
       interval: 5s
@@ -70,6 +86,19 @@ services:
         condition: service_completed_successfully
     ports:
       - "9187:9187"
+    # Opt-in to the stat_statements collector. Upstream marks it
+    # `defaultDisabled` because it can be expensive on busy servers;
+    # enabling here so the DB-side cost we pay (shared_preload_libraries,
+    # hook overhead) actually surfaces as Prometheus metrics.
+    #
+    # --collector.stat_statements.include_query exposes the normalized
+    # query text as a metric label. Safe for this local single-DB stack
+    # (exporter limit=100, query_length=120 chars). DO NOT enable in a
+    # production or multi-tenant deployment without explicit cardinality
+    # review — the label explodes per unique normalized query.
+    command:
+      - "--collector.stat_statements"
+      - "--collector.stat_statements.include_query"
     # LOCAL-ONLY CREDENTIALS. In a non-local deployment, route through
     # Docker/K8s secrets and use DATA_SOURCE_PASS_FILE / DATA_SOURCE_URI_FILE.
     # Single-DB scrape: we intentionally do NOT enable auto-discovery, so
