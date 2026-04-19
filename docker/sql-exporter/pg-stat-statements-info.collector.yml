@@ -1,0 +1,111 @@
+---
+# pg_stat_statements coverage & integrity signals — gap-filler collector.
+#
+# Fills gaps left by postgres_exporter v0.19.1's built-in stat_statements
+# collector, which exposes the main pg_stat_statements view (per-queryid
+# calls, exec time, I/O time) but none of the metadata that tells an
+# operator whether the exposed sample is representative of the full set
+# tracked by PostgreSQL. Without these metrics the Top-N query panels on
+# the 'Database — Query & Table Performance' dashboard look authoritative
+# even when they are silently truncated.
+#
+# Two independent truncation mechanisms affect that dashboard. We surface
+# BOTH here because they fire at different points on a production path:
+#
+#   (1) EXPORTER-SIDE TRUNCATION — fires first, common case.
+#       postgres-exporter v0.19.1's stat_statements collector hardcodes
+#       `ORDER BY total_exec_time DESC LIMIT 100` in its SQL; there is no
+#       flag to override it. Empirically confirmed on this stack: the
+#       exporter emits exactly 100 pg_stat_statements_calls_total series
+#       once PG has tracked ≥100 distinct normalized statements. The
+#       leaderboards thus show the top-100-by-exec-time, not the top-N
+#       overall, and statements that are call-rate-hot but exec-time-cheap
+#       can be clipped before Prometheus ever sees them.
+#
+#       Signal: pg_stat_statements_tracked (gauge, not a _total counter —
+#       naming convention matters because the value goes DOWN under PG-side
+#       LRU eviction). When > 100, exporter truncation is active and the
+#       leaderboards are incomplete.
+#
+#   (2) PG-SIDE LRU EVICTION — fires rarely, worst case.
+#       pg_stat_statements stores up to pg_stat_statements.max entries
+#       (PG default 5000; we pin this explicitly in docker-compose.local.yml).
+#       Entries are aged out in LRU order when the cap is hit.
+#
+#       Signal: pg_stat_statements_info_dealloc_total. Non-zero rate
+#       means even the full in-DB view is a moving target.
+#
+#       Companion signal: pg_stat_statements_info_stats_reset_seconds.
+#       `time() - stats_reset_seconds` yields the actual lookback window
+#       of the leaderboards, otherwise invisible from Grafana.
+#
+# Cardinality budget:
+#   3 metrics × 1 row = 3 series. Rounding error against the ~300-series
+#   budget already consumed by pg_stat_io. Kept labels-free deliberately:
+#   these are server-wide integrity signals, not per-queryid forensics.
+#
+# Query cost: two single-row selects against in-memory views. The
+# count(*) query walks the pg_stat_statements hash at most
+# pg_stat_statements.max rows (5000) — sub-millisecond on any PG. Fits
+# trivially inside sql_exporter's scrape_timeout=8s / max_connections=1
+# serial pipeline (see sql_exporter.yml).
+#
+# Scope rule (same as wal-io.collector.yml): this file exists solely to
+# plug concrete postgres-exporter coverage gaps. The two queries below
+# are both about pg_stat_statements completeness, which is a single
+# operational concern even though they touch two different views. Do
+# NOT grow into general-purpose query telemetry. Each additional query
+# must cite a specific postgres-exporter coverage gap in its header.
+#
+# EXTENSION DEPENDENCY: pg_stat_statements_info and pg_stat_statements
+# are both created by the pg_stat_statements extension, registered in
+# docker/postgres/bootstrap/03-pg-stat-statements.sql. That bootstrap
+# fails loudly if the extension is misconfigured, so these queries can
+# assume the views exist at scrape time. If the extension is ever
+# removed, these queries error per scrape; sql_exporter isolates
+# per-query errors so wal-io.collector.yml metrics continue to flow —
+# the only visible effect is the three metrics below going absent.
+
+collector_name: pg_stat_statements_info
+
+queries:
+  # Cast dealloc to double precision for the same reason wal_bytes is
+  # cast in wal-io.collector.yml: Prometheus samples are float64
+  # regardless; doing the cast in SQL keeps the type explicit at the
+  # collector boundary.
+  - query_name: pg_stat_statements_info
+    query: |
+      SELECT
+        dealloc::double precision AS dealloc,
+        EXTRACT(epoch FROM stats_reset)::double precision AS stats_reset_seconds
+      FROM pg_stat_statements_info
+
+  # Cardinality of the full in-DB view. Compared against the exporter's
+  # own 100-row emission ceiling, this is the truncation detector: if
+  # this gauge exceeds 100, the dashboard's Top-N panels are clipped.
+  - query_name: pg_stat_statements_tracked
+    query: |
+      SELECT count(*)::double precision AS tracked FROM pg_stat_statements
+
+metrics:
+  - metric_name: pg_stat_statements_info_dealloc_total
+    type: counter
+    help: "Total entries evicted from the pg_stat_statements LRU since stats_reset. Non-zero rate means the PG-side LRU is churning — compare against pg_stat_statements_tracked to understand whether this is the primary or secondary truncation signal."
+    values: [dealloc]
+    query_ref: pg_stat_statements_info
+
+  - metric_name: pg_stat_statements_info_stats_reset_seconds
+    type: gauge
+    help: "Unix timestamp of the last pg_stat_statements stats_reset. Compute `time() - pg_stat_statements_info_stats_reset_seconds` to read the actual lookback window of the Top-N leaderboards."
+    values: [stats_reset_seconds]
+    query_ref: pg_stat_statements_info
+
+  # Named without `_total` suffix deliberately: Prometheus naming convention
+  # reserves `_total` for monotonically-increasing counters. This is a gauge
+  # (view-row count, can go DOWN via LRU eviction), so `_total` would be a
+  # misleading label for any alert rule author who hadn't read this file.
+  - metric_name: pg_stat_statements_tracked
+    type: gauge
+    help: "Current number of distinct normalized statements in pg_stat_statements. When > 100, the Query & Table Performance dashboard's Top-N leaderboards are truncated because postgres-exporter v0.19.1's stat_statements collector hardcodes LIMIT 100. When approaching pg_stat_statements.max (5000), the PG-side LRU will begin evicting — watch pg_stat_statements_info_dealloc_total for that."
+    values: [tracked]
+    query_ref: pg_stat_statements_tracked

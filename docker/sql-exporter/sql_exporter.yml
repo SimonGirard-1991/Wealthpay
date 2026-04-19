@@ -24,19 +24,21 @@ global:
   # scrapes faster. Aligns with Prometheus global scrape_interval (15s)
   # so we don't pay for queries whose output nobody will see.
   min_interval: 15s
-  # Single DB, two lightweight queries — one connection is enough. Keeps
-  # the footprint on the monitored server minimal. If this exporter ever
-  # grows beyond the pg_stat_wal / pg_stat_io scope (which the collector
-  # file's top comment explicitly prohibits), revisit this in concert
-  # with scrape_timeout: a scrape that ever approaches 8s would contend
-  # with the next scrape 15s later under max_connections=1.
+  # Single DB, a handful of lightweight queries — one connection is
+  # enough. Keeps the footprint on the monitored server minimal. Each
+  # collector file registered below MUST cite a specific postgres-exporter
+  # coverage gap in its header comment; if a future collector cannot, it
+  # does not belong in this exporter.
   #
   # Concurrency note: this is not only a footprint choice — with
   # max_connections=1 and enable_ping=true below, every scrape runs
-  # serially as PING -> pg_stat_wal -> pg_stat_io inside one
-  # scrape_timeout window. Both current queries are sub-millisecond so
-  # the 8s budget is ample, but a third collector query added without
-  # raising this limit would compound serially, not in parallel.
+  # serially as PING -> pg_stat_wal -> pg_stat_io -> pg_stat_statements_info
+  # -> pg_stat_statements_tracked inside one scrape_timeout window. All
+  # four current queries are sub-millisecond so the 8s budget is ample,
+  # but additional collector queries compound serially, not in parallel —
+  # re-evaluate max_connections before adding a fifth, especially if the
+  # new query touches a heavy view (pg_stat_activity at high connection
+  # counts is the usual gotcha).
   max_connections: 1
 
 target:
@@ -53,9 +55,13 @@ target:
   enable_ping: true
   collectors:
     - pg_wal_io
+    - pg_stat_statements_info
 
 collector_files:
-  # Explicit list, NOT a glob. The collector file's top comment forbids
-  # growing this exporter; a glob would silently onboard rogue files
-  # dropped into the mount. Add entries here consciously.
+  # Explicit list, NOT a glob. Each collector file must cite a specific
+  # postgres-exporter coverage gap in its header; a glob would silently
+  # onboard rogue files dropped into the mount without that review.
+  # Add entries here consciously, in the same order as the `collectors:`
+  # list above so the execution order reads the same from both sides.
   - wal-io.collector.yml
+  - pg-stat-statements-info.collector.yml

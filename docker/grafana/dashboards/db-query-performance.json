@@ -1,0 +1,743 @@
+{
+  "uid": "db-query-performance",
+  "title": "Database — Query & Table Performance",
+  "description": "Forensic companion to the 'Database — Server Health' dashboard: which query and which table is responsible? Expand the 'How to read this dashboard' row at the top for leaderboard-integrity caveats and data-source details.",
+  "tags": [
+    "wealthpay",
+    "postgres",
+    "db-performance",
+    "pg_stat_statements"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "label": "Prometheus",
+        "refresh": 1
+      },
+      {
+        "name": "BOOTSTRAP_REGEX",
+        "type": "constant",
+        "description": "Hidden constant. Single source of truth for the bootstrap/driver-noise regex referenced by the three Top-N leaderboards (panels 1, 2, 3). Uses RE2 character classes ([$], [.], [(], [)]) instead of backslash escapes so it survives Grafana's JSON round-trip without double-escaping. When a new JDBC driver version introduces a novel introspection query that dominates the leaderboards after a quiet period, extend the pattern HERE, not in each panel separately — the three panels disagreeing on what counts as 'noise' is the whole failure mode this variable exists to prevent.",
+        "query": "(?i)^(BEGIN|COMMIT|ROLLBACK|SET .*|SHOW .*|SELECT [$][0-9]+( AS TABLE_CAT)?[ ]*$|SELECT t[.]oid AS oid.*|SELECT DISTINCT ON [(]typname[)].*|SELECT COALESCE[(]SUM[(]GREATEST[(]child[.]reltuples.*).*",
+        "current": {
+          "value": "(?i)^(BEGIN|COMMIT|ROLLBACK|SET .*|SHOW .*|SELECT [$][0-9]+( AS TABLE_CAT)?[ ]*$|SELECT t[.]oid AS oid.*|SELECT DISTINCT ON [(]typname[)].*|SELECT COALESCE[(]SUM[(]GREATEST[(]child[.]reltuples.*).*",
+          "text": "bootstrap regex"
+        },
+        "hide": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "How to read this dashboard",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": [
+        {
+          "id": 101,
+          "type": "text",
+          "title": "",
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 1
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "### Purpose\n\nForensic companion to the **Database — Server Health** dashboard. Server Health answers *is the DB healthy right now?*; this dashboard answers *which query and which table is responsible?*.\n\n### Data sources\n\n| Panel group | Source | Collector config |\n|---|---|---|\n| Top-N query leaderboards | `pg_stat_statements` via **postgres-exporter** | `--collector.stat_statements`, `--collector.stat_statements.include_query` |\n| Table-level panels (dead-tuple, index-scan, autovacuum, HOT) | `pg_stat_user_tables` via **postgres-exporter** | default `stat_user_tables` collector |\n| Integrity tiles (evictions, visible %) | `pg_stat_statements_info` + row count via **sql-exporter** | `docker/sql-exporter/pg-stat-statements-info.collector.yml` |\n| Block-I/O panel | `pg_stat_io` via **sql-exporter** | `docker/sql-exporter/wal-io.collector.yml` |\n\n### Leaderboard integrity — the two truncation mechanisms\n\nThe three Top-N leaderboards below are subject to **two independent truncation mechanisms**, both surfaced by the tiles at the top of this dashboard.\n\n**(1) Exporter-side truncation — common case.** postgres-exporter v0.19.1's `stat_statements` collector hardcodes `ORDER BY total_exec_time DESC LIMIT 100` in its query and does not expose a flag to override it. Once PG tracks >100 distinct normalized statements the leaderboards show the top-100-by-exec-time and silently omit the rest, including statements that are call-rate-hot but exec-time-cheap (the classic N+1 signature). The **% visible** tile on the top row catches this.\n\n**(2) PG-side LRU eviction — rare case.** `pg_stat_statements` is bounded by `pg_stat_statements.max` (pinned at 5000 in `docker-compose.local.yml`). When that cap is hit PG ages entries out in LRU order and the full in-DB view becomes a moving target. The **LRU eviction** tile on the top row catches this.\n\nBoth integrity metrics come from `docker/sql-exporter/pg-stat-statements-info.collector.yml` because postgres-exporter covers the main `pg_stat_statements` view only.\n\n### Why the integrity tiles sit at the top\n\nReading a truncated leaderboard as if it were complete is the single most common diagnostic mistake this dashboard can cause. The tiles are pinned at the top so the operator's eye lands on the integrity signals BEFORE the ranked data. If either is yellow/red, discount the leaderboards below accordingly.\n\n### Why the traffic sentinel sits next to them\n\nA leaderboard that looks empty has two very different causes: (a) no traffic ran inside the window, or (b) the dashboard's filtering is broken and dropped the real queries. The **Application traffic — last 15m** tile disambiguates: green = traffic exists, yellow = quiet stack. Without the sentinel, a just-past-Gatling-run dashboard and a broken-filter dashboard look identical."
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "pg_stat_statements LRU eviction (15m)",
+      "description": "`sum(pg_stat_statements_info_dealloc_total - pg_stat_statements_info_dealloc_total offset 15m) or vector(0)` — entries aged out of the PG-side pg_stat_statements LRU in the last 15 minutes. WHY THIS SHAPE INSTEAD OF `increase(...[15m])` — this counter ticks at most once per LRU eviction event (often zero for hours). `increase()` does floating-point extrapolation across window edges, so a counter that actually advanced 0→3 over the window can display as 2.97 or 3.04, which is misleading on a tile whose thresholds are integer-sensitive (yellow at ≥1). The offset-subtraction form yields the exact count of evictions that happened between `now - 15m` and `now`. The trailing `or vector(0)` handles the cold-start edge case where the `offset 15m` side has no samples (sql-exporter started <15m ago) — substituting 0 there reads as 'no evictions since boot' rather than showing 'No data'. THE OUTER `sum()` IS LOAD-BEARING — without it this panel renders TWO tiles when the fallback fires, because the metric side carries `{instance=\"sql-exporter:9399\", job=\"sql-exporter\"}` labels and `vector(0)` carries none; PromQL's `or` is a set-union over label-sets so it returns both series as distinct. Grafana renders one tile per label-set. Wrapping in `sum()` strips labels to `{}` which matches `vector(0)`'s empty label-set, collapsing to a single series. Do not remove the `sum()`. SIGNAL INTERPRETATION — this is the SECOND-order integrity signal for the leaderboards below, paired with the 'tracked cardinality' tile to its right which catches the FIRST-order signal (exporter-side LIMIT 100 truncation). Read the two together: LRU eviction is only a concern once PG-side tracked cardinality has approached pg_stat_statements.max (pinned at 5000 here). Below that, tracked cardinality is the more sensitive indicator and this tile is expected to stay at 0. UNDERLYING CAUSE WHEN THIS IS NON-ZERO — unparameterized SQL hitting the view with a distinct queryid per literal value, dynamic SQL generators, or a deliberately-low pg_stat_statements.max. On this local single-DB stack with JDBC's parameterized drivers this should sit at 0 indefinitely; a non-zero reading means even the full in-DB view is a moving target, so every Top-N row below is subject to mid-window churn. THRESHOLD — yellow at >0, red at >=50 (heuristic for 'enough churn to materially bias a 20-row leaderboard'). SOURCE — sql-exporter via docker/sql-exporter/pg-stat-statements-info.collector.yml, because postgres-exporter v0.19.1's stat_statements collector covers the main view only.",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(pg_stat_statements_info_dealloc_total - pg_stat_statements_info_dealloc_total offset 15m) or vector(0)",
+          "legendFormat": "evictions (15m)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "% of tracked statements visible in leaderboards",
+      "description": "`sum(clamp_max(10000 / clamp_min(pg_stat_statements_tracked, 1), 100)) or vector(100)`. The fraction of PG-tracked normalized statements that actually make it into the three Top-N leaderboards below, expressed as a percentage. WHY A PERCENTAGE AND NOT RAW COUNT — an earlier iteration of this tile was `pg_stat_statements_tracked` with a yellow threshold at ≥100. On this stack that tile is permanently yellow (tracked is ~130 on an idle dev instance and only grows) which trains operators to ignore the color. The percentage framing makes the tile actionable: it shows how much of the view the dashboard is actually letting you see, and it degrades smoothly instead of flipping on a hard boundary. FORMULA MECHANICS — the inner expression `10000 / clamp_min(tracked, 1)` reads as `100 * (100 / tracked)`. `clamp_min(tracked, 1)` guards the tracked=0 case (right after `pg_stat_statements_reset()` or before the first sql-exporter scrape lands) so the division never becomes 0/0. The `clamp_max(..., 100)` caps the result when tracked<100 (all statements visible → bounded at 100%, not displayed as >100%). The trailing `or vector(100)` collapses the absent-series case (sql-exporter container restarting, scrape not yet arrived) to 100% — which is the truthful reading, because with zero tracked statements nothing is being clipped. THE OUTER `sum()` IS LOAD-BEARING — without it this panel renders TWO tiles when the fallback fires: the metric side carries `{instance=\"sql-exporter:9399\", job=\"sql-exporter\"}` labels and `vector(100)` carries none, so PromQL's `or` is a set-union over label-sets (it treats them as distinct series and returns both). Grafana's stat panel then renders one tile per label-set. Wrapping the metric in `sum()` strips its labels to `{}`, which matches `vector(100)`'s empty label-set so `or` collapses them to a single series. Do not remove the `sum()` — it is a correctness guard, not aggregation boilerplate. At tracked=132 the reading is ~75.7%; at tracked=500 it is 20%; at tracked=1000 it is 10%. THE FAILURE MODE THIS CATCHES — postgres-exporter v0.19.1's stat_statements collector hardcodes `ORDER BY total_exec_time DESC LIMIT 100` in its query text (verified empirically: this exporter emits exactly 100 series under load regardless of how many statements PG is tracking). There is no flag to override that LIMIT. The three Top-N leaderboards below are therefore clipped to the top-100-by-exec-time and silently omit everything else — including statements that are call-rate-hot but exec-time-cheap (the classic N+1 signature, which this clipping specifically hides). THRESHOLDS — green ≥80% (most statements visible, leaderboards reliable); yellow 30-80% (material clipping, be aware the 'tail' is missing from exec-time-cheap-but-chatty queries in particular); red <30% (heavily clipped, most of the view is invisible — treat leaderboards as a biased sample, not a census). REMEDIATION WHEN YELLOW/RED — if investigation needs data for clipped statements, query pg_stat_statements directly via psql: `SELECT queryid, calls, total_exec_time, query FROM pg_stat_statements WHERE dbid = (SELECT oid FROM pg_database WHERE datname = 'wealthpay') ORDER BY calls DESC LIMIT 200`. This bypasses the exporter LIMIT entirely. Prefer this to calling `pg_stat_statements_reset()`, which erases ALL history, not just clipped entries. PAIRED TILE — the adjacent 'LRU eviction' tile covers the second-order concern (PG-side LRU churn when tracked approaches pg_stat_statements.max = 5000); this tile covers the first-order concern (exporter-side truncation at 100), which fires at a much lower cardinality. METRIC NAMING — the underlying metric is `pg_stat_statements_tracked` (gauge, no `_total` suffix) because it can go DOWN via LRU eviction; Prometheus naming convention reserves `_total` for monotonic counters.",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(clamp_max(10000 / clamp_min(pg_stat_statements_tracked, 1), 100)) or vector(100)",
+          "legendFormat": "visible %",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Application traffic — last 15m",
+      "description": "`sum(rate(pg_stat_statements_calls_total{datname=\"wealthpay\", user!=\"monitoring\"}[15m]))` — aggregate call rate from the application across all non-monitoring users, over the same 15m window the leaderboards below use. PURPOSE — sentinel that disambiguates the two very different failure modes of a Top-N leaderboard: (1) 'the leaderboard is empty because nothing ran' (sentinel = 0 or near-0, yellow) vs (2) 'the leaderboard is empty because the dashboard is broken' (sentinel > 0 but leaderboards show only bootstrap SQL, green sentinel + empty leaderboards = real bug). Without this tile, a just-past-Gatling-run dashboard and a broken-filter dashboard look identical. WHY THE `user!=\"monitoring\"` FILTER AND NOT `user=\"<app>\"` — verified empirically on this stack: postgres-exporter runs its own scrapes as user='monitoring' (correctly stripped by the `!=` denylist) and no series is emitted with an empty user label (no NULL-rolname leakage), so the denylist is tight. An allowlist like `user=\"wealthpay\"` would be wrong here because .env sets DB_USER='user' — the actual app user is literally the string 'user', which is easy to miss if you read the compose file casually. THRESHOLD — yellow for 0 (nothing ran), green at >=0.01 calls/s (traffic present). The 0.01 floor is deliberately low so even a single in-flight Gatling ramp-up registers as green. INTERPRETATION GUIDE — if this tile reads 0 and the three leaderboards below look thin or show only `GRANT`/`CREATE EXTENSION`/`SHOW` bootstrap rows, the 15m window has rolled past your last workload — that is expected behavior, not a bug. Widen the Grafana time range or kick off `mvn -Pgatling gatling:test` and wait one scrape cycle (15s) for signal to appear.",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.01
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(pg_stat_statements_calls_total{datname=\"wealthpay\", user!=\"monitoring\"}[15m])) or vector(0)",
+          "legendFormat": "calls/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "title": "Top-20 queries by total exec time (rate, 15m)",
+      "description": "`topk(20, sum by (queryid) (rate(pg_stat_statements_seconds_total[15m])) * on(queryid) group_left(query) pg_stat_statements_query_id)`. Reads as: seconds of DB backend CPU spent in this query per wall-clock second, over the last 15 minutes. A value of 1.0 means one full core is pinned by that query. JOIN SHAPE — the stats counters carry labels {datname, queryid, user} but `pg_stat_statements_query_id` carries only {queryid, query}. Written naively `rate(...) * on(queryid) group_left(query) pg_stat_statements_query_id`, Prometheus rejects the many-to-one match because `user` and `datname` appear on the left but not the right, and the panel silently returns 'No data'. The `sum by (queryid)` wrapper collapses the extra labels first. Any change to this query must preserve that shape. WINDOW CHOICE — 15m is wide enough to survive a single Gatling run (typically 2-5 min) without the ranking being dominated by the very last few scrapes, narrow enough that the leaderboard reacts to workload shifts within a single observation. TEXT TRUNCATION — `query` label is capped at 120 chars by postgres-exporter's default query_length. Queries longer than that are shown truncated; cross-reference with `pg_stat_statements` in psql for the full normalized text. CARDINALITY CAVEAT — stat_statements has a built-in LRU limit (100 entries here, controlled by postgres-exporter's default). On an evicting system the leaderboard is biased toward currently-hot queries, not all-time-hot queries — see dashboard-level description for the dealloc follow-up.",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "displayName",
+                "value": "exec time"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 900
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "queryid"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "topk(20, sum by (queryid) (rate(pg_stat_statements_seconds_total{datname=\"wealthpay\", user!=\"monitoring\"}[15m])) * on(queryid) group_left(query) pg_stat_statements_query_id unless on(queryid) pg_stat_statements_query_id{query=~\"${BOOTSTRAP_REGEX}\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "Value": 0,
+              "queryid": 1,
+              "query": 2
+            },
+            "renameByName": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Top-20 queries by call rate (15m)",
+      "description": "`topk(20, sum by (queryid) (rate(pg_stat_statements_calls_total[15m])) * on(queryid) group_left(query) pg_stat_statements_query_id)`. Calls per second per queryid. Complement to the exec-time leaderboard above: this panel surfaces queries that are individually cheap but chatty (the classic N+1 signature), which the exec-time panel will often miss because cheap × many is still less than one slow query. JOIN CAVEAT — same label-matching contract as panel 1: `sum by (queryid)` on the left is mandatory to collapse `datname`/`user` before the `on(queryid) group_left(query)` match. FILTER — `user!=\"monitoring\"` excludes sql-exporter's enable_ping SELECT 1 and postgres-exporter's own probes; otherwise they'd dominate the leaderboard on a quiet stack. RED FLAGS — for this event-sourced app specifically: (a) a SELECT against `event_store` or `account_snapshot` ranking higher than the corresponding INSERT suggests rehydrate-per-command is dominating writes, a sign snapshot_threshold should be lowered; (b) any query against `processed_transactions` or `processed_reservations` appearing above account_balance_view means idempotency lookups are chatty — expected, but worth confirming the composite index is in use. Cross-reference the index-scan ratio panel below for the same tables.",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              },
+              {
+                "id": "displayName",
+                "value": "calls/s"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 900
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "queryid"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "topk(20, sum by (queryid) (rate(pg_stat_statements_calls_total{datname=\"wealthpay\", user!=\"monitoring\"}[15m])) * on(queryid) group_left(query) pg_stat_statements_query_id unless on(queryid) pg_stat_statements_query_id{query=~\"${BOOTSTRAP_REGEX}\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "Value": 0,
+              "queryid": 1,
+              "query": 2
+            },
+            "renameByName": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Top-20 queries by block I/O time (15m)",
+      "description": "`topk(20, sum by (queryid) (rate(pg_stat_statements_block_read_seconds_total[15m]) + rate(pg_stat_statements_block_write_seconds_total[15m])) * on(queryid) group_left(query) pg_stat_statements_query_id)`. Seconds of DB time spent in shared-buffer or disk I/O per wall-clock second, per queryid. A query can rank #1 on exec time for two very different reasons — CPU-bound expression evaluation, or I/O-bound block fetches — and the operational response differs. This panel isolates the I/O axis so the distinction is visible. PREREQUISITE — requires `track_io_timing=on` at the server level (set in docker-compose.local.yml postgresql.conf command). Without it, `block_read_seconds_total` and `block_write_seconds_total` are permanently 0 and this panel is a flat no-op — not a bug, a missing setting. INTERPRETATION — a ranking dominated by SELECT queries against `event_store` suggests the working set has exceeded shared_buffers (cross-check with the Buffer cache hit ratio tile on the Server Health dashboard); a ranking dominated by INSERTs into `outbox` on a fresh partition is expected — relation extend is always disk-touching — and not itself pathological.",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "displayName",
+                "value": "block I/O time"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 900
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "queryid"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "topk(20, sum by (queryid) (rate(pg_stat_statements_block_read_seconds_total{datname=\"wealthpay\", user!=\"monitoring\"}[15m]) + rate(pg_stat_statements_block_write_seconds_total{datname=\"wealthpay\", user!=\"monitoring\"}[15m])) * on(queryid) group_left(query) pg_stat_statements_query_id unless on(queryid) pg_stat_statements_query_id{query=~\"${BOOTSTRAP_REGEX}\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "Value": 0,
+              "queryid": 1,
+              "query": 2
+            },
+            "renameByName": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Dead-tuple ratio — top 10 tables (≥1000 rows)",
+      "description": "`topk(10, (n_dead_tup / clamp_min(n_live_tup + n_dead_tup, 1)) and (n_live_tup + n_dead_tup) > 1000)`. The fraction of each table's rows that are dead (MVCC tombstones awaiting autovacuum reclamation), restricted to tables with ≥1000 total tuples. For an event-sourced + outbox workload this is the primary bloat signal. SIZE GATE RATIONALE — without it the top-10 is dominated by noise from tiny bookkeeping tables where a single dead tuple pushes the ratio into double digits: `flyway_schema_history` (~20 rows), the `cron.*` tables (job metadata, dozens of rows), and similar. Those are not operationally interesting — a 50% dead ratio on a 10-row table is meaningless; the autovacuum machinery doesn't even notice it until autovacuum_vacuum_threshold=50 is crossed. 1000 rows is the floor below which ratio-based alerting is mathematically unstable AND below which autovacuum's default tuple-count thresholds haven't yet activated, so nothing below the gate is actionable. Note on *which* tables spike (all comfortably above the gate under load): `event_store` should stay at 0 (append-only, no UPDATE/DELETE); `outbox` rises during the CDC lag window and is reclaimed by pg_cron partition drops (see ADR on Outbox Lifecycle Management); `account_balance_view` rises under Gatling because every projected event updates the same row — this is the table to watch in the manual bloat test. `clamp_min(..., 1)` guards against divide-by-zero inside the gate on the edge case of a freshly-TRUNCATE'd table whose stats haven't been re-gathered yet. Threshold heuristic: <10% green, <30% yellow, ≥30% red. These are starting values; recalibrate against a Gatling baseline once the workload mix is representative — the right number is workload-dependent and there is no universal correct answer.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.3
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "topk(10, pg_stat_user_tables_n_dead_tup{datname=\"wealthpay\"} / clamp_min(pg_stat_user_tables_n_live_tup{datname=\"wealthpay\"} + pg_stat_user_tables_n_dead_tup{datname=\"wealthpay\"}, 1) and (pg_stat_user_tables_n_live_tup{datname=\"wealthpay\"} + pg_stat_user_tables_n_dead_tup{datname=\"wealthpay\"}) > 1000)",
+          "legendFormat": "{{schemaname}}.{{relname}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Index-scan ratio — top 10 tables by scan activity",
+      "description": "`rate(idx_scan) / (rate(idx_scan) + rate(seq_scan))` over 5m, rank-then-show pattern: the table-selection vector `topk(10, rate(idx_scan) + rate(seq_scan) > 0)` picks the 10 tables with the highest COMBINED scan activity, and the ratio is then computed only for those. Low ratio on a large table = missing or unused index. WHY RANK-THEN-SHOW — a naive `topk(10, ratio)` picks the 10 highest ratios, which on a typical workload means 10 barely-used tables at 100% displace the hot tables that actually matter operationally. The `and on(datname, schemaname, relname) topk(...)` construct intersects the ratio-per-table vector with the activity-picked set so the panel answers 'what is the index-scan ratio on the 10 tables actually being scanned right now?'. THE > 0 GATE in the inner topk is deliberate: without it, idle tables at rate=0 can still rank into the top-10 on a quiet server and produce ratio=0/0=NaN series that clutter the legend. SCHEMA FILTER — `schemaname=~\"account|public\"` excludes `cron.*` (pg_cron job-metadata tables) from the ranking; those aren't operationally interesting AND their scan activity pollutes the legend. Widen the allowlist if future migrations add new application schemas. WINDOW CHOICE — 5m (not 15m like the query-level leaderboards above) because this panel is a timeseries, not a ranking: a narrower window reacts faster to regressions during a Gatling run while still smoothing single-scrape jitter. The two windows are deliberately different: 15m for ranking stability, 5m for visual responsiveness. IMPORTANT — for very small tables (<1000 rows) the planner correctly chooses seq scan and a low ratio is not a bug. The tables where this reading matters operationally are `event_store` (must be idx-scanned by aggregate_id), `account_snapshot` (idx by aggregate_id), `account_balance_view` (idx by account_id), `outbox` (range-partitioned, queried by id). A dip on any of those under load = planner regression worth investigating — cross-reference with the 'Top-20 queries by total exec time' leaderboard above.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": false
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "(rate(pg_stat_user_tables_idx_scan{datname=\"wealthpay\", schemaname=~\"account|public\"}[5m]) / (rate(pg_stat_user_tables_idx_scan{datname=\"wealthpay\", schemaname=~\"account|public\"}[5m]) + rate(pg_stat_user_tables_seq_scan{datname=\"wealthpay\", schemaname=~\"account|public\"}[5m]))) and on(datname, schemaname, relname) topk(10, rate(pg_stat_user_tables_idx_scan{datname=\"wealthpay\", schemaname=~\"account|public\"}[5m]) + rate(pg_stat_user_tables_seq_scan{datname=\"wealthpay\", schemaname=~\"account|public\"}[5m]) > 0)",
+          "legendFormat": "{{schemaname}}.{{relname}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Autovacuum staleness per table",
+      "description": "`time() - pg_stat_user_tables_last_autovacuum` and the same for `last_autoanalyze`, per table. Shows the age of each table's most-recent autovacuum/autoanalyze, as a duration. Rising monotonically on any table means autovacuum is not keeping up for that table specifically — either because the workload is write-dominated, because per-table autovacuum thresholds (autovacuum_vacuum_scale_factor) are too loose, or because autovacuum is starved server-wide (check concurrent autovacuum workers). NO THRESHOLDS DELIBERATELY — there is no universal 'correct' autovacuum cadence: a large, rarely-written reference table can legitimately go weeks without autovacuum and that is not a problem, while a hot write-heavy table stale for 30 minutes IS a problem. A single global threshold here would train operators to either ignore red (because most reds are legitimate) or to panic on green (because a table that SHOULD autovacuum every 5m but has been stale for 55m is still green). Diagnosis comes from the cross-reference, not from the color of this tile. HOW TO READ — pair with the dead-tuple ratio panel on the left: staleness rising AND dead-tuple ratio rising on the same table = autovacuum falling behind on that specific relation; staleness rising but dead-tuple ratio flat = table is quiet and there's nothing for autovacuum to do (the metric keeps ticking up because time() keeps advancing). If per-table thresholds are genuinely needed later, use field overrides targeted at the high-write relations (`account_balance_view`, `outbox_*`, `processed_*`) rather than a dashboard-global threshold. GAP — series will NOT appear for tables that have NEVER been autovacuumed since stats_reset; `last_autovacuum` is NULL in the view and postgres-exporter drops the sample entirely rather than emit 0.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 5,
+            "lineWidth": 2,
+            "spanNulls": false
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "time() - pg_stat_user_tables_last_autovacuum{datname=\"wealthpay\"} and pg_stat_user_tables_last_autovacuum{datname=\"wealthpay\"} > 0",
+          "legendFormat": "autovacuum {{schemaname}}.{{relname}}",
+          "refId": "A"
+        },
+        {
+          "expr": "time() - pg_stat_user_tables_last_autoanalyze{datname=\"wealthpay\"} and pg_stat_user_tables_last_autoanalyze{datname=\"wealthpay\"} > 0",
+          "legendFormat": "autoanalyze {{schemaname}}.{{relname}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "HOT-update ratio — account_balance_view (projection target)",
+      "description": "`rate(n_tup_hot_upd) / rate(n_tup_upd) and rate(n_tup_upd) > 0` over 5m, scoped to `account_balance_view` — the single UPDATE-heavy table in this schema and the one where HOT% is operationally meaningful. WHAT HOT IS — Heap-Only-Tuple is PG's fast update path: when an UPDATE touches no indexed columns AND the new tuple fits on the same page, PG avoids creating new index entries, and page bloat stays bounded. WHY THIS TABLE — every projected AccountEvent runs `UPDATE account_balance_view SET balance = $, version = $, updated_at = $ WHERE account_id = $`. The only index on this table is the PK on account_id, which the UPDATE never touches, so the UPDATE should be HOT essentially 100% of the time under steady state. THE REGRESSION THIS PANEL CATCHES — if someone later adds an index on `balance`, `version`, or `updated_at`, every projection UPDATE will suddenly create a new index entry, HOT% collapses toward 0, and page bloat starts accumulating on the projection table. CROSS-REFERENCE — this is a LEADING indicator; the 'Dead-tuple ratio' panel to the left is the LAGGING indicator of the same phenomenon. A simultaneous drop in HOT% here and rise in dead tuples on account_balance_view is the diagnostic signature of newly-added churned-column indexes. WHY NOT event_store/outbox — both are hard append-only (BEFORE UPDATE RAISE EXCEPTION triggers in V3__event_store_append_only.sql, V7__outbox_append_only.sql, re-installed in V13__partition_outbox.sql). UPDATEs against them abort before n_tup_upd increments; HOT% is structurally undefined there, so those tables are deliberately excluded from this panel. DIVIDE-BY-ZERO GATE — the trailing `and rate(n_tup_upd) > 0` is the only guard needed: during idle periods the right side has no series and the `and` intersection drops the ratio entirely, producing a gap rather than NaN or +Inf. An earlier version wrapped the denominator in `clamp_min(rate, 1)`; that silently under-reported HOT% on any sub-1-update/sec workload (a 0.2 upd/s fully-HOT stream would render as 0.2 instead of 1.0) — removed deliberately, don't reintroduce.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": false
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(pg_stat_user_tables_n_tup_hot_upd{datname=\"wealthpay\", relname=\"account_balance_view\"}[5m]) / rate(pg_stat_user_tables_n_tup_upd{datname=\"wealthpay\", relname=\"account_balance_view\"}[5m]) and rate(pg_stat_user_tables_n_tup_upd{datname=\"wealthpay\", relname=\"account_balance_view\"}[5m]) > 0",
+          "legendFormat": "{{relname}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Block reads by backend type (pg_stat_io)",
+      "description": "`sum by (backend_type) (rate(pg_io_stat_reads_total[5m]))` — stacked area. Answers the forensic question 'who is driving reads right now — client backends, autovacuum, bgwriter, checkpointer, walsender?'. Source metric is emitted by our own sql-exporter (docker/sql-exporter/wal-io.collector.yml) because postgres-exporter has no built-in pg_stat_io collector. NO `datname` FILTER (unlike the other panels on this dashboard) — `pg_stat_io` is CLUSTER-SCOPED in PostgreSQL: the view has no per-database column and the metric exposes no `datname` label. Adding `{datname=\"wealthpay\"}` here would silently match zero series. Since this stack runs a single application database plus template0/postgres/wealthpay, cluster-scoped I/O attribution is effectively wealthpay's I/O plus a negligible amount of template catalog traffic. READING THE STACK — a load-test spike dominated by `client backend` is the expected shape; a spike dominated by `autovacuum worker` during load means autovacuum is scanning tables concurrently with your workload and the two are contending for buffer cache; a sustained high `checkpointer` baseline points at undersized shared_buffers forcing dirty-page eviction outside checkpoint windows. PG18 HAZARD — on PG18 the `wal` object's counters relocate from pg_stat_wal into pg_stat_io rows with object='wal'; this panel continues to render since it sums across object types, but the Server Health dashboard's WAL latency panels would break and need re-wiring. See docs/postgres-upgrade.md. SCOPE CHOICE — this panel intentionally collapses `object` and `context` to keep the stack readable. A full `backend_type × object × context` breakdown produces ~23 series and is only useful during a specific investigation; keep it for ad-hoc Explore queries rather than putting it on a dashboard.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 40,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (backend_type) (rate(pg_io_stat_reads_total[5m]))",
+          "legendFormat": "{{backend_type}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
