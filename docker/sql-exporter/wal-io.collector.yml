@@ -24,6 +24,17 @@
 #
 # All metrics are TYPE counter (cumulative since stats_reset). Use
 # rate()/increase() in PromQL — never the raw value.
+#
+# PG18 upgrade hazard: wal_write, wal_sync, wal_write_time, and
+# wal_sync_time are removed from pg_stat_wal and relocated to pg_stat_io
+# with object='wal' (write_time / fsync_time columns). Because Postgres
+# resolves column references at plan time, referencing the four moved
+# columns on PG18 fails the entire pg_stat_wal query at parse, silently
+# freezing ALL 8 pg_wal_stat_* metrics (not just the four that moved).
+# Fix on upgrade: split into a PG18-specific pg_stat_wal query that
+# selects only {records, fpi, bytes, buffers_full}, and source the four
+# timing/count columns from the pg_stat_io rows where object='wal'. See
+# docs/postgres-upgrade.md for the full runbook.
 
 collector_name: pg_wal_io
 

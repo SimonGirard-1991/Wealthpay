@@ -30,6 +30,13 @@ global:
   # file's top comment explicitly prohibits), revisit this in concert
   # with scrape_timeout: a scrape that ever approaches 8s would contend
   # with the next scrape 15s later under max_connections=1.
+  #
+  # Concurrency note: this is not only a footprint choice — with
+  # max_connections=1 and enable_ping=true below, every scrape runs
+  # serially as PING -> pg_stat_wal -> pg_stat_io inside one
+  # scrape_timeout window. Both current queries are sub-millisecond so
+  # the 8s budget is ample, but a third collector query added without
+  # raising this limit would compound serially, not in parallel.
   max_connections: 1
 
 target:
@@ -37,8 +44,12 @@ target:
   # registered driver. `postgresql://` is the canonical form for the
   # pgx-backed driver.
   data_source_name: "postgresql://monitoring:monitoring@postgres:5432/wealthpay?sslmode=disable&connect_timeout=5"
-  # Lightweight SELECT 1 on every scrape; surfaces connection health as
-  # the `up` metric independently from postgres_exporter's `pg_up`.
+  # Runs SELECT 1 as the first operation of every scrape. On connection
+  # or auth failure it short-circuits the scrape so Prometheus sees `up`
+  # flip to 0 on a dead DB, instead of only flipping when a collector
+  # query happens to error. Prometheus synthesizes `up` from the scrape
+  # itself either way — this just makes the failure signal faster and
+  # more specific (a DB reachability problem vs a query-specific one).
   enable_ping: true
   collectors:
     - pg_wal_io

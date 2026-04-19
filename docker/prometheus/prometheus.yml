@@ -29,5 +29,12 @@ scrape_configs:
     # docker/sql-exporter/sql_exporter.yml). Tightening this job's
     # scrape_interval below 15s will return cached values, not fresher
     # data — adjust both sides in lockstep if you need higher resolution.
+    #
+    # scrape_timeout pinned explicitly (Prometheus default is 10s) so the
+    # lockstep contract with sql-exporter's own scrape_timeout: 8s is
+    # visible from this file alone. Keep this > sql-exporter's internal
+    # budget so the exporter fails a slow query first, instead of
+    # Prometheus cutting the scrape mid-flight.
+    scrape_timeout: 10s
     static_configs:
       - targets: [ 'sql-exporter:9399' ]
