@@ -1,7 +1,7 @@
 {
   "uid": "db-server-health",
   "title": "Database — Server Health",
-  "description": "Top-level server-health signals: liveness, saturation, throughput, efficiency, durability subsystem, capacity. Per-query / per-table / per-backend-type (pg_stat_io) forensics live in the 'Database — Query & Table Performance' dashboard — this one is intentionally high-level so it stays readable during an incident. Scope of the `Exporter job` dropdown: gates the two liveness panels only (Postgres up stat, and Scrape liveness history). Data panels (connection utilization, TPS, cache hit, WAL, checkpoints, storage) always render against their full upstream series regardless of selection — they don't depend on which exporter's `up` signal you're inspecting.",
+  "description": "Top-level server-health signals: liveness, saturation, throughput, efficiency, durability subsystem, capacity. Expand the 'How to read this dashboard' row at the top for scope notes and per-panel caveats. Per-query / per-table forensics live in the 'Database — Query & Table Performance' dashboard.",
   "tags": [
     "wealthpay",
     "postgres",
@@ -51,15 +51,44 @@
   },
   "panels": [
     {
+      "id": 100,
+      "type": "row",
+      "title": "How to read this dashboard",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": [
+        {
+          "id": 101,
+          "type": "text",
+          "title": "",
+          "gridPos": {
+            "h": 12,
+            "w": 24,
+            "x": 0,
+            "y": 1
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "### Purpose\nTop-level server-health signals: liveness, saturation, throughput, efficiency, durability subsystem, capacity. Per-query / per-table / per-backend-type forensics live in the **Database — Query & Table Performance** dashboard.\n\n### Scope of the `Exporter job` dropdown\nGates the two liveness panels only (**Postgres up** stat, **Scrape liveness history**). Data panels (connections, TPS, cache, WAL, checkpoints, storage) always render against their full upstream series regardless of selection.\n\n### Liveness composite\n**Postgres up** is `min(up over selected exporters) × (max(pg_up) or vector(0))` — DOWN if any selected exporter scrape fails OR if postgres-exporter scrapes successfully but reports `pg_up=0`; UNKNOWN if both arms are absent (instrumentation failure, not a DB failure). Vector multiplication rather than `scalar()` so the tile stays stable if a second postgres-exporter target is ever added.\n\n### Scrape liveness history — two failure shapes\n- **Step to 0** — the exporter scraped but reported itself DOWN. Real connectivity or auth problem.\n- **Gap in the line** — no sample at all. Prometheus wasn't scraping (laptop sleep, docker paused, Prometheus restarted). `connectNulls=false` is intentional so these render as gaps, not interpolated lines.\n\n### Rollback ratio — event-sourcing context\nA ROLLBACK here is *not* necessarily an application error. Optimistic-concurrency conflicts on `event_store(aggregate_id, version)` are a designed retry path and under Gatling load can dominate the ratio. Cross-reference with the app-side `wealthpay_account_command_*` timer's `outcome=\"error\"` tag before concluding the DB is reflecting a user-visible incident. Gated to combined rate > 0.5 tps so a handful of rollbacks on an idle DB don't flash red.\n\n### WAL latency averaging caveat\n**Fsync latency** and **Write latency** are 5-minute means, so a single short stall (e.g. one 500 ms hiccup among 300 normal fsyncs) is smoothed away. Downstream alerts on these signals must target sustained elevation, not spikes — short-stall detection would require a histogram collector. Pair the two: a write-latency spike without fsync-latency spike points at WAL-buffer contention; both together point at the underlying device.\n\n### Checkpoints: `increase` not `rate`\nCheckpoints are discrete, low-cadence events (≈1 per 5 min timed, rare for requested). The honest abstraction is `count per window` — derivative-based rates alias into sawtooth or suppress rare events into invisibility. Any non-zero `requested` value is a tuning signal: WAL filled before the checkpoint timer, so bump `max_wal_size` or shorten `checkpoint_timeout`.\n\n### Checkpoint busy fraction\nSustained >0.95 is tuning pressure, not per-checkpoint duration. 0.9 is the default steady-state for large checkpoints (`checkpoint_completion_target=0.9`). Computed as milliseconds-of-phase ÷ milliseconds-of-5-minute-window, aligned with the adjacent checkpoints panel so the same tick appears on both charts.\n\n### TPS y-axis\nSymlog scaling (linear below 1, log above) so a load-test spike at hundreds of tps doesn't visually crush the 0-5 tps baseline. Caveat: on symlog, 0 tps and <0.01 tps look identical — hover for exact values, or cross-check with the block hits/reads panel.\n\n### Buffer cache hit ratio — idle gaps\nIdle periods render as gaps, not 100%. A flat-100% line during idle would be indistinguishable from healthy high-traffic. Correlate with the TPS panel to read this one.\n\n### Storage footprint scope\nDB size is `datname=wealthpay`; WAL is server-wide. The visual comparison only holds on a single-DB stack. Y-axis is pinned to 0 so a WAL runaway doesn't visually \"track\" the DB line under auto-scaling.\n\n### Replication slot lag thresholds\nSized against a 1 MB/s baseline WAL rate: warn at 100 MiB (about 100 s of lag), crit at 1 GiB (about 17 min) — both recoverable before disk pressure becomes acute. Filter is `slot_name=\"debezium.*\"` (regex-matched) explicitly so adding a physical replica later doesn't silently change which slot this tile reports on.\n\n### PG17 hazard\nCheckpoint columns (`checkpoints_timed_total`, `checkpoints_req_total`, `checkpoint_write_time_total`, `checkpoint_sync_time_total`) relocate from `pg_stat_bgwriter` to the new `pg_stat_checkpointer` view on PG17 and are gated behind postgres-exporter's opt-in `--collector.stat_checkpointer` flag (default off). On upgrade these panels go silently flat until that flag is set. See `docs/postgres-upgrade.md`."
+          }
+        }
+      ]
+    },
+    {
       "id": 1,
       "title": "Postgres up",
-      "description": "Composite liveness: `min(up over selected exporters) × (max(pg_up) or vector(0))`. Flips to DOWN (red) when any selected exporter scrape fails OR when postgres-exporter scrapes successfully but reports pg_up=0 (i.e. it cannot reach Postgres). Renders UNKNOWN (yellow) when BOTH arms are absent — neither the selected exporter nor postgres-exporter are producing samples — because that's an instrumentation failure, not a DB failure, and on-call should diagnose it differently. Uses vector multiplication rather than `scalar()` so the expression is stable if a second postgres-exporter target is ever added (scalar() would return NaN on multi-series input and the tile would silently go blank). The `$job` dropdown only gates this panel and the Scrape liveness history panel directly below it; all other panels render their full data regardless of selection.",
+      "description": "Composite liveness: DOWN when any selected exporter scrape fails or postgres-exporter reports pg_up=0; UNKNOWN when both arms are absent.",
       "type": "stat",
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "datasource": {
         "type": "prometheus",
@@ -131,13 +160,13 @@
     {
       "id": 2,
       "title": "Connection utilization",
-      "description": "Connected backends (to wealthpay + any user DB; template0/template1/postgres excluded) / `max_connections`. `numbackends` counts ALL connected sessions including idle ones — this is deliberate, because an idle session still consumes a connection slot, and slot exhaustion is the #1 DB outage cause. Sustained >80% is the canonical warning threshold. Expression avoids `scalar()` on the divisor: `max(pg_settings_max_connections)` is used instead so the panel degrades to no-data rather than NaN if postgres-exporter reports multiple PG instances in the future. `clamp_min(..., 1)` guards against divide-by-zero; max_connections is never 0 on a live PG but the guard is essentially free and closes a footgun.",
+      "description": "Connected backends / max_connections. Sustained >80% is the canonical warning threshold for slot exhaustion — idle sessions still consume a slot.",
       "type": "stat",
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 0
+        "y": 1
       },
       "datasource": {
         "type": "prometheus",
@@ -187,13 +216,13 @@
     {
       "id": 3,
       "title": "Replication slot lag (Debezium)",
-      "description": "`pg_replication_slots_pg_wal_lsn_diff` in bytes, filtered to `slot_name=~\"debezium.*\"`. Sustained growth = Debezium is not keeping up; WAL cannot be reclaimed until the consumer drains. If this climbs unboundedly, the DB disk will fill. Explicit slot-name filter (rather than `max by (slot_name)`) so that adding a second replication slot later — e.g. a physical replica — does not silently change which slot this tile reports on. Current thresholds (100 MiB warn / 1 GiB crit) sized against ~1 MB/s WAL production at baseline: warn ≈ 100 s of lag, crit ≈ 17 min — both recoverable before disk pressure becomes acute, both well above normal end-to-end Debezium latency jitter.",
+      "description": "WAL bytes retained for Debezium. Sustained growth = Debezium isn't keeping up; unreclaimable WAL will fill the disk.",
       "type": "stat",
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 0
+        "y": 1
       },
       "datasource": {
         "type": "prometheus",
@@ -241,13 +270,13 @@
     {
       "id": 4,
       "title": "Rollback ratio (5m)",
-      "description": "Rollbacks / (commits + rollbacks) over 5m — the DB-side view of how many recent transactions ended in ROLLBACK rather than COMMIT. Only computed when the combined transaction rate exceeds 0.5 tps; below that threshold the panel gaps deliberately (a handful of rollbacks on an otherwise quiet DB would make the ratio jump to ~1.0 and flash red for no operational reason — postgres-exporter's own probe traffic and stray `ROLLBACK` from monitoring sessions are enough to swamp a truly idle denominator). Mirrors the `and rate(...) > 0` gating pattern already used on the WAL latency panels. Important context for this event-sourced stack: a ROLLBACK here is not necessarily an application error — optimistic-concurrency conflicts on `event_store(aggregate_id, version)` are a designed retry path, and under Gatling load they can dominate the ratio. Cross-reference with the app-side `wealthpay_account_command_*` timer's `outcome=\"error\"` tag before concluding the DB is reflecting a user-visible incident.",
+      "description": "Rollbacks / (commits + rollbacks) over 5m, gated to >0.5 tps. Optimistic-concurrency retries are a designed path on this stack — cross-check app-side error outcomes before escalating.",
       "type": "stat",
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 0
+        "y": 1
       },
       "datasource": {
         "type": "prometheus",
@@ -297,13 +326,13 @@
     {
       "id": 5,
       "title": "Transactions per second",
-      "description": "Commits and rollbacks per second for the wealthpay database. Load shape — a flat line when app traffic is known to be high is a red flag (connection pool exhausted, or scrape broken). Y-axis uses `symlog` scaling (linear below 1, log above) so that a single load-test spike at hundreds of tps does not visually crush the 0-5 tps baseline, which is usually the diagnostic signal. Visual caveat: on symlog, a line hugging the x-axis can be either 0 tps or <0.01 tps — they look identical. If you need to distinguish true-idle from near-idle (e.g. during a traffic-drop incident), hover the line for the exact value, or cross-check against the block hits/reads panel below.",
+      "description": "Commits and rollbacks per second. Flat line when traffic is known to be high = red flag (pool exhausted or scrape broken). Symlog y-axis: 0 and <0.01 tps look identical — hover for exact values.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 10
+        "y": 11
       },
       "datasource": {
         "type": "prometheus",
@@ -338,13 +367,13 @@
     {
       "id": 6,
       "title": "Buffer cache hit ratio",
-      "description": "`blks_hit / (blks_hit + blks_read)` over 5m. When this falls off a cliff, the working set has exceeded shared_buffers and PG is going to disk. Expected steady-state is >0.99 for an OLTP workload. Idle periods (zero blocks read or hit) render as a GAP, not a flat line — that is deliberate: a flat-100% panel during idle would be visually indistinguishable from a healthy high-traffic panel, masking whether the DB is actually being exercised. Correlate with the Transactions per second panel above to read this one: if TPS is non-zero and this is flat, the cache is healthy; if this is a gap, there's no traffic to judge.",
+      "description": "blks_hit / (blks_hit + blks_read). Steady-state >0.99 for OLTP; a cliff means the working set exceeded shared_buffers. Idle periods render as gaps — cross-reference with TPS.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 11
       },
       "datasource": {
         "type": "prometheus",
@@ -371,13 +400,13 @@
     {
       "id": 7,
       "title": "Block hits / reads",
-      "description": "Raw rates behind the hit ratio — when the ratio dips, look here to see whether hits dropped or reads spiked (the former is concerning, the latter is usually a large scan).",
+      "description": "Raw rates behind the hit ratio — when the ratio dips, check whether hits dropped or reads spiked (the former is concerning, the latter is usually a large scan).",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 19
       },
       "datasource": {
         "type": "prometheus",
@@ -407,13 +436,13 @@
     {
       "id": 8,
       "title": "WAL production rate",
-      "description": "`rate(pg_wal_stat_bytes_total[5m])` — bytes of WAL generated per second. The original 'excessive WAL' signal from the Step 3 brief.",
+      "description": "WAL bytes generated per second — the original 'excessive WAL' signal.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 19
       },
       "datasource": {
         "type": "prometheus",
@@ -438,13 +467,13 @@
     {
       "id": 9,
       "title": "WAL backpressure (buffers_full rate)",
-      "description": "Sustained non-zero rate means `wal_buffers` is undersized — the server is stalling on WAL buffer flushes. This is a tuning signal, not a transient alert.",
+      "description": "Sustained non-zero rate means wal_buffers is undersized — server is stalling on WAL buffer flushes. Tuning signal, not a transient alert.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 26
+        "y": 27
       },
       "datasource": {
         "type": "prometheus",
@@ -469,13 +498,13 @@
     {
       "id": 10,
       "title": "WAL fsync latency (avg ms / sync)",
-      "description": "`rate(sync_time_ms) / rate(sync_count)` — average milliseconds per WAL fsync over 5 minutes. Requires `track_wal_io_timing=on` (see docker-compose.local.yml). This is the earliest signal of a WAL device stall: rising fsync time means commits are queuing behind disk flushes. Will be wired to a Prometheus alert in the 'Calibrated alert rules' milestone. Averaging caveat: this is a mean across the 5-minute window, so a single short fsync stall (e.g. one 500 ms hiccup amid 300 normal fsyncs) is smoothed away — by design, counters can't surface p99 without a histogram. Downstream alerts on this signal must be written for SUSTAINED elevation (e.g. `> threshold for 5m`), not spikes. Short-stall detection is a separate workstream that would require `pg_stat_statements`-driven slow-commit counts or a histogram collector.",
+      "description": "Average ms per WAL fsync over 5m. Earliest signal of a WAL device stall — rising = commits queuing behind disk flushes. 5m mean smooths short spikes; alert on sustained elevation. Requires `track_wal_io_timing=on`; otherwise flat.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 26
+        "y": 27
       },
       "datasource": {
         "type": "prometheus",
@@ -500,13 +529,13 @@
     {
       "id": 11,
       "title": "WAL write latency (avg ms / write)",
-      "description": "`rate(write_time_ms) / rate(write_count)` — average milliseconds per WAL write over 5 minutes. Pair with the fsync latency panel: a spike in write latency without fsync latency points at WAL-buffer contention; a spike in both points at the underlying device. Same averaging caveat as the fsync panel — short stalls inside the 5m window are smoothed away, and downstream alerts must target sustained elevation, not spikes.",
+      "description": "Average ms per WAL write over 5m. Pair with fsync latency: write-only spike = WAL-buffer contention; both together = underlying device. Requires `track_wal_io_timing=on`; otherwise flat.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 26
+        "y": 27
       },
       "datasource": {
         "type": "prometheus",
@@ -531,13 +560,13 @@
     {
       "id": 12,
       "title": "Checkpoints per 5 min (timed vs requested)",
-      "description": "Count of checkpoints that happened in each rolling 5-minute window. `increase([5m])` rather than `rate([5m])` on purpose: checkpoints are discrete, low-cadence events (~1 per 5 min timed, rare for requested), so derivative-based rates either alias into sawtooth (short window) or suppress rare events into invisibility (long window). The honest abstraction is `count per window` — a human reads '2 timed, 1 requested' and immediately knows what happened. Any non-zero requested value is a tuning signal: WAL filled before the checkpoint timer, so bump `max_wal_size` or shorten `checkpoint_timeout`. The requested series is rendered in red specifically so a single tick during a load burst draws the eye. PG17 upgrade hazard: these columns move from pg_stat_bgwriter to the new pg_stat_checkpointer view on PG17 — postgres-exporter gates them behind the opt-in `--collector.stat_checkpointer` flag (default off), so these series will go silently flat on upgrade until that flag is set. See docs/postgres-upgrade.md.",
+      "description": "Count of timed vs requested checkpoints per 5m window. Any non-zero `requested` value = WAL filled before the timer; bump max_wal_size or shorten checkpoint_timeout.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 35
       },
       "datasource": {
         "type": "prometheus",
@@ -610,13 +639,13 @@
     {
       "id": 13,
       "title": "Checkpoint busy fraction (write + sync phases)",
-      "description": "Fraction of wall-clock time the checkpointer spent in its write or sync phase over each 5-minute window. 0.9 means the checkpointer was busy 90% of that window — which is the default steady-state for large checkpoints (checkpoint_completion_target=0.9). Treat sustained values >0.95 as tuning pressure, not a per-checkpoint duration. Computed as `increase(ms_counter[5m]) / 300000` — milliseconds-of-phase divided by milliseconds-of-window. The 5-minute window is deliberately aligned with the adjacent checkpoints panel so the same tick appears on both charts under the same temporal lens. Same PG17 hazard: columns relocate to pg_stat_checkpointer on PG17 and require postgres-exporter's opt-in `--collector.stat_checkpointer` collector. See docs/postgres-upgrade.md.",
+      "description": "Fraction of wall-clock time the checkpointer was in its write or sync phase over 5m. Sustained >0.95 is tuning pressure; 0.9 is the default steady-state for large checkpoints.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 35
       },
       "datasource": {
         "type": "prometheus",
@@ -648,13 +677,13 @@
     {
       "id": 14,
       "title": "Storage footprint",
-      "description": "Database size (content) and WAL directory size (liveness). If WAL size diverges upward from DB size, replication lag or archiver failure is usually the cause — cross-reference with the Replication slot lag tile at the top. Scope caveat: DB size is scoped to `datname=wealthpay` while WAL is server-wide — the visual comparison only holds on a single-DB stack. On a multi-DB server, sum `pg_database_size_bytes` across the databases you care about before comparing. Y-axis minimum is pinned to 0 on purpose: an auto-scaled bytes axis makes a WAL runaway look visually \"close to the DB line\" because both lines shift in concert, masking the divergence.",
+      "description": "Database size vs pg_wal directory size. WAL diverging upward from DB size usually means replication lag or archiver failure — cross-reference with the replication slot lag tile.",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 43
       },
       "datasource": {
         "type": "prometheus",
@@ -685,13 +714,13 @@
     {
       "id": 15,
       "title": "Scrape liveness (history)",
-      "description": "Per-exporter `up` over the selected time range. Complements the top-left `Postgres up` stat, which shows only the current moment. Two distinct failure shapes to read here: (1) a step down to 0 means the exporter was scraped but reported itself DOWN — a real connectivity or auth problem inside the exporter; (2) a gap in the line means no sample was recorded at all, which on a local dev stack most often means Prometheus itself wasn't scraping (laptop sleep, docker paused, Prometheus restarted). The two are operationally very different — a 0-step pages someone, a gap does not. `connectNulls=false` is intentional so gaps render as gaps.",
+      "description": "Per-exporter `up` over the selected time range. Step to 0 = DOWN (connectivity/auth); gap in the line = no sample at all (Prometheus wasn't scraping).",
       "type": "timeseries",
       "gridPos": {
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 5
       },
       "datasource": {
         "type": "prometheus",
