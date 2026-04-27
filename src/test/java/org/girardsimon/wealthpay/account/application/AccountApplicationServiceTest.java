@@ -42,6 +42,7 @@ import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationStoreInconsistencyException;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
@@ -400,6 +401,51 @@ class AccountApplicationServiceTest {
     // Act ... Assert
     assertThatExceptionOfType(ReservationAlreadyCapturedException.class)
         .isThrownBy(() -> accountApplicationService.cancelReservation(cancelReservation));
+  }
+
+  @Test
+  void
+      cancelReservation_should_throw_inconsistency_when_phase_is_RESERVED_but_aggregate_lacks_reservation() {
+    // Arrange — aggregate has no reservations, but the phase store says one is RESERVED.
+    // This is a "should never happen" inconsistency between two stores that should be in lockstep.
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
+    AccountEventMeta accountEventMeta =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta, usd, initialBalance);
+    when(accountLoader.loadAccount(accountId))
+        .thenReturn(Account.rehydrate(List.of(accountOpened)));
+    ReservationId orphanReservationId = ReservationId.newId();
+    CancelReservation cancelReservation = new CancelReservation(accountId, orphanReservationId);
+    when(processedReservationStore.lookupPhase(accountId, orphanReservationId))
+        .thenReturn(Optional.of(ReservationPhase.RESERVED));
+
+    // Act ... Assert
+    assertThatExceptionOfType(ReservationStoreInconsistencyException.class)
+        .isThrownBy(() -> accountApplicationService.cancelReservation(cancelReservation))
+        .withMessageContaining(orphanReservationId.toString());
+  }
+
+  @Test
+  void
+      captureReservation_should_throw_inconsistency_when_phase_is_RESERVED_but_aggregate_lacks_reservation() {
+    // Arrange
+    SupportedCurrency usd = SupportedCurrency.USD;
+    Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
+    AccountEventMeta accountEventMeta =
+        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountOpened accountOpened = new AccountOpened(accountEventMeta, usd, initialBalance);
+    when(accountLoader.loadAccount(accountId))
+        .thenReturn(Account.rehydrate(List.of(accountOpened)));
+    ReservationId orphanReservationId = ReservationId.newId();
+    CaptureReservation captureReservation = new CaptureReservation(accountId, orphanReservationId);
+    when(processedReservationStore.lookupPhase(accountId, orphanReservationId))
+        .thenReturn(Optional.of(ReservationPhase.RESERVED));
+
+    // Act ... Assert
+    assertThatExceptionOfType(ReservationStoreInconsistencyException.class)
+        .isThrownBy(() -> accountApplicationService.captureReservation(captureReservation))
+        .withMessageContaining(orphanReservationId.toString());
   }
 
   @Test

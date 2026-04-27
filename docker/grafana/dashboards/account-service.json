@@ -1,0 +1,172 @@
+{
+  "uid": "account-service",
+  "title": "Account Service — Application SLIs",
+  "tags": [
+    "wealthpay",
+    "account",
+    "slo"
+  ],
+  "timezone": "browser",
+  "refresh": "15s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Command Latency p99 (committed)",
+      "description": "p99 end-to-end latency per command, measured at the application-service boundary outside @Transactional (commit time is included). Filtered to outcome=committed so happy-path latency isn't muddied by idempotent replays or error fast-paths.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(wealthpay_account_command_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\", outcome=\"committed\"}[5m])) by (le, command))",
+          "legendFormat": "{{command}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Concurrency Conflict Ratio (per command)",
+      "description": "Fraction of commands that fail with optimistic-locking / transaction-id conflicts (concurrency_conflict ÷ total). Ratio is the meaningful SLI here — absolute rate scales with traffic, so 0.1/s at 1 RPS is a fire while 0.1/s at 1000 RPS is noise. Sustained > a few % per command signals account-level contention (hot account, retrying clients, or racing producers). Note: under zero traffic the expression is 0/0 = NaN and renders as a gap; that's expected. Reusing this expression for paging requires `or vector(0)` to guard against NaN.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (command) (rate(wealthpay_account_command_seconds_count{job=\"wealthpay\", instance=~\"$instance\", outcome=\"concurrency_conflict\"}[5m])) / sum by (command) (rate(wealthpay_account_command_seconds_count{job=\"wealthpay\", instance=~\"$instance\"}[5m]))",
+          "legendFormat": "{{command}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Account Load Duration",
+      "description": "p95/p99 latency for rehydrating an account from the event store — growth signals snapshotting misfunction",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(account_load_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(account_load_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Account Load Rate",
+      "description": "Throughput of account rehydrations — correlate with HTTP request rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(account_load_seconds_count{job=\"wealthpay\", instance=~\"$instance\"}[5m]))",
+          "legendFormat": "loads/s"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {
+          "text": "Prometheus (Main)",
+          "value": "Prometheus (Main)"
+        }
+      },
+      {
+        "name": "instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(up{job=\"wealthpay\"}, instance)",
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
+      }
+    ]
+  },
+  "schemaVersion": 39
+}

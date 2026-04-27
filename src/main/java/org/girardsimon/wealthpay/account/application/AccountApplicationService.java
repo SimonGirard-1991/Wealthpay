@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import org.girardsimon.wealthpay.account.application.metric.CommandMetric;
 import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
@@ -21,6 +22,7 @@ import org.girardsimon.wealthpay.account.domain.command.ReservationCommand;
 import org.girardsimon.wealthpay.account.domain.command.ReserveFunds;
 import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationStoreInconsistencyException;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
@@ -106,6 +108,7 @@ public class AccountApplicationService {
   }
 
   @Transactional
+  @CommandMetric(command = "open")
   public AccountId openAccount(OpenAccount openAccount) {
     AccountId accountId = accountIdGenerator.newId();
     HandleResult result =
@@ -115,6 +118,7 @@ public class AccountApplicationService {
   }
 
   @Transactional
+  @CommandMetric(command = "close")
   public TransactionStatus closeAccount(CloseAccount closeAccount) {
     Account account = accountLoader.loadAccount(closeAccount.accountId());
 
@@ -130,6 +134,7 @@ public class AccountApplicationService {
   }
 
   @Transactional
+  @CommandMetric(command = "capture")
   public ReservationResponse captureReservation(CaptureReservation captureReservation) {
     return processReservation(
         captureReservation,
@@ -156,18 +161,21 @@ public class AccountApplicationService {
   }
 
   @Transactional
+  @CommandMetric(command = "credit")
   public TransactionStatus creditAccount(CreditAccount creditAccount) {
     return processTransaction(
         creditAccount, (account, now) -> account.handle(creditAccount, eventIdGenerator, now));
   }
 
   @Transactional
+  @CommandMetric(command = "debit")
   public TransactionStatus debitAccount(DebitAccount debitAccount) {
     return processTransaction(
         debitAccount, (account, now) -> account.handle(debitAccount, eventIdGenerator, now));
   }
 
   @Transactional
+  @CommandMetric(command = "reserve")
   public ReserveFundsResponse reserveFunds(ReserveFunds reserveFunds) {
     Instant now = Instant.now(clock);
     AccountId accountId = reserveFunds.accountId();
@@ -197,6 +205,7 @@ public class AccountApplicationService {
   }
 
   @Transactional
+  @CommandMetric(command = "cancel")
   public ReservationResponse cancelReservation(CancelReservation cancelReservation) {
     return processReservation(
         cancelReservation,
@@ -240,7 +249,7 @@ public class AccountApplicationService {
             .orElseThrow(() -> new ReservationNotFoundException(reservationId));
 
     if (reservationPhase == ReservationPhase.RESERVED) {
-      throw new IllegalStateException(
+      throw new ReservationStoreInconsistencyException(
           "Inconsistency: reservation %s is RESERVED in store but absent from aggregate"
               .formatted(reservationId));
     }

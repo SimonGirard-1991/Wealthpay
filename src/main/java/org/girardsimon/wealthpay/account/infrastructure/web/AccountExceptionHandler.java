@@ -13,6 +13,7 @@ import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceE
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCanceledException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationAlreadyCapturedException;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
+import org.girardsimon.wealthpay.account.domain.exception.ReservationStoreInconsistencyException;
 import org.girardsimon.wealthpay.account.domain.exception.TransactionIdConflictException;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.shared.api.generated.model.ApiErrorDto;
@@ -80,7 +81,10 @@ public class AccountExceptionHandler {
     return ResponseEntity.unprocessableContent().body(apiErrorDto);
   }
 
-  @ExceptionHandler({InvalidAccountEventStreamException.class})
+  @ExceptionHandler({
+    InvalidAccountEventStreamException.class,
+    ReservationStoreInconsistencyException.class
+  })
   public ResponseEntity<ApiErrorDto> handleInternalServerErrorException(Exception e) {
     log.error("Internal Server Error exception: ", e);
     ApiErrorDto apiErrorDto =
