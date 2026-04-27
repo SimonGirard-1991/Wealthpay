@@ -138,6 +138,126 @@
           "legendFormat": "loads/s"
         }
       ]
+    },
+    {
+      "id": 5,
+      "title": "Event Store Append Latency p99 (per outcome)",
+      "description": "p99 latency of the critical-path write to event_store, broken down by outcome (success vs optimistic_conflict). Conflicts are typically much faster than successful appends (no INSERT, just a version check rejection) — a sustained convergence of conflict and success p99 suggests contention is dominating the success path's tail.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(wealthpay_account_event_store_append_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (le, outcome))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Snapshot Save Latency p99 (per outcome)",
+      "description": "p99 latency of snapshot persistence to the account_snapshot table, broken down by outcome. Snapshot saves are best-effort (failures are caught by the application service and never block the critical path) — a sustained non-zero rate of failure outcomes signals a real DB issue worth investigating. Note: snapshots only fire every ACCOUNT_SNAPSHOT_THRESHOLD events per account (default 100). At low traffic this panel can read empty/NaN — that's no signal, not no problem. Pair with the rate panel below to disambiguate.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(wealthpay_account_snapshot_save_seconds_bucket{job=\"wealthpay\", instance=~\"$instance\"}[5m])) by (le, outcome))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Event Store Append Rate (per outcome)",
+      "description": "Throughput of event_store appends, broken down by outcome (success vs optimistic_conflict). Pair with the latency panel above — non-zero rate validates that latency p99 reflects real traffic. Conflict rate spikes here will also show on the per-command Concurrency Conflict Ratio panel.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(wealthpay_account_event_store_append_seconds_count{job=\"wealthpay\", instance=~\"$instance\"}[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Snapshot Save Rate (per outcome)",
+      "description": "Throughput of snapshot saves, broken down by outcome. Disambiguates the latency panel: an empty rate panel + empty latency panel together = no recent saves (expected at low traffic given snapshots only fire every ACCOUNT_SNAPSHOT_THRESHOLD events). A non-zero failure rate is page-worthy regardless of latency — saves are best-effort, so failures don't surface as 5xx but do indicate snapshotting is broken (and aggregates will rehydrate slower over time).",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(wealthpay_account_snapshot_save_seconds_count{job=\"wealthpay\", instance=~\"$instance\"}[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
     }
   ],
   "templating": {

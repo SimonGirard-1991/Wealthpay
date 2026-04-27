@@ -95,7 +95,10 @@ public class AccountApplicationService {
       try {
         accountSnapshotStore.saveSnapshot(Account.toSnapshot(account));
       } catch (RuntimeException e) {
-        // Snapshot is performance optimization and should not block a critical path
+        // Snapshot is a performance optimization and must not block the critical path.
+        // Catch is intentionally narrowed to RuntimeException — Errors (OOM, StackOverflow)
+        // and any future checked-exception path remain unhandled, which is the correct
+        // behavior for genuinely unrecoverable failures.
         log.warn("Failed to save snapshot for account {}", account.getId(), e);
       }
     }

@@ -8,12 +8,15 @@ import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.domain.model.AccountSnapshot;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountSnapshotDeserializer;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountSnapshotSerializer;
+import org.girardsimon.wealthpay.account.infrastructure.metric.AdapterMetric;
 import org.girardsimon.wealthpay.account.jooq.tables.records.AccountSnapshotRecord;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class AccountSnapshotRepository implements AccountSnapshotStore {
+
+  static final String SAVE_TIMER = "wealthpay.account.snapshot.save";
 
   private final DSLContext dslContext;
 
@@ -40,6 +43,7 @@ public class AccountSnapshotRepository implements AccountSnapshotStore {
   }
 
   @Override
+  @AdapterMetric(name = SAVE_TIMER)
   public void saveSnapshot(AccountSnapshot accountSnapshot) {
     AccountSnapshotRecord row = accountSnapshotSerializer.apply(accountSnapshot);
 

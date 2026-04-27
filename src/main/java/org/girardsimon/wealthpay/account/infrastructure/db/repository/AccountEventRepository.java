@@ -10,6 +10,7 @@ import org.girardsimon.wealthpay.account.domain.event.AccountEvent;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountEventSerializer;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.EventStoreEntryToAccountEventMapper;
+import org.girardsimon.wealthpay.account.infrastructure.metric.AdapterMetric;
 import org.girardsimon.wealthpay.account.jooq.tables.pojos.EventStore;
 import org.jooq.DSLContext;
 import org.jooq.JSONB;
@@ -19,6 +20,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class AccountEventRepository implements AccountEventStore {
+
+  static final String APPEND_TIMER = "wealthpay.account.event_store.append";
 
   private final DSLContext dslContext;
   private final EventStoreEntryToAccountEventMapper eventStoreEntryToAccountEventMapper;
@@ -62,6 +65,7 @@ public class AccountEventRepository implements AccountEventStore {
   }
 
   @Override
+  @AdapterMetric(name = APPEND_TIMER)
   public void appendEvents(AccountId accountId, long expectedVersion, List<AccountEvent> events) {
     if (events.isEmpty()) {
       return;
