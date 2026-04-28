@@ -101,38 +101,7 @@ func (a *app) handleAlerts(w http.ResponseWriter, r *http.Request, webhookURL st
 
 	embeds := make([]DiscordEmbed, 0, len(payload.Alerts))
 	for _, alert := range payload.Alerts {
-		color := 0xFF0000
-		status := "FIRING"
-		if strings.EqualFold(alert.Status, "resolved") {
-			color = 0x00FF00
-			status = "RESOLVED"
-		}
-
-		severity := strings.ToUpper(strings.TrimSpace(alert.Labels["severity"]))
-		if severity == "" {
-			severity = "UNKNOWN"
-		}
-
-		alertName := strings.TrimSpace(alert.Labels["alertname"])
-		if alertName == "" {
-			alertName = "Unnamed alert"
-		}
-		title := truncateRunes(fmt.Sprintf("[%s] %s - %s", status, severity, alertName), discordTitleMaxRunes)
-
-		description := firstNonEmpty(
-			alert.Annotations["description"],
-			alert.Annotations["summary"],
-		)
-		if description == "" {
-			description = "No description provided."
-		}
-		description = truncateRunes(description, discordDescMaxRunes)
-
-		embeds = append(embeds, DiscordEmbed{
-			Title:       title,
-			Description: description,
-			Color:       color,
-		})
+		embeds = append(embeds, toDiscordEmbed(alert))
 	}
 
 	if strings.EqualFold(payload.Status, "resolved") {
@@ -263,6 +232,45 @@ func parseDurationSeconds(value string) (time.Duration, bool) {
 		return 0, false
 	}
 	return time.Duration(seconds * float64(time.Second)), true
+}
+
+// toDiscordEmbed maps a single Alertmanager alert to a Discord embed, applying the
+// presentation defaults: color/status by firing-vs-resolved, fallback severity / alert
+// name / description, and rune-safe truncation of title and description to Discord's
+// per-embed limits. Pure function of its input — easy to table-test in isolation, and
+// keeps handleAlerts focused on HTTP plumbing.
+func toDiscordEmbed(alert Alert) DiscordEmbed {
+	color := 0xFF0000
+	status := "FIRING"
+	if strings.EqualFold(alert.Status, "resolved") {
+		color = 0x00FF00
+		status = "RESOLVED"
+	}
+
+	severity := strings.ToUpper(strings.TrimSpace(alert.Labels["severity"]))
+	if severity == "" {
+		severity = "UNKNOWN"
+	}
+
+	alertName := strings.TrimSpace(alert.Labels["alertname"])
+	if alertName == "" {
+		alertName = "Unnamed alert"
+	}
+	title := truncateRunes(
+		fmt.Sprintf("[%s] %s - %s", status, severity, alertName),
+		discordTitleMaxRunes,
+	)
+
+	description := firstNonEmpty(
+		alert.Annotations["description"],
+		alert.Annotations["summary"],
+	)
+	if description == "" {
+		description = "No description provided."
+	}
+	description = truncateRunes(description, discordDescMaxRunes)
+
+	return DiscordEmbed{Title: title, Description: description, Color: color}
 }
 
 func firstNonEmpty(values ...string) string {
