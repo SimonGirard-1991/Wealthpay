@@ -74,18 +74,25 @@ public class CommandMetricAspect {
   private static final String DOMAIN_EXCEPTION_PACKAGE =
       "org.girardsimon.wealthpay.account.domain.exception.";
 
+  private static final String OUTCOME_COMMITTED = "committed";
+  private static final String OUTCOME_IDEMPOTENT = "idempotent";
+  private static final String OUTCOME_CONCURRENCY_CONFLICT = "concurrency_conflict";
+  private static final String OUTCOME_NOT_FOUND = "not_found";
+  private static final String OUTCOME_INVARIANT_VIOLATION = "invariant_violation";
+  private static final String OUTCOME_ERROR = "error";
+
   private final MeterRegistry meterRegistry;
 
   public CommandMetricAspect(MeterRegistry meterRegistry) {
     this.meterRegistry = meterRegistry;
   }
 
-  @Around("@annotation(org.girardsimon.wealthpay.account.application.metric.CommandMetric)")
+  @Around("@annotation(CommandMetric)")
   public Object measure(ProceedingJoinPoint pjp) throws Throwable {
     CommandMetric commandMetric =
         ((MethodSignature) pjp.getSignature()).getMethod().getAnnotation(CommandMetric.class);
     Timer.Sample sample = Timer.start(meterRegistry);
-    String outcome = "error";
+    String outcome = OUTCOME_ERROR;
     try {
       Object result = pjp.proceed();
       outcome = classify(result);
@@ -124,36 +131,38 @@ public class CommandMetricAspect {
 
   private static String classify(Object result) {
     if (result instanceof TransactionStatus status) {
-      return status == TransactionStatus.NO_EFFECT ? "idempotent" : "committed";
+      return status == TransactionStatus.NO_EFFECT ? OUTCOME_IDEMPOTENT : OUTCOME_COMMITTED;
     }
     if (result instanceof ReservationResponse response) {
       return response.reservationResult() == ReservationResult.NO_EFFECT
-          ? "idempotent"
-          : "committed";
+          ? OUTCOME_IDEMPOTENT
+          : OUTCOME_COMMITTED;
     }
     if (result instanceof ReserveFundsResponse response) {
       return response.reservationResult() == ReservationResult.NO_EFFECT
-          ? "idempotent"
-          : "committed";
+          ? OUTCOME_IDEMPOTENT
+          : OUTCOME_COMMITTED;
     }
-    return "committed";
+    return OUTCOME_COMMITTED;
   }
 
   private static String classifyException(Throwable t) {
     if (t instanceof OptimisticLockingFailureException
         || t instanceof TransactionIdConflictException) {
-      return "concurrency_conflict";
+      return OUTCOME_CONCURRENCY_CONFLICT;
     }
     if (t instanceof ReservationStoreInconsistencyException
         || t instanceof InvalidAccountEventStreamException) {
       // Page-worthy data-integrity breaches. Lifted out of invariant_violation so they appear
       // in any error-rate alert and stay consistent with the HTTP layer's 500 + log.error.
-      return "error";
+      return OUTCOME_ERROR;
     }
     String className = t.getClass().getName();
     if (className.startsWith(DOMAIN_EXCEPTION_PACKAGE)) {
-      return className.endsWith("NotFoundException") ? "not_found" : "invariant_violation";
+      return className.endsWith("NotFoundException")
+          ? OUTCOME_NOT_FOUND
+          : OUTCOME_INVARIANT_VIOLATION;
     }
-    return "error";
+    return OUTCOME_ERROR;
   }
 }

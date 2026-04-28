@@ -62,7 +62,7 @@ public class AdapterMetricAspect {
     this.meterRegistry = meterRegistry;
   }
 
-  @Around("@annotation(org.girardsimon.wealthpay.account.infrastructure.metric.AdapterMetric)")
+  @Around("@annotation(AdapterMetric)")
   public Object measure(ProceedingJoinPoint pjp) throws Throwable {
     Method declaredMethod = ((MethodSignature) pjp.getSignature()).getMethod();
     AdapterMetric adapterMetric = resolveAnnotation(declaredMethod, pjp.getTarget());
