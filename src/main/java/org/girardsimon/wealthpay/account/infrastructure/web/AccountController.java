@@ -22,6 +22,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+/**
+ * Note: the {@code @SuppressWarnings("java:S5128")} on @RequestBody parameters is intentional. The
+ * OpenAPI-generated {@link AccountApi} already declares {@code @Valid} on those parameters, and
+ * Hibernate Validator's HV000151 forbids the override from redeclaring it ("a method overriding
+ * another method must not redefine the parameter constraint configuration"). Validation is fully
+ * active via the interface; the suppression silences a Sonar false positive.
+ */
 @RestController
 public class AccountController implements AccountApi {
 
@@ -63,7 +70,7 @@ public class AccountController implements AccountApi {
 
   @Override
   public ResponseEntity<OpenAccountResponseDto> openAccount(
-      OpenAccountRequestDto openAccountRequestDto) {
+      @SuppressWarnings("java:S5128") OpenAccountRequestDto openAccountRequestDto) {
     OpenAccount openAccount = openAccountDtoToDomainMapper.apply(openAccountRequestDto);
     AccountId accountId = accountApplicationService.openAccount(openAccount);
     URI location =

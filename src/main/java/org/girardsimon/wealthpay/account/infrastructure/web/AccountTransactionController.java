@@ -15,6 +15,13 @@ import org.girardsimon.wealthpay.account.infrastructure.web.mapper.DebitAccountD
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Note: the {@code @SuppressWarnings("java:S5128")} on @RequestBody parameters is intentional. The
+ * OpenAPI-generated {@link AccountTransactionApi} already declares {@code @Valid} on those
+ * parameters, and Hibernate Validator's HV000151 forbids the override from redeclaring it ("a
+ * method overriding another method must not redefine the parameter constraint configuration").
+ * Validation is fully active via the interface; the suppression silences a Sonar false positive.
+ */
 @RestController
 public class AccountTransactionController implements AccountTransactionApi {
 
@@ -34,7 +41,9 @@ public class AccountTransactionController implements AccountTransactionApi {
 
   @Override
   public ResponseEntity<TransactionResponseDto> creditAccount(
-      UUID id, UUID transactionId, CreditAccountRequestDto creditAccountRequestDto) {
+      UUID id,
+      UUID transactionId,
+      @SuppressWarnings("java:S5128") CreditAccountRequestDto creditAccountRequestDto) {
     CreditAccount creditAccount =
         creditAccountDtoToDomainMapper.apply(id, transactionId, creditAccountRequestDto);
     TransactionStatus transactionStatus = accountApplicationService.creditAccount(creditAccount);
@@ -45,7 +54,9 @@ public class AccountTransactionController implements AccountTransactionApi {
 
   @Override
   public ResponseEntity<TransactionResponseDto> debitAccount(
-      UUID id, UUID transactionId, DebitAccountRequestDto debitAccountRequestDto) {
+      UUID id,
+      UUID transactionId,
+      @SuppressWarnings("java:S5128") DebitAccountRequestDto debitAccountRequestDto) {
     DebitAccount debitAccount =
         debitAccountDtoToDomainMapper.apply(id, transactionId, debitAccountRequestDto);
     TransactionStatus transactionStatus = accountApplicationService.debitAccount(debitAccount);
