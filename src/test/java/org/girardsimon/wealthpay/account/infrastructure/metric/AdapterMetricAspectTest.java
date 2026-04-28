@@ -49,10 +49,12 @@ class AdapterMetricAspectTest {
   void records_optimistic_conflict_outcome_when_OptimisticLockingFailureException_is_thrown() {
     // Arrange
     TestTarget target = proxy(new TestTarget(), aspect);
+    OptimisticLockingFailureException toThrow =
+        new OptimisticLockingFailureException("version mismatch");
 
     // Act + Assert
     assertThatExceptionOfType(OptimisticLockingFailureException.class)
-        .isThrownBy(() -> target.run(new OptimisticLockingFailureException("version mismatch")));
+        .isThrownBy(() -> target.run(toThrow));
     assertThat(timerCount("optimistic_conflict")).isEqualTo(1L);
     assertThat(timerCount("failure")).isZero();
     assertThat(timerCount("success")).isZero();
@@ -62,10 +64,10 @@ class AdapterMetricAspectTest {
   void records_failure_outcome_on_any_other_runtime_exception() {
     // Arrange
     TestTarget target = proxy(new TestTarget(), aspect);
+    IllegalStateException toThrow = new IllegalStateException("boom");
 
     // Act + Assert
-    assertThatExceptionOfType(IllegalStateException.class)
-        .isThrownBy(() -> target.run(new IllegalStateException("boom")));
+    assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> target.run(toThrow));
     assertThat(timerCount("failure")).isEqualTo(1L);
     assertThat(timerCount("success")).isZero();
     assertThat(timerCount("optimistic_conflict")).isZero();
@@ -89,10 +91,11 @@ class AdapterMetricAspectTest {
     // Arrange
     FailingMeterRegistry failing = new FailingMeterRegistry();
     TestTarget target = proxy(new TestTarget(), new AdapterMetricAspect(failing));
+    OptimisticLockingFailureException toThrow = new OptimisticLockingFailureException("v");
 
     // Act + Assert — original domain exception (not the meter failure) reaches caller
     assertThatExceptionOfType(OptimisticLockingFailureException.class)
-        .isThrownBy(() -> target.run(new OptimisticLockingFailureException("v")));
+        .isThrownBy(() -> target.run(toThrow));
     assertThat(failing.newTimerInvocations.get()).isPositive();
   }
 
@@ -134,10 +137,11 @@ class AdapterMetricAspectTest {
   void original_exception_propagates_under_JDK_proxy_with_annotation_only_on_impl() {
     // Arrange
     InterfaceTarget target = jdkProxy(new AnnotatedImpl(), aspect);
+    OptimisticLockingFailureException toThrow = new OptimisticLockingFailureException("v");
 
     // Act + Assert — exception classification still works through the resolved annotation
     assertThatExceptionOfType(OptimisticLockingFailureException.class)
-        .isThrownBy(() -> target.run(new OptimisticLockingFailureException("v")));
+        .isThrownBy(() -> target.run(toThrow));
     assertThat(timerCount("optimistic_conflict")).isEqualTo(1L);
   }
 

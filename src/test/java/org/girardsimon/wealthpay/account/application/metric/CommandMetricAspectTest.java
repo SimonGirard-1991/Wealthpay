@@ -149,12 +149,12 @@ class CommandMetricAspectTest {
   void records_concurrency_conflict_outcome_when_OptimisticLockingFailureException_is_thrown() {
     // Arrange
     TestTarget target = proxy(new TestTarget(), aspect);
+    OptimisticLockingFailureException toThrow =
+        new OptimisticLockingFailureException("version mismatch");
 
     // Act + Assert
     assertThatExceptionOfType(OptimisticLockingFailureException.class)
-        .isThrownBy(
-            () ->
-                target.commandThrowing(new OptimisticLockingFailureException("version mismatch")));
+        .isThrownBy(() -> target.commandThrowing(toThrow));
     assertThat(timerCount("probe", "concurrency_conflict")).isEqualTo(1L);
     assertThat(timerCount("probe", "error")).isZero();
   }
@@ -178,10 +178,11 @@ class CommandMetricAspectTest {
   void records_not_found_outcome_when_NotFoundException_from_domain_package_is_thrown() {
     // Arrange
     TestTarget target = proxy(new TestTarget(), aspect);
+    ReservationNotFoundException toThrow = new ReservationNotFoundException("missing");
 
     // Act + Assert
     assertThatExceptionOfType(ReservationNotFoundException.class)
-        .isThrownBy(() -> target.commandThrowing(new ReservationNotFoundException("missing")));
+        .isThrownBy(() -> target.commandThrowing(toThrow));
     assertThat(timerCount("probe", "not_found")).isEqualTo(1L);
     assertThat(timerCount("probe", "invariant_violation")).isZero();
   }
@@ -190,10 +191,11 @@ class CommandMetricAspectTest {
   void records_invariant_violation_outcome_when_customer_driven_domain_exception_is_thrown() {
     // Arrange — InsufficientFunds is a customer-driven 4xx-class outcome
     TestTarget target = proxy(new TestTarget(), aspect);
+    InsufficientFundsException toThrow = new InsufficientFundsException();
 
     // Act + Assert
     assertThatExceptionOfType(InsufficientFundsException.class)
-        .isThrownBy(() -> target.commandThrowing(new InsufficientFundsException()));
+        .isThrownBy(() -> target.commandThrowing(toThrow));
     assertThat(timerCount("probe", "invariant_violation")).isEqualTo(1L);
     assertThat(timerCount("probe", "not_found")).isZero();
     assertThat(timerCount("probe", "error")).isZero();
@@ -204,14 +206,12 @@ class CommandMetricAspectTest {
     // Arrange — page-worthy data-integrity breach. Should NOT bucket as invariant_violation,
     // because the HTTP layer returns 500 and oncall paging keys off the error metric bucket.
     TestTarget target = proxy(new TestTarget(), aspect);
+    ReservationStoreInconsistencyException toThrow =
+        new ReservationStoreInconsistencyException("phase store / aggregate diverged");
 
     // Act + Assert
     assertThatExceptionOfType(ReservationStoreInconsistencyException.class)
-        .isThrownBy(
-            () ->
-                target.commandThrowing(
-                    new ReservationStoreInconsistencyException(
-                        "phase store / aggregate diverged")));
+        .isThrownBy(() -> target.commandThrowing(toThrow));
     assertThat(timerCount("probe", "error")).isEqualTo(1L);
     assertThat(timerCount("probe", "invariant_violation")).isZero();
   }
@@ -220,12 +220,12 @@ class CommandMetricAspectTest {
   void records_error_outcome_when_InvalidAccountEventStreamException_is_thrown() {
     // Arrange — event-stream corruption is page-worthy and HTTP-500 by AccountExceptionHandler.
     TestTarget target = proxy(new TestTarget(), aspect);
+    InvalidAccountEventStreamException toThrow =
+        new InvalidAccountEventStreamException("corrupted stream");
 
     // Act + Assert
     assertThatExceptionOfType(InvalidAccountEventStreamException.class)
-        .isThrownBy(
-            () ->
-                target.commandThrowing(new InvalidAccountEventStreamException("corrupted stream")));
+        .isThrownBy(() -> target.commandThrowing(toThrow));
     assertThat(timerCount("probe", "error")).isEqualTo(1L);
     assertThat(timerCount("probe", "invariant_violation")).isZero();
   }
@@ -234,10 +234,11 @@ class CommandMetricAspectTest {
   void records_error_outcome_when_unexpected_exception_outside_domain_package_is_thrown() {
     // Arrange — IllegalStateException is not a domain exception, not OptimisticLocking either
     TestTarget target = proxy(new TestTarget(), aspect);
+    IllegalStateException toThrow = new IllegalStateException("boom");
 
     // Act + Assert
     assertThatExceptionOfType(IllegalStateException.class)
-        .isThrownBy(() -> target.commandThrowing(new IllegalStateException("boom")));
+        .isThrownBy(() -> target.commandThrowing(toThrow));
     assertThat(timerCount("probe", "error")).isEqualTo(1L);
     assertThat(timerCount("probe", "invariant_violation")).isZero();
   }
@@ -267,10 +268,11 @@ class CommandMetricAspectTest {
     FailingMeterRegistry failingRegistry = new FailingMeterRegistry();
     CommandMetricAspect failingAspect = new CommandMetricAspect(failingRegistry);
     TestTarget target = proxy(new TestTarget(), failingAspect);
+    InsufficientFundsException toThrow = new InsufficientFundsException();
 
     // Act + Assert — original domain exception (not the meter failure) reaches the caller
     assertThatExceptionOfType(InsufficientFundsException.class)
-        .isThrownBy(() -> target.commandThrowing(new InsufficientFundsException()));
+        .isThrownBy(() -> target.commandThrowing(toThrow));
     assertThat(failingRegistry.timerInvocations.get()).isPositive();
   }
 
