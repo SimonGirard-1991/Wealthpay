@@ -55,15 +55,45 @@ Module boundaries are enforced by `ArchitectureTests` via `ApplicationModules.of
 ### Hexagonal Layers (within `account`)
 
 - **`domain/`** — Pure domain logic, zero framework dependencies.
-  - `model/` — `Account` aggregate (the only aggregate), value objects (`Money`, `AccountId`, `ReservationId`, etc.), sealed `AccountEvent` hierarchy, ID generators.
+  - `model/` — `Account` aggregate (the only aggregate), value objects (`Money`, `AccountId`, `ReservationId`, etc.), sealed `AccountEvent` hierarchy, ID generator **interfaces** (`AccountIdGenerator`, `EventIdGenerator`, `ReservationIdGenerator`). Spring-annotated impls live in `infrastructure/id/`.
   - `command/` — Command records (`OpenAccount`, `CreditAccount`, `DebitAccount`, `ReserveFunds`, `CancelReservation`, `CaptureReservation`, `CloseAccount`).
   - `event/` — Sealed interface `AccountEvent` with 7 concrete event types. Events carry `AccountEventMeta` (eventId, accountId, occurredAt, version).
   - `exception/` — Domain-specific exceptions (invariant violations).
 - **`application/`** — Orchestration layer. Ports defined as interfaces (`AccountEventStore`, `AccountEventPublisher`, `AccountSnapshotStore`, `ProcessedTransactionStore`, `ProcessedReservationStore`, `AccountBalanceProjector`, `AccountBalanceReader`). `AccountApplicationService` handles commands transactionally with idempotency (via processed transaction/reservation stores) and snapshot management.
+  - `metric/` — application-aware command instrumentation (`@CommandMetric` annotation + aspect). The only place in `application` allowed to use Micrometer's runtime API and AspectJ.
 - **`infrastructure/`** — Adapters.
   - `web/` — REST controllers implementing OpenAPI-generated interfaces (`AccountApi`). Explicit DTO-to-domain and domain-to-DTO mappers (one class per mapping direction).
   - `db/repository/` — jOOQ-based repositories implementing application ports. Event serialization/deserialization with JSONB.
   - `consumer/` — Kafka consumer (`AccountOutboxConsumer`) projecting outbox events into the read model.
+  - `producer/` — _(reserved)_ Kafka producer adapters when needed; the architecture rules already lock the convention.
+  - `id/` — Spring-annotated `Random*IdGenerator` impls of the domain-defined ID-generator ports.
+  - `metric/` — adapter-level latency aspect (`@AdapterMetric`).
+  - `serialization/` — Jackson `JsonNode` helpers (`AccountEventType`, `MoneyDeserializerUtils`) shared across `db/repository/`, `consumer/`, and the snapshot deserializer (Debezium streams the same JSONB envelope to Kafka, so the wire format is genuinely shared).
+
+### Architecture Rules
+
+Two complementary mechanisms enforce architecture, both in `mvn test`:
+
+- **Spring Modulith** (`account.ArchitectureTests`) — verifies module-to-module dependencies (e.g. `account` may depend on `shared`, not vice-versa).
+- **ArchUnit** (`architecture.HexagonalArchitectureTest`) — enforces hexagonal layering _within_ a BC, which Modulith does not cover. 16 rules grouped:
+  - **Hexagonal layering** per BC: domain ← application ← infrastructure. Auto-discovers BCs by scanning for top-level packages with a `domain` subpackage; applies the layered rule to each. Fails loudly if zero BCs are detected.
+  - **Domain framework-free**: no Spring, jOOQ, Jackson (2.x and 3.x), Kafka, Micrometer, AspectJ, servlets in `..domain..`. Spring-annotated impls of domain-defined ports live in infrastructure.
+  - **Application boundary**: no jOOQ, Kafka, web, Jackson, AspectJ, or Micrometer runtime API (`io.micrometer.core..`) in `..application..`. Spring stereotypes (`@Service`, `@Transactional`), Spring DAO exceptions, and declarative observability annotations (`@Observed` from `io.micrometer.observation..`) are allowed — markers interpreted by infrastructure handlers, not coupling to the meter registry.
+  - **Infrastructure I/O sibling isolation**: `web ⊥ db ⊥ consumer ⊥ producer`. They communicate only through application ports. Cross-slice helpers live in `..infrastructure.serialization..`, `..infrastructure.metric..`, `..infrastructure.id..`.
+  - **Annotation / type locality** (uses `areMetaAnnotatedWith` to also catch composed stereotypes): `@RestController` and `@RestControllerAdvice` only in `..infrastructure.web..`; `@KafkaListener` only in `..infrastructure.consumer..`; `KafkaTemplate` only referenced from `..infrastructure.producer..` or `..config..` (bean wiring).
+  - **`@Transactional` location**: only in `..application..` (use-case orchestration) or `..infrastructure.db..` (read-side `readOnly=true` repos).
+  - **jOOQ confinement**: both the library (`org.jooq..`: `DSLContext`, `Field`, `JSONB`, etc.) and the generated package (`..jooq..`: tables, records, POJOs) may only be referenced from `..infrastructure.db..` (and the generated package itself). Closes the gap that the layered rule cannot catch — generated jOOQ lives outside the three declared layers, so without this rule any infrastructure subpackage could reach into jOOQ directly.
+  - **OpenAPI-generated transport types** (`..api.generated..`) only referenced from `..infrastructure.web..` and the generated package itself. Domain, application, and the non-web infrastructure slices speak in domain types; web maps DTOs in and out via explicit mappers.
+  - **No `utils` package at BC root**: auto-applied per discovered BC. Catches the dependency-hub anti-pattern. The `shared` open module (e.g. `shared.utils.MapperUtils`) is exempt by definition since it holds cross-BC helpers and is not a BC.
+
+Carve-outs are explicit and named in the rule bodies:
+
+- `..application.metric..` may import `io.micrometer.core..` and `org.aspectj..` (cross-cutting application instrumentation; outcome lattice is application-aware).
+- `..infrastructure.serialization..`, `..infrastructure.metric..`, `..infrastructure.id..` are exempt from I/O sibling isolation (they exist precisely to be shared by the I/O slices).
+- `..config..` packages may reference `KafkaTemplate` as a parameter for bean wiring (e.g. `shared.config.KafkaErrorConfig`). Such config doesn't send messages itself.
+- `..jooq..` (generated jOOQ) and `..api.generated..` (OpenAPI generated) are exempt from their own confinement rules as _source_ — they legitimately reference each other and `org.jooq..` types internally.
+
+A new BC arrives with full intra-BC layer enforcement on day one — no manual rule registration required. Cross-BC rules (purity, boundary, sibling isolation, annotation locality, jOOQ/OpenAPI confinement) and BC-specific rules (hexagonal layering, no utils package) all apply automatically via package patterns and BC auto-discovery.
 
 ### Event Sourcing Flow
 
