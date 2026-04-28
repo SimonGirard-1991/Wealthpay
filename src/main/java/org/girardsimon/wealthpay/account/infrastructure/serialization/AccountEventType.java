@@ -1,4 +1,4 @@
-package org.girardsimon.wealthpay.account.utils;
+package org.girardsimon.wealthpay.account.infrastructure.serialization;
 
 import java.util.Locale;
 import java.util.regex.Pattern;

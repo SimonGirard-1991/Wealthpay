@@ -1,4 +1,4 @@
-package org.girardsimon.wealthpay.account.utils;
+package org.girardsimon.wealthpay.account.infrastructure.serialization;
 
 import static org.girardsimon.wealthpay.shared.utils.MapperUtils.getRequiredField;
 

@@ -1,5 +1,7 @@
-package org.girardsimon.wealthpay.account.domain.model;
+package org.girardsimon.wealthpay.account.infrastructure.id;
 
+import org.girardsimon.wealthpay.account.domain.model.EventId;
+import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.springframework.stereotype.Component;
 
 @Component

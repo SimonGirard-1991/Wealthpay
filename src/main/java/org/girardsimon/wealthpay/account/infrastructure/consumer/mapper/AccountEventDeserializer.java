@@ -1,6 +1,6 @@
 package org.girardsimon.wealthpay.account.infrastructure.consumer.mapper;
 
-import static org.girardsimon.wealthpay.account.utils.MoneyDeserializerUtils.extractMoney;
+import static org.girardsimon.wealthpay.account.infrastructure.serialization.MoneyDeserializerUtils.extractMoney;
 import static org.girardsimon.wealthpay.shared.utils.MapperUtils.getRequiredField;
 import static org.girardsimon.wealthpay.shared.utils.MapperUtils.headerAsString;
 
@@ -24,7 +24,7 @@ import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
-import org.girardsimon.wealthpay.account.utils.AccountEventType;
+import org.girardsimon.wealthpay.account.infrastructure.serialization.AccountEventType;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;

@@ -4,8 +4,8 @@ import static org.girardsimon.wealthpay.account.infrastructure.db.repository.map
 import static org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountSnapshotFields.CURRENCY;
 import static org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountSnapshotFields.RESERVATIONS;
 import static org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountSnapshotFields.STATUS;
+import static org.girardsimon.wealthpay.account.infrastructure.serialization.MoneyDeserializerUtils.extractMoney;
 import static org.girardsimon.wealthpay.account.jooq.tables.AccountSnapshot.ACCOUNT_SNAPSHOT;
-import static org.girardsimon.wealthpay.account.utils.MoneyDeserializerUtils.extractMoney;
 import static org.girardsimon.wealthpay.shared.utils.MapperUtils.getRequiredField;
 
 import java.util.HashMap;
