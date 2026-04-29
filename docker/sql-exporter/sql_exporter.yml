@@ -33,12 +33,14 @@ global:
   # Concurrency note: this is not only a footprint choice — with
   # max_connections=1 and enable_ping=true below, every scrape runs
   # serially as PING -> pg_stat_wal -> pg_stat_io -> pg_stat_statements_info
-  # -> pg_stat_statements_tracked inside one scrape_timeout window. All
-  # four current queries are sub-millisecond so the 8s budget is ample,
-  # but additional collector queries compound serially, not in parallel —
-  # re-evaluate max_connections before adding a fifth, especially if the
-  # new query touches a heavy view (pg_stat_activity at high connection
-  # counts is the usual gotcha).
+  # -> pg_stat_statements_tracked -> pg_replication_slots inside one
+  # scrape_timeout window. All five current queries are sub-millisecond
+  # (the slot query reads an in-memory view bounded by N slots; this
+  # stack runs N=1) so the 8s budget is ample, but additional collector
+  # queries compound serially, not in parallel — re-evaluate
+  # max_connections before adding a sixth, especially if the new query
+  # touches a heavy view (pg_stat_activity at high connection counts is
+  # the usual gotcha).
   max_connections: 1
 
 target:
@@ -56,6 +58,7 @@ target:
   collectors:
     - pg_wal_io
     - pg_stat_statements_info
+    - pg_replication_slots
 
 collector_files:
   # Explicit list, NOT a glob. Each collector file must cite a specific
@@ -65,3 +68,4 @@ collector_files:
   # list above so the execution order reads the same from both sides.
   - wal-io.collector.yml
   - pg-stat-statements-info.collector.yml
+  - replication.collector.yml

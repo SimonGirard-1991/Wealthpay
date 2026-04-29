@@ -1,0 +1,106 @@
+---
+# pg_replication_slots — gap-filler collector.
+#
+# Fills one gap left by postgres_exporter v0.19.1's built-in
+# replication_slot collector, which emits:
+#   - pg_replication_slots_active{slot_name}            (gauge, 0/1)
+#   - pg_replication_slots_pg_wal_lsn_diff{slot_name}   (gauge, bytes)
+#       = pg_current_wal_lsn() - confirmed_flush_lsn
+#       semantics: CONSUMER LAG (how much WAL the consumer hasn't
+#       acknowledged yet)
+#
+# THE GAP: pg_wal_lsn_diff measures how far behind the consumer is in
+# acknowledging records. It does NOT measure how much WAL Postgres is
+# RETAINING on disk for the slot. Those two values diverge under a
+# specific but operationally critical failure mode: a logical-decoding
+# consumer that reads + acks recent records (so confirmed_flush_lsn
+# advances) but then stalls or crashes before its ack is reflected in
+# restart_lsn. Postgres will retain WAL all the way back to restart_lsn
+# regardless of confirmed_flush_lsn, so the disk-fill canary is
+# (current_lsn - restart_lsn), not (current_lsn - confirmed_flush_lsn).
+#
+# Why this matters specifically here: this stack runs Debezium against
+# a logical slot for outbox CDC. Debezium dying without clean shutdown
+# is the single most plausible path to "Postgres runs out of disk".
+# Alerting on consumer lag (built-in metric) misses the failure case
+# where Debezium had ack'd recent records before crashing; alerting on
+# retention bytes (this collector) catches both.
+#
+# WHAT'S NOT EMITTED HERE — and why:
+#
+#   - pg_replication_slots_inactive_age_seconds. The natural source is
+#     pg_replication_slots.inactive_since, added in PG17. This stack
+#     pins postgres:16 in docker-compose.local.yml, so the column does
+#     not exist server-side. Deriving "age of inactivity" by joining
+#     pg_stat_replication does not work either: pg_stat_replication has
+#     NO row for an inactive slot, so there's nothing to subtract a
+#     timestamp from. The correct PG16 mechanism is a Prometheus
+#     recording rule keyed off the existing pg_replication_slots_active
+#     metric:
+#         time()
+#         - timestamp(last_over_time((pg_replication_slots_active == 1)[1d:1m]))
+#     That recording rule lives alongside the alert in db.rules.yml.
+#     PG17 upgrade step: drop the recording rule, fold inactive_since
+#     into a SELECT in this collector, and reference the new metric
+#     directly from the alert.
+#
+#   - pg_replication_slots_active. Already emitted by postgres-exporter's
+#     built-in replication_slot collector. Duplicating it here would
+#     violate the explicit one-collector-per-gap rule documented in
+#     sql_exporter.yml.
+#
+# Cardinality budget:
+#   1 metric × N slots = N series. This stack runs a single Debezium
+#   logical slot, so N=1. Even on a 10x fan-out it is rounding error
+#   against the existing ~300-series pg_stat_io footprint.
+#
+# Type discipline: restart_lsn can move forward AND backward (the
+# latter on a base-backup-driven restart). The derived retention-bytes
+# value is therefore a gauge, not a counter — never use rate() on it.
+#
+# Standby caveat: pg_current_wal_lsn() raises an error on a hot
+# standby (the standby exposes pg_last_wal_replay_lsn() instead). This
+# stack runs a single primary with no standbys, so the query is safe.
+# If a standby is ever added that also hosts replication slots, this
+# query needs branching on pg_is_in_recovery() — flagged here so the
+# next operator doesn't have to discover it from a stack trace.
+
+collector_name: pg_replication_slots
+
+queries:
+  - query_name: pg_replication_slots
+    # pg_wal_lsn_diff returns NUMERIC; cast to double precision for the
+    # same reason wal_bytes is cast in wal-io.collector.yml: Prometheus
+    # samples are float64 regardless, and an explicit SQL-side cast
+    # keeps the type contract visible at the collector boundary.
+    #
+    # COALESCE on restart_lsn: a freshly-created slot can briefly have
+    # NULL restart_lsn before the first WAL position is recorded.
+    # Mapping NULL to current_lsn yields 0 retention bytes for the gap
+    # instead of an absent series, which avoids spurious absent()-style
+    # alert flakes during slot creation.
+    #
+    # CTE binds pg_current_wal_lsn() exactly once. The function is
+    # marked VOLATILE in PG, so two inline invocations can return
+    # slightly different LSNs under heavy WAL pressure — sub-byte drift
+    # in practice, but it can produce a transient negative diff in the
+    # NULL/COALESCE branch. Pinning the value once eliminates the wart
+    # at the cost of a single CTE row.
+    query: |
+      WITH s AS (SELECT pg_current_wal_lsn() AS cur_lsn)
+      SELECT
+        slot_name,
+        slot_type,
+        pg_wal_lsn_diff(
+          s.cur_lsn,
+          COALESCE(restart_lsn, s.cur_lsn)
+        )::double precision AS wal_retention_bytes
+      FROM pg_replication_slots, s
+
+metrics:
+  - metric_name: pg_replication_slots_wal_retention_bytes
+    type: gauge
+    help: "WAL bytes Postgres is retaining on disk for this slot (pg_current_wal_lsn() - restart_lsn). Distinct from pg_replication_slots_pg_wal_lsn_diff, which measures consumer lag against confirmed_flush_lsn. This is the correct disk-fill canary for logical-decoding consumers like Debezium: a consumer that ack'd recent records can still hold WAL hostage if restart_lsn does not advance. Alert on this, not on consumer lag, when sizing for retention pressure."
+    key_labels: [slot_name, slot_type]
+    values: [wal_retention_bytes]
+    query_ref: pg_replication_slots
