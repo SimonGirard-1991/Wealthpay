@@ -183,8 +183,8 @@ groups:
 
       - alert: OutboxCleanupStale
         expr: |
-          max(outbox_cleanup_last_run_seconds{job="wealthpay"}) > 0
-          and time() - max(outbox_cleanup_last_run_seconds{job="wealthpay"}) > 129600
+          time() - max(outbox_cleanup_last_run_seconds{job="wealthpay"}) > 129600
+          and max(outbox_cleanup_last_run_seconds{job="wealthpay"}) > 0
         for: 5m
         labels:
           severity: warning
