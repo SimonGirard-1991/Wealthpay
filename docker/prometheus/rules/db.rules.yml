@@ -1,0 +1,208 @@
+---
+# Database alerting and recording rules for the Wealthpay stack.
+#
+# Pairs with:
+#   - postgres-exporter v0.19.1 (built-in collectors: pg_up, pg_stat_database,
+#     pg_settings, pg_stat_bgwriter, pg_stat_activity, pg_replication_slots).
+#   - sql-exporter (custom collectors: pg_stat_wal, pg_stat_io,
+#     pg_stat_statements_info, pg_replication_slots_wal_retention_bytes).
+#
+# Routing: the existing alertmanager.yml routes severity=critical to the
+# critical Discord webhook and severity=warning to the default webhook.
+# No alertmanager change required for this file.
+#
+# Threshold rationale: see docs/adr/008-db-observability-slos.md for the
+# full calibration log. Workload-derived thresholds (cache hit ratio) cite
+# their measured baseline in the rule comment; design-derived thresholds
+# (1 GiB WAL retention, 5m idle-in-tx, 0.8 connection-pool ratio) are
+# justified inline.
+
+groups:
+
+  # -------------------------------------------------------------------------
+  # Recording rules.
+  #
+  # On PG16, pg_replication_slots.inactive_since does not exist (added in
+  # PG17). Joining pg_stat_replication does not work either: the view has no
+  # row for an inactive slot. Derive the inactivity age in PromQL instead,
+  # keyed off the postgres-exporter built-in pg_replication_slots_active
+  # gauge. When this stack moves to PG17, replace this recording rule with a
+  # SQL-side metric in docker/sql-exporter/replication.collector.yml.
+  # -------------------------------------------------------------------------
+  - name: wealthpay-db-recording
+    rules:
+      - record: pg_replication_slot:inactive_age_seconds
+        # 7d subquery window: the inner expression returns no samples when
+        # the slot has been inactive for the entire lookback, which makes
+        # the recording rule output disappear. A 7d window keeps the alert
+        # active across a week of inactivity and survives a Prometheus
+        # restart for the same window. Cardinality cost is unchanged
+        # (one sample per slot per evaluation).
+        expr: |
+          time()
+          - last_over_time(timestamp(pg_replication_slots_active == 1)[7d:1m])
+
+  # -------------------------------------------------------------------------
+  # Availability.
+  # -------------------------------------------------------------------------
+  - name: wealthpay-db-availability
+    rules:
+      - alert: PostgresUnreachable
+        # Three-arm disjunction:
+        #   up{job="postgres-exporter"} == 0  → scrape failed THIS interval.
+        #     Catches "exporter container died" within 1 evaluation cycle,
+        #     before Prometheus's staleness window (~5m) kicks in. Without
+        #     this arm, a dead exporter leaves pg_up returning its last
+        #     value (probably 1) for up to 5m and the alert stays silent.
+        #   pg_up == 0                        → exporter reachable but
+        #     could NOT open a Postgres connection.
+        #   absent(pg_up)                     → series has been gone long
+        #     enough for staleness markers to drop it. Long-tail backstop.
+        expr: up{job="postgres-exporter"} == 0 or pg_up == 0 or absent(pg_up)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "postgres-exporter cannot reach Postgres"
+          description: "Either Postgres is down or the postgres-exporter container is unhealthy. App-level signals (DbConnectionPoolTimeouts) will follow within minutes if Postgres is down."
+
+  # -------------------------------------------------------------------------
+  # Replication-slot health.
+  #
+  # Two distinct failure modes, two distinct alerts:
+  #   1. WAL retention has grown large (disk-fill canary, hard threshold).
+  #   2. Slot has been inactive for more than 5 minutes (Debezium-died canary,
+  #      catches the case where retention is not yet large but the consumer
+  #      has dropped off — earlier signal than #1 for a low-write-rate window).
+  # -------------------------------------------------------------------------
+  - name: wealthpay-db-replication
+    rules:
+      - alert: ReplicationSlotWalRetentionHigh
+        # 1 GiB hard threshold. The Wealthpay default Postgres data volume
+        # is 10-20 GiB depending on environment; 1 GiB of WAL retained per
+        # slot is well into "investigate now" territory and an order of
+        # magnitude below "disk full". Adjust the threshold (here AND in
+        # the ADR) if the data-volume size changes substantially.
+        expr: pg_replication_slots_wal_retention_bytes > 1073741824
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Replication slot {{ $labels.slot_name }} is retaining over 1 GiB of WAL"
+          description: "{{ $value | humanize1024 }}B of WAL retained on slot {{ $labels.slot_name }} ({{ $labels.slot_type }}). Postgres cannot recycle WAL until restart_lsn advances. Disk fill is the next failure mode — check the consumer (Debezium for the wealthpay outbox)."
+
+      - alert: ReplicationSlotInactive
+        # 5 minutes is well above any plausible Debezium reconnect window
+        # (default Debezium reconnect backoff caps at ~10s). Five minutes
+        # of continuous inactivity is unambiguously "the consumer has died
+        # or been deliberately stopped". The recording rule's value goes
+        # into the annotation as a humanized duration.
+        # for: 1m is defense-in-depth against a single missed scrape (e.g.
+        # postgres-exporter pod restart) momentarily making the recording
+        # rule produce a spuriously high value. Costs 1 minute of latency
+        # on a >5-minute outage; cheap.
+        expr: pg_replication_slot:inactive_age_seconds > 300
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replication slot {{ $labels.slot_name }} has been inactive for {{ $value | humanizeDuration }}"
+          description: "Consumer for slot {{ $labels.slot_name }} has been disconnected for {{ $value | humanizeDuration }}. WAL retention will start growing — ReplicationSlotWalRetentionHigh is the disk-fill canary that follows."
+
+  # -------------------------------------------------------------------------
+  # Resource pressure.
+  # -------------------------------------------------------------------------
+  - name: wealthpay-db-resource
+    rules:
+      - alert: DbConnectionsNearMax
+        # max_connections is a single-server value (scalar). numbackends is
+        # per-database; sum across DBs gives the total backend count for the
+        # whole server. Threshold of 0.8 leaves headroom for a planned
+        # connection-pool resize before the cap is hit.
+        expr: |
+          sum(pg_stat_database_numbackends) / scalar(pg_settings_max_connections) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Postgres backend count above 80% of max_connections"
+          description: "Backend count is {{ $value | humanizePercentage }} of max_connections. Source can be the application Hikari pool (DbConnectionPoolPending will fire too) or external clients (psql, IDE, monitoring)."
+
+      - alert: DbCacheHitRatioLow
+        # Threshold derived from the at-rest baseline of 98.7% on a small
+        # working set that fits in shared_buffers. 0.90 sits comfortably
+        # below the lower bound of any plausible loaded-state baseline,
+        # while still catching a real working-set explosion (e.g. a query
+        # plan switching to a sequential scan over a cold table).
+        # The denominator `> 0` filter strips intervals with zero block
+        # access (DB idle), which would otherwise produce 0/0 NaN.
+        expr: |
+          rate(pg_stat_database_blks_hit{datname="wealthpay"}[10m])
+          /
+          (
+            rate(pg_stat_database_blks_hit{datname="wealthpay"}[10m])
+            + rate(pg_stat_database_blks_read{datname="wealthpay"}[10m])
+            > 0
+          )
+          < 0.90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Postgres cache hit ratio below 90% on the wealthpay DB"
+          description: "Buffer cache hit ratio is {{ $value | humanizePercentage }} (baseline ≈ 98.7%, see docs/adr/008-db-observability-slos.md). Either the working set has outgrown shared_buffers or a query plan has switched to a cold scan. Common false-positive: cold buffer cache after a Postgres restart — verify pg_stat_bgwriter buffers_alloc trend before escalating."
+
+      - alert: DbForcedCheckpointRatioHigh
+        # 0.3 is the conventional Postgres "raise max_wal_size" threshold
+        # — at-rest baseline on this stack is 0.4% (49 forced / 11440
+        # total at the time of writing). Above 30% means the WAL is
+        # filling faster than the checkpoint_timeout window can drain it.
+        expr: |
+          rate(pg_stat_bgwriter_checkpoints_req_total[10m])
+          /
+          (
+            rate(pg_stat_bgwriter_checkpoints_req_total[10m])
+            + rate(pg_stat_bgwriter_checkpoints_timed_total[10m])
+            > 0
+          )
+          > 0.3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 30% of recent checkpoints were forced (max_wal_size pressure)"
+          description: "Forced/total checkpoint ratio is {{ $value | humanizePercentage }}. Postgres is hitting max_wal_size before checkpoint_timeout completes. Consider raising max_wal_size or investigate write-traffic spikes."
+
+      - alert: PgStatStatementsLruEvicting
+        # Detector, not a calibrated threshold: any sustained eviction
+        # rate means the working set has exceeded pg_stat_statements.max
+        # (5000 on this stack). Top-N panels on the Database — Query &
+        # Table Performance dashboard become a moving target as a result.
+        # 5m rate × 15m duration = robust to one-off bursts.
+        expr: rate(pg_stat_statements_info_dealloc_total[5m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "pg_stat_statements LRU is evicting tracked statements"
+          description: "Working set has exceeded pg_stat_statements.max=5000. Top-N dashboard panels are now a moving target. Either raise pg_stat_statements.max or accept the rotation if the working set has genuinely grown."
+
+      - alert: IdleInTransactionTooLong
+        # 5 minutes is the operational hard ceiling. An idle-in-tx session
+        # blocks autovacuum and holds row locks for the duration, so even
+        # short idle-in-tx is a smell — 5m is "definitely a bug, page".
+        # Restricted to datname=wealthpay so noise from template0/postgres
+        # connections doesn't leak in.
+        # NOTE: postgres-exporter aggregates pg_stat_activity_max_tx_duration
+        # by (datname, state) inside the SQL it runs, so application_name,
+        # usename, and pid never reach Prometheus. The annotation can NOT
+        # name the offending session — the description embeds the SQL the
+        # on-call needs to run instead.
+        expr: |
+          pg_stat_activity_max_tx_duration{datname="wealthpay", state="idle in transaction"} > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Idle-in-transaction session on wealthpay DB open for {{ $value | humanizeDuration }}"
+          description: "Longest idle-in-transaction session on the wealthpay DB has been open for {{ $value | humanizeDuration }}. Blocks autovacuum and holds row locks. To identify the offender, run on the DB: SELECT pid, application_name, usename, xact_start, query FROM pg_stat_activity WHERE datname='wealthpay' AND state='idle in transaction' ORDER BY xact_start LIMIT 5; — common causes: app holding a tx across an external HTTP call, stale debugger session, misconfigured pool."
