@@ -243,11 +243,59 @@ diff or explicitly explain why not — flipping the default from drift to consis
 
 The following items are out of scope for this ADR. Each has a separate trigger for re-engagement:
 
-- **Per-query slow-query regression alert.** Requires extending the
-  `pg-stat-statements-info.collector.yml` to emit a top-N collector with `queryid` labels, with the
-  Prometheus "info pattern" splitting numerics and query text into separate series. Tracked as the
-  next commit in the step-7 sequence. The current `PgStatStatementsLruEvicting` alert is the
-  placeholder for "your top-N panel is incomplete" until that work lands.
+- **Per-query slow-query regression alert.** Verification during planning surfaced that
+  postgres-exporter (≥ v0.18.0; this stack runs v0.19.1) already emits
+  `pg_stat_statements_query_id{queryid, query} 1` (a constant-value info-pattern metric, top 100 by
+  total exec time, untruncated), in addition to per-queryid numerics like
+  `pg_stat_statements_seconds_total{datname, queryid, user}`. An earlier draft of this ADR called
+  for a custom sql-exporter collector to provide the info series — that collector would have
+  duplicated the built-in. The regression alert is therefore feasible **today** using only built-in
+  metrics. **Prerequisite:** both `--collector.stat_statements` and
+  `--collector.stat_statements.include_query` must be enabled on the exporter; both are default-off
+  upstream. The local stack enables them in `docker-compose.local.yml`; production should review
+  the cardinality footprint of `include_query` (untruncated query text on every series) before
+  turning it on. Sketch:
+
+  ```promql
+  (
+    rate(pg_stat_statements_seconds_total{datname="wealthpay"}[15m])
+    >
+    3 * rate(pg_stat_statements_seconds_total{datname="wealthpay"}[1h] offset 24h)
+  )
+  * on(queryid) group_left(query) pg_stat_statements_query_id
+  ```
+
+  Fires when a queryid's 15m exec-time rate is more than 3× its rate 24h ago, with the query text
+  joined in for the alert annotation. Three caveats for the operator wiring this up:
+
+  - **Detects regressions of already-tracked queries only.** The comparison requires the queryid
+    to exist on BOTH arms of the rate expression (current and 24h-offset). A query that is hot
+    today but wasn't in the top-100 24h ago — the classic "missing index turned a previously-cheap
+    query pathological" / "new hot query" scenario — has no right-hand-side series, so the
+    expression silently produces no result rather than firing. This alert is for *"watch the
+    queries we're already watching, page if any of them got 3× worse"*; the orthogonal "we lost
+    track of a hot query" case is left to the existing `PgStatStatementsLruEvicting` placeholder.
+  - **queryid stability is not absolute.** queryids can shift on major version upgrades (always),
+    on `DROP`/`CREATE` of referenced objects (a deployment that replaces a function or recreates
+    a table will mint new queryids for queries that touched it), on cross-architecture replicas,
+    and — rarely, as a documented "last resort" — on minor upgrades. After any of these, the
+    `offset 24h` arm has no matching series for affected queries, producing false negatives for
+    ~24h. Document in the upgrade and migration runbooks.
+  - **Series rotate as queries enter and leave the exporter's top-100.** When a queryid drops out
+    of the top-100, both `pg_stat_statements_seconds_total` and `pg_stat_statements_query_id` stop
+    being emitted for it (Prometheus inserts an implicit staleness marker on the next scrape).
+    Both arms of the alert fall off in lockstep, so the failure mode is "alert stops being
+    possible for that queryid" rather than "alert fires with an empty annotation." Acceptable for
+    a warning-tier alert; if you need historical query-text recovery, query `pg_stat_statements`
+    directly from the DB by queryid while the row is still in the in-memory hashtable.
+
+  Reason this remains deferred (not shipped now): the `3×` regression factor and the `24h` offset
+  are workload-tuning choices that need a longer calibration baseline than this ADR's single
+  Gatling run provides — weekday/weekend mix, batch-job patterns, end-of-month effects. Re-engages
+  once the service has accumulated ≥2 weeks of production-shape traffic to baseline against, or
+  when a specific regression incident motivates ad-hoc tuning. The current
+  `PgStatStatementsLruEvicting` alert remains the placeholder for "your Top-N panel may be
+  incomplete" in the meantime.
 - **OpenTelemetry JDBC tracing spans.** Correlates with distributed traces but does not affect
   alerting. Separate workstream.
 - **Production-mode secrets for the monitoring role.** The local stack hard-codes `monitoring/monitoring`
