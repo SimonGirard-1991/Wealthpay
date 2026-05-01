@@ -20,29 +20,6 @@
 groups:
 
   # -------------------------------------------------------------------------
-  # Recording rules.
-  #
-  # On PG16, pg_replication_slots.inactive_since does not exist (added in
-  # PG17). Joining pg_stat_replication does not work either: the view has no
-  # row for an inactive slot. Derive the inactivity age in PromQL instead,
-  # keyed off the postgres-exporter built-in pg_replication_slots_active
-  # gauge. When this stack moves to PG17, replace this recording rule with a
-  # SQL-side metric in docker/sql-exporter/replication.collector.yml.
-  # -------------------------------------------------------------------------
-  - name: wealthpay-db-recording
-    rules:
-      - record: pg_replication_slot:inactive_age_seconds
-        # 7d subquery window: the inner expression returns no samples when
-        # the slot has been inactive for the entire lookback, which makes
-        # the recording rule output disappear. A 7d window keeps the alert
-        # active across a week of inactivity and survives a Prometheus
-        # restart for the same window. Cardinality cost is unchanged
-        # (one sample per slot per evaluation).
-        expr: |
-          time()
-          - last_over_time(timestamp(pg_replication_slots_active == 1)[7d:1m])
-
-  # -------------------------------------------------------------------------
   # Availability.
   # -------------------------------------------------------------------------
   - name: wealthpay-db-availability
@@ -95,13 +72,15 @@ groups:
         # 5 minutes is well above any plausible Debezium reconnect window
         # (default Debezium reconnect backoff caps at ~10s). Five minutes
         # of continuous inactivity is unambiguously "the consumer has died
-        # or been deliberately stopped". The recording rule's value goes
-        # into the annotation as a humanized duration.
+        # or been deliberately stopped".
         # for: 1m is defense-in-depth against a single missed scrape (e.g.
-        # postgres-exporter pod restart) momentarily making the recording
-        # rule produce a spuriously high value. Costs 1 minute of latency
-        # on a >5-minute outage; cheap.
-        expr: pg_replication_slot:inactive_age_seconds > 300
+        # postgres-exporter pod restart) momentarily producing a spurious
+        # value. Costs 1 minute of latency on a >5-minute outage; cheap.
+        # The pg_replication_slots_inactive_since_seconds series is absent
+        # while the slot is ACTIVE (NULL in pg_replication_slots.inactive_since
+        # → no row → no series), so this expression silently evaluates to
+        # nothing for healthy slots — exactly the desired behaviour.
+        expr: time() - pg_replication_slots_inactive_since_seconds > 300
         for: 1m
         labels:
           severity: warning
@@ -158,11 +137,11 @@ groups:
         # total at the time of writing). Above 30% means the WAL is
         # filling faster than the checkpoint_timeout window can drain it.
         expr: |
-          rate(pg_stat_bgwriter_checkpoints_req_total[10m])
+          rate(pg_stat_checkpointer_num_requested_total[10m])
           /
           (
-            rate(pg_stat_bgwriter_checkpoints_req_total[10m])
-            + rate(pg_stat_bgwriter_checkpoints_timed_total[10m])
+            rate(pg_stat_checkpointer_num_requested_total[10m])
+            + rate(pg_stat_checkpointer_num_timed_total[10m])
             > 0
           )
           > 0.3

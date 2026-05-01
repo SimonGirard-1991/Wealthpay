@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql
     command:
       - "postgres"
       - "-c"
@@ -58,7 +58,7 @@ services:
       retries: 5
 
   postgres-bootstrap:
-    image: postgres:16
+    image: postgres:18
     container_name: wealthpay-postgres-bootstrap
     depends_on:
       postgres:
@@ -111,6 +111,7 @@ services:
     command:
       - "--collector.stat_statements"
       - "--collector.stat_statements.include_query"
+      - "--collector.stat_checkpointer"
     # LOCAL-ONLY CREDENTIALS. In a non-local deployment, route through
     # Docker/K8s secrets and use DATA_SOURCE_PASS_FILE / DATA_SOURCE_URI_FILE.
     # Single-DB scrape: we intentionally do NOT enable auto-discovery, so

@@ -625,12 +625,12 @@
       },
       "targets": [
         {
-          "expr": "increase(pg_stat_bgwriter_checkpoints_timed_total[5m])",
+          "expr": "increase(pg_stat_checkpointer_num_timed_total[5m])",
           "legendFormat": "timed (5m)",
           "refId": "A"
         },
         {
-          "expr": "increase(pg_stat_bgwriter_checkpoints_req_total[5m])",
+          "expr": "increase(pg_stat_checkpointer_num_requested_total[5m])",
           "legendFormat": "requested (5m)",
           "refId": "B"
         }
@@ -663,12 +663,12 @@
       },
       "targets": [
         {
-          "expr": "increase(pg_stat_bgwriter_checkpoint_write_time_total[5m]) / (5 * 60 * 1000)",
+          "expr": "increase(pg_stat_checkpointer_write_time_total[5m]) / (5 * 60 * 1000)",
           "legendFormat": "write busy",
           "refId": "A"
         },
         {
-          "expr": "increase(pg_stat_bgwriter_checkpoint_sync_time_total[5m]) / (5 * 60 * 1000)",
+          "expr": "increase(pg_stat_checkpointer_sync_time_total[5m]) / (5 * 60 * 1000)",
           "legendFormat": "sync busy",
           "refId": "B"
         }

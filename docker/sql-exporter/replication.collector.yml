@@ -28,22 +28,6 @@
 #
 # WHAT'S NOT EMITTED HERE — and why:
 #
-#   - pg_replication_slots_inactive_age_seconds. The natural source is
-#     pg_replication_slots.inactive_since, added in PG17. This stack
-#     pins postgres:16 in docker-compose.local.yml, so the column does
-#     not exist server-side. Deriving "age of inactivity" by joining
-#     pg_stat_replication does not work either: pg_stat_replication has
-#     NO row for an inactive slot, so there's nothing to subtract a
-#     timestamp from. The correct PG16 mechanism is a Prometheus
-#     recording rule keyed off the existing pg_replication_slots_active
-#     metric:
-#         time()
-#         - timestamp(last_over_time((pg_replication_slots_active == 1)[1d:1m]))
-#     That recording rule lives alongside the alert in db.rules.yml.
-#     PG17 upgrade step: drop the recording rule, fold inactive_since
-#     into a SELECT in this collector, and reference the new metric
-#     directly from the alert.
-#
 #   - pg_replication_slots_active. Already emitted by postgres-exporter's
 #     built-in replication_slot collector. Duplicating it here would
 #     violate the explicit one-collector-per-gap rule documented in
@@ -91,6 +75,7 @@ queries:
       SELECT
         slot_name,
         slot_type,
+        EXTRACT(epoch FROM inactive_since)::double precision AS inactive_since_seconds,
         pg_wal_lsn_diff(
           s.cur_lsn,
           COALESCE(restart_lsn, s.cur_lsn)
@@ -103,4 +88,18 @@ metrics:
     help: "WAL bytes Postgres is retaining on disk for this slot (pg_current_wal_lsn() - restart_lsn). Distinct from pg_replication_slots_pg_wal_lsn_diff, which measures consumer lag against confirmed_flush_lsn. This is the correct disk-fill canary for logical-decoding consumers like Debezium: a consumer that ack'd recent records can still hold WAL hostage if restart_lsn does not advance. Alert on this, not on consumer lag, when sizing for retention pressure."
     key_labels: [slot_name, slot_type]
     values: [wal_retention_bytes]
+    query_ref: pg_replication_slots
+
+  # PG17+ adds pg_replication_slots.inactive_since; on this stack PG18
+  # (see Phase 2.1 image bump) the column is present. NULL while the slot
+  # is ACTIVE → no row in the value column → series ABSENT. Consumers
+  # compute inactivity age in PromQL as `time() - <this metric>`; absence
+  # is the desired signal for "slot is currently consuming". This replaces
+  # the PG16-era pg_replication_slot:inactive_age_seconds recording rule
+  # that previously lived in db.rules.yml.
+  - metric_name: pg_replication_slots_inactive_since_seconds
+    type: gauge
+    help: "Unix timestamp (seconds) when the slot last became inactive. Series ABSENT while the slot is active (NULL inactive_since → no value → no row). Compute `time() - pg_replication_slots_inactive_since_seconds` for inactivity age."
+    key_labels: [slot_name, slot_type]
+    values: [inactive_since_seconds]
     query_ref: pg_replication_slots
