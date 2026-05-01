@@ -11,7 +11,7 @@ public abstract class AbstractContainerTest {
 
   @Container
   static PostgreSQLContainer postgres =
-      new PostgreSQLContainer("postgres:16")
+      new PostgreSQLContainer("postgres:18")
           .withDatabaseName("wealthpay")
           .withUsername("wealthpay")
           .withPassword("wealthpay");
