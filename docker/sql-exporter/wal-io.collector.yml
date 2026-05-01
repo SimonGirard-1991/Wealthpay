@@ -25,16 +25,17 @@
 # All metrics are TYPE counter (cumulative since stats_reset). Use
 # rate()/increase() in PromQL — never the raw value.
 #
-# PG18 upgrade hazard: wal_write, wal_sync, wal_write_time, and
-# wal_sync_time are removed from pg_stat_wal and relocated to pg_stat_io
-# with object='wal' (write_time / fsync_time columns). Because Postgres
-# resolves column references at plan time, referencing the four moved
-# columns on PG18 fails the entire pg_stat_wal query at parse, silently
-# freezing ALL 8 pg_wal_stat_* metrics (not just the four that moved).
-# Fix on upgrade: split into a PG18-specific pg_stat_wal query that
-# selects only {records, fpi, bytes, buffers_full}, and source the four
-# timing/count columns from the pg_stat_io rows where object='wal'. See
-# docs/postgres-upgrade.md for the full runbook.
+# PG18 layout (current): wal_write, wal_sync, wal_write_time, and
+# wal_sync_time were removed from pg_stat_wal and relocated to pg_stat_io
+# with object='wal' (writes / fsyncs / write_time / fsync_time columns).
+# This collector uses the post-PG18 split: pg_stat_wal selects only the
+# four columns that remain {records, fpi, bytes, buffers_full}; the four
+# timing/count metrics source from a separate pg_stat_io_wal query
+# narrowed to backend_type='walwriter' (single relevant row, keeps the
+# metrics labels-free). The four PromQL metric names are PRESERVED across
+# the rewiring so dashboards and alerts referencing pg_wal_stat_* keep
+# working without panel-side edits. See docs/postgres-upgrade.md §PG18
+# for the full migration history.
 
 collector_name: pg_wal_io
 
@@ -49,17 +50,38 @@ queries:
     # deliberately because Prometheus samples are float64 regardless:
     # sql_exporter would perform this conversion internally anyway, and
     # doing it in SQL keeps the type explicit. Do NOT "optimize" this away.
+    #
+    # PG18: only four columns remain on pg_stat_wal. The wal_write /
+    # wal_sync / wal_write_time / wal_sync_time columns moved to
+    # pg_stat_io WHERE object='wal' and are surfaced via pg_stat_io_wal
+    # below.
     query: |
       SELECT
         wal_records,
         wal_fpi,
         wal_bytes::double precision AS wal_bytes,
-        wal_buffers_full,
-        wal_write,
-        wal_sync,
-        wal_write_time,
-        wal_sync_time
+        wal_buffers_full
       FROM pg_stat_wal
+  # PG18 source for what used to be pg_stat_wal.{wal_write, wal_sync,
+  # wal_write_time, wal_sync_time}. Narrowed to backend_type='walwriter'
+  # to keep the metric labels-free (single matching row on a primary; on
+  # a replica an additional 'walreceiver' row exists, which this stack
+  # does not run). This filter is the load-bearing assumption of the
+  # PG18 fix recipe and must be re-verified against live PG18 output
+  # during Phase 2.9 rehearsal — the postgres-upgrade.md runbook flags
+  # the same. The four metric names exposed downstream
+  # (pg_wal_stat_{write,sync}_total, pg_wal_stat_{write,sync}_time_*)
+  # are intentionally preserved across the relocation.
+  - query_name: pg_stat_io_wal
+    query: |
+      SELECT
+        writes     AS wal_write,
+        fsyncs     AS wal_sync,
+        write_time AS wal_write_time,
+        fsync_time AS wal_sync_time
+      FROM pg_stat_io
+      WHERE object = 'wal'
+        AND backend_type = 'walwriter'
   - query_name: pg_stat_io
     query: |
       SELECT
@@ -109,29 +131,31 @@ metrics:
     values: [wal_buffers_full]
     query_ref: pg_stat_wal
 
+  # The next four metrics moved to pg_stat_io WHERE object='wal' in PG18
+  # (see pg_stat_io_wal above). Names preserved for dashboard/alert continuity.
   - metric_name: pg_wal_stat_write_total
     type: counter
     help: "Number of times WAL was written to disk. Pair with pg_wal_stat_write_time_milliseconds_total to compute avg ms per WAL write (rate(time)/rate(count))."
     values: [wal_write]
-    query_ref: pg_stat_wal
+    query_ref: pg_stat_io_wal
 
   - metric_name: pg_wal_stat_sync_total
     type: counter
     help: "Number of WAL fsync operations issued. Pair with pg_wal_stat_sync_time_milliseconds_total to compute avg ms per WAL fsync."
     values: [wal_sync]
-    query_ref: pg_stat_wal
+    query_ref: pg_stat_io_wal
 
   - metric_name: pg_wal_stat_write_time_milliseconds_total
     type: counter
-    help: "Total time spent writing WAL buffers to disk, in milliseconds. Only non-zero when track_wal_io_timing is on."
+    help: "Total time spent writing WAL buffers to disk, in milliseconds. Only non-zero when track_io_timing is on (PG18 sources this from pg_stat_io.write_time, which is governed by track_io_timing rather than the legacy track_wal_io_timing)."
     values: [wal_write_time]
-    query_ref: pg_stat_wal
+    query_ref: pg_stat_io_wal
 
   - metric_name: pg_wal_stat_sync_time_milliseconds_total
     type: counter
-    help: "Total time spent syncing WAL files to disk, in milliseconds. Only non-zero when track_wal_io_timing is on. Rising values indicate fsync pressure on the WAL device."
+    help: "Total time spent syncing WAL files to disk, in milliseconds. Only non-zero when track_io_timing is on. Rising values indicate fsync pressure on the WAL device."
     values: [wal_sync_time]
-    query_ref: pg_stat_wal
+    query_ref: pg_stat_io_wal
 
   # ---------------------------------------------------------------------
   # pg_stat_io — ~23 rows (matches the top-of-file cardinality budget;
