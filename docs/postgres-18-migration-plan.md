@@ -1,7 +1,7 @@
 # PostgreSQL 16 → 18 Migration Plan
 
-> **Status:** Candidate runbook (2026-05-01) — pending pg-upgrader image rehearsal ([Phase 2.9](#phase-29--build-and-rehearse-the-pg-upgrader-image-blocking-gate-before-phase-3)) and Debezium offset-path confirmation ([Phase 6 step 0](#phase-6--recreate-debezium-connector)). Once Phase 2.9 passes against a disposable volume copy and Phase 6's chosen offset path is documented in the PR, promote to "Ready for execution". Distributable to agents per phase, but the BLOCKING gates must be respected — agents executing Phase 3+ must verify Phase 2.9 has been signed off by the human owner.
-> **Execution progress.** Phase 0 executed 2026-05-01; baseline captured to `~/wealthpay-pg-upgrade-baseline/` (8 files, all acceptance criteria met — see [Phase 0 status block](#phase-0--pre-flight-inventory--baseline-read-only)). Phase 1 is doc-only and already DECIDED. Phase 2 executed 2026-05-01 — both the Java track (2.0, commit `734cc46`) and the infra track (2.1–2.8, this PR's infra commit) on `feat/postgres-migration`; verification suite green (228 tests pass against PG18 Testcontainers, `docker buildx build docker/postgres/` succeeds, `promtool check rules` reports 0 errors on the 8 remaining rules) — see [Phase 2 status block](#phase-2--code--config-changes-single-pr-lands-but-does-not-run). **Next agent should start [Phase 2.9](#phase-29--build-and-rehearse-the-pg-upgrader-image-blocking-gate-before-phase-3)** — the `pg-upgrader` image rehearsal against a disposable copy of `wealthpay_pg_data`. Phase 2.9 is a BLOCKING gate before Phase 3; do not skip.
+> **Status:** Candidate runbook (2026-05-01) — pending Debezium offset-path confirmation ([Phase 6 step 0](#phase-6--recreate-debezium-connector)). Phase 2.9 (`pg-upgrader` image rehearsal) **PASSED 2026-05-01** against a disposable copy of `wealthpay_pg_data`; rehearsal evidence and findings recorded in [Phase 2.9 status block](#phase-29--build-and-rehearse-the-pg-upgrader-image-blocking-gate-before-phase-3). Once Phase 6's chosen offset path is documented in the PR, promote to "Ready for execution". Distributable to agents per phase, but the BLOCKING gates must be respected — agents executing Phase 3+ must verify Phase 2.9 has been signed off by the human owner.
+> **Execution progress.** Phase 0 executed 2026-05-01; baseline captured to `~/wealthpay-pg-upgrade-baseline/` (8 files, all acceptance criteria met — see [Phase 0 status block](#phase-0--pre-flight-inventory--baseline-read-only)). Phase 1 is doc-only and already DECIDED. Phase 2 executed 2026-05-01 — both the Java track (2.0, commit `734cc46`) and the infra track (2.1–2.8, this PR's infra commit) on `feat/postgres-migration`; verification suite green (228 tests pass against PG18 Testcontainers, `docker buildx build docker/postgres/` succeeds, `promtool check rules` reports 0 errors on the 8 remaining rules) — see [Phase 2 status block](#phase-2--code--config-changes-single-pr-lands-but-does-not-run). Phase 2.9 executed 2026-05-01 — `wealthpay-pg-upgrader:18` image built from `docker/pg-upgrader/Dockerfile`; `pg_upgrade --check` and `pg_upgrade --link` both exited 0 against the rehearsal clone; rehearsed PG18 cluster booted with the runtime image, reported PG18.3, preserved every contract-table row count exactly, and the pre-existing collation warning resolved as predicted. Six findings fed back into Phase 3 step 6, Phase 4a steps 1–2, and Phase 5 (see [Phase 2.9 status block](#phase-29--build-and-rehearse-the-pg-upgrader-image-blocking-gate-before-phase-3)). **Next agent should start [Phase 3](#phase-3--drain--backup-cluster-state-touching-immediately-precedes-upgrade)** — but human approval of the Phase 2.9 sign-off is the gate; do not skip.
 > **Plan-wide conventions (added after Phase 0 execution, applies to every phase that runs psql against the live cluster):**
 >   - **Compose invocation.** This repo's compose file is `docker-compose.local.yml` (and `docker-compose.local.linux.yml` on Linux), not the default `docker-compose.yml`. Plain `docker compose exec …` fails with `no configuration file provided`. Use `./scripts/infra.sh exec …` (it applies the right `-f` flags) — or pass `-f docker-compose.local.yml` explicitly. The Phase 0 commands have been rewritten to use `./scripts/infra.sh exec`; later phases still show plain `docker compose exec` and the executing agent must apply this same substitution.
 >   - **Flyway schema-history table location.** It lives in the **`account` schema** (Flyway is configured per-BC), so SQL must say `FROM account.flyway_schema_history` — not `FROM flyway_schema_history`. The Phase 0 step has been corrected; identical SQL appears in Phase 4.5 step 2 and Appendix A and must be qualified the same way.
@@ -422,6 +422,20 @@ PR description includes:
 
 ## Phase 2.9 — Build and rehearse the `pg-upgrader` image (BLOCKING gate before Phase 3)
 
+**Status (2026-05-01): EXECUTED.** Rehearsal succeeded against a disposable copy of `wealthpay_pg_data`. `pg_upgrade --check` exit 0; `pg_upgrade --link` exit 0; rehearsed PG18.3 cluster booted via `wealthpay-postgres-local` with the production GUC set, `pg_cron` preloaded, all six contract-table row counts identical to the Phase 0 baseline (`event_store=2 124 327`, `account_balance_view=718 004`, `account_snapshot=35`, `processed_transactions=1 159 354`, `processed_reservations=248 088`, `outbox_cleanup_log=19`), and the pre-existing collation-version warning (catalog 2.41 vs OS 2.36) resolved on the trixie-based PG18 image as predicted in Phase 0. The real `wealthpay_pg_data` volume was never mounted read-write; every read used `:ro` (load-bearing safety) and the before/after `ls -la` snapshots are identical except for an alpine-container `/v/..` mtime artefact. Logs preserved at `~/wealthpay-pg-upgrade-baseline/pg_upgrade.link.rehearsal.log`, `~/wealthpay-pg-upgrade-baseline/pg16-rehearsal-recovery.log`; full rehearsal report at `~/wealthpay-pg-upgrade-baseline/phase-2.9-rehearsal.md`.
+
+- **Image deliverable.** `docker/pg-upgrader/Dockerfile` committed; built locally as `wealthpay-pg-upgrader:18` (base `postgres:18-trixie`, packages `postgresql-16` 16.13-1.pgdg13+1, `postgresql-16-cron` 1.6.7-2.pgdg13+1, `postgresql-18-cron`, `locales-all`). Both `/usr/lib/postgresql/{16,18}/lib/pg_cron.so` present; `en_US.utf8` locale (the source's `LC_COLLATE`) available. Phase 4a's `ghcr.io/<org>/pg-upgrader:18` placeholder should be substituted with `wealthpay-pg-upgrader:18` (or whatever the operator pushes to a registry).
+- **Findings folded back into the runbook.** Six real configuration drifts were surfaced. Each was *recoverable* (none cross the `--link` cliff) but each adds friction the operator should not rediscover at execution time. The runbook now incorporates them inline so Phase 4a runs deterministically on the real volume:
+  1. **Phase 4a step 1** — wrapper directories `/v/16` and `/v/16/docker` come out of the staging `mv` as `root:root` mode 0755; postgres requires the data dir owned by `postgres` (UID 999) with mode 0700. A `chown -R 999:999 /v/16 && chmod 0700 /v/16/docker` was added to the step.
+  2. **Phase 4a step 2 (initdb)** — PG18's `initdb` enables data page checksums **by default**; the source has `Data page checksum version: 0`. The example now passes `--no-data-checksums` (and the comment is corrected — earlier wording suggested adding `--data-checksums` if checksums were on, but the PG18 default flip means we need `--no-data-checksums` when checksums are off).
+  3. **Phase 4a step 2 (initdb)** — this cluster's superuser is `user`, not `postgres`. Without `--username=user`, `pg_upgrade --check` later fails on the new-cluster side with `role "user" does not exist`. The example now passes `--username=user`.
+  4. **Phase 4a step 2 (`pg_upgrade --check`/`--link`)** — `pg_upgrade` starts both clusters internally without re-reading compose's `-c` flags. With `pg_cron` and `pg_stat_statements` only set via compose `command:` (not persisted in `postgresql.conf`/`postgresql.auto.conf`), the source startup fails (`logical replication slot "debezium" exists, but wal_level < logical`) and the target startup fails (`pg_cron` not loaded). Both invocations now pass `--old-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay"` and the same `--new-options=...`, plus `--username=user`. With these, the source-side checks pass cleanly *because Phase 3 step 6 has dropped the slot*.
+  5. **Phase 3 step 6 (slot drop)** — previously framed as "defence in depth" because today PG16-source slots aren't preserved by `pg_upgrade` regardless. The rehearsal proved it's actually **required** *given the conventions on this cluster* (see (4) above): without the slot drop, `pg_upgrade --check` errors out on the source side. Commentary updated.
+  6. **Phase 5 post-boot housekeeping** — `pg_upgrade` emits an `update_extensions.sql` that wants `ALTER EXTENSION pg_stat_statements UPDATE` (the bundled version moves 1.10 → 1.12 between PG16 and PG18; `pg_cron` is 1.6 in both, no change). Added to Phase 5's post-boot steps.
+- **Watch-items deferred to Phase 5.** Phase 2 flagged two checks for Phase 2.9 — (i) confirm `backend_type='walwriter'` is the right `pg_stat_io` row attribution on PG18 GA via `curl localhost:9399/metrics | grep pg_wal_stat`; (ii) confirm the volume name. (ii) was confirmed in Phase 2.9 step 0 (`wealthpay_pg_data`). (i) was **not** exercised in Phase 2.9 because the rehearsal step 7 boots only the postgres container, not the full compose stack including sql-exporter — so the exporter-grep step has no exporter to grep. Phase 5 step 1 (full stack up against the upgraded real volume) is the natural place; if `walwriter` is the wrong attribution there, all four `pg_wal_stat_*` series go silent and the filter must be widened per `postgres-upgrade.md §PG18`.
+- **Real volume state at end of Phase 2.9.** Untouched. Live PG16 still serving on port 5432 from `wealthpay_pg_data`. Rehearsal volume `wealthpay_pg_data_rehearsal` destroyed in step 8.
+- **Next phase:** [Phase 3](#phase-3--drain--backup-cluster-state-touching-immediately-precedes-upgrade) — drain & safety-net dump. Human approval of this sign-off is required before Phase 3 starts.
+
 **Assigned agent.** Agent prepares the Dockerfile + rehearsal harness and reports results; **human reviews and signs off before Phase 3 fires.** The image artefact itself is real engineering work outside the scope of this runbook — what this phase does is *gate* Phase 3 on that work having been done and rehearsed against a disposable copy of the real volume.
 
 **Goal.** Convert the `--link` upgrade from "a command in a runbook against a placeholder image" into "a tested artefact with a known exit code on a known input". The whole `--link` cliff is meaningless if the upgrader image cannot start — and we cannot find that out for the first time on the production-equivalent volume.
@@ -452,6 +466,8 @@ PR description includes:
    ```
    Apply the same `:ro` mount mode to any subsequent rehearsal command that reads from the real volume — cheap safety win, removes a class of "rehearsal accidentally mutated production" bugs.
 3. **Run the same volume-layout migration** from Phase 4a step 1 against the rehearsal volume (substitute `pg_data_rehearsal` for `pg_data`). Confirm pre-checks pass and no data is lost.
+
+   **Rehearsal-only prep — only if you cloned a *running* PG16.** Phase 4a runs against a cluster that Phase 3 step 7 has cleanly stopped, so the source datadir at execution time is already in `Database cluster state: shut down` and has no `postmaster.pid` or active replication slots in the way. The Phase 2.9 clone of a running PG16 is in `Database cluster state: in production` with a stale `postmaster.pid` and the live `debezium` slot — `pg_upgrade --check` rejects all three. Synthesize the post-Phase-3 state on the clone before step 4: remove the stale pid (`rm -f /v/16/docker/postmaster.pid`), boot the clone via `pg_ctl` with the same compose GUCs (`-c wal_level=logical -c max_replication_slots=10 -c max_wal_senders=12 -c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay`), drop the slot (`SELECT pg_drop_replication_slot('debezium')`), and `pg_ctl stop -m fast`. Confirm `pg_controldata` reports `shut down` before continuing. (If you cloned an already-stopped cluster — e.g. snapshotted after Phase 3 — skip this prep entirely.)
 4. **Initialize the PG18 target data directory — with locale and encoding extracted from the source.** `pg_upgrade` requires an *existing, initialized* new cluster *with matching encoding and locale*; if any of these diverge between source and target, `pg_upgrade --check` fails. The hand-rolled image needs an explicit `initdb`; only `pgautoupgrade` does this for you (and only if its entrypoint actually runs). Skip this step **only** if you chose Option A in step 1 *and* verified its README states the entrypoint runs `initdb`.
 
    **First, extract the source locale/encoding** so the values driving `initdb` are not hardcoded — the source cluster may not be `C.UTF-8`:
@@ -467,7 +483,9 @@ PR description includes:
    ```
    **STOP if** the source `LC_COLLATE` / `LC_CTYPE` is a locale not present in the PG18 image (`docker run --rm ghcr.io/<org>/pg-upgrader:18 locale -a` to enumerate). The image must include the source locale, otherwise `initdb` cannot reproduce it. Fix in the upgrader Dockerfile (`apt-get install locales-all` or generate the specific locale via `localedef`); do not improvise an "almost-matching" locale.
 
-   **Then run `initdb`** with the extracted values. The example below uses `en_US.UTF-8` — substitute whatever `pg_controldata` reported:
+   **Then run `initdb`** with the extracted values. The example below uses `en_US.utf8` — substitute whatever `pg_controldata` reported. The two non-default flags below are load-bearing on this cluster (this is the same flag set Phase 4a step 2 uses; see Phase 2.9 status block for the rationale):
+   - `--no-data-checksums` — PG18's `initdb` default flipped to ON; source has `Data page checksum version: 0`. They must match or `pg_upgrade --check` fails. If your source ever has `Data page checksum version: 1`, drop this flag and pass `--data-checksums` instead.
+   - `--username=user` — cluster's superuser is `user`, not `postgres`. Without this, `pg_upgrade --check` fails later with `role "user" does not exist` on the new-cluster side.
    ```bash
    docker run --rm -v pg_data_rehearsal:/var/lib/postgresql ghcr.io/<org>/pg-upgrader:18 \
      bash -lc '
@@ -475,19 +493,27 @@ PR description includes:
        rm -rf /var/lib/postgresql/18/docker
        mkdir -p /var/lib/postgresql/18/docker
        chown -R postgres:postgres /var/lib/postgresql/18
+       chmod 0700 /var/lib/postgresql/18/docker
        # Substitute the locale below with the value extracted from pg_controldata above.
-       su postgres -c "/usr/lib/postgresql/18/bin/initdb -D /var/lib/postgresql/18/docker --encoding=UTF8 --locale=en_US.UTF-8"
+       su postgres -c "/usr/lib/postgresql/18/bin/initdb \
+         -D /var/lib/postgresql/18/docker \
+         --encoding=UTF8 \
+         --locale=en_US.utf8 \
+         --no-data-checksums \
+         --username=user"
      '
    ```
-   If the source had `Data page checksum version: 1`, also pass `--data-checksums` to `initdb` — checksum settings must match across the upgrade. `pg_upgrade --check` in the next step will catch this if you miss it, but better to set it correctly the first time.
-5. **Run `pg_upgrade --check`** (not `--link`) first. This is non-mutating and proves the upgrader image can read both old and new clusters and produce an upgrade plan without surprises:
+5. **Run `pg_upgrade --check`** (not `--link`) first. This is non-mutating and proves the upgrader image can read both old and new clusters and produce an upgrade plan without surprises. Pass `--username=user` and the same `--old-options`/`--new-options` Phase 4a uses (see step 2 of that phase for the rationale — `pg_upgrade` starts both clusters internally without re-reading compose's `-c` flags, so `pg_cron` / `wal_level=logical` must be passed explicitly here):
    ```bash
    docker run --rm -v pg_data_rehearsal:/var/lib/postgresql ghcr.io/<org>/pg-upgrader:18 \
      /usr/lib/postgresql/18/bin/pg_upgrade --check \
        --old-bindir=/usr/lib/postgresql/16/bin \
        --new-bindir=/usr/lib/postgresql/18/bin \
        --old-datadir=/var/lib/postgresql/16/docker \
-       --new-datadir=/var/lib/postgresql/18/docker
+       --new-datadir=/var/lib/postgresql/18/docker \
+       --username=user \
+       --old-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay" \
+       --new-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay"
    ```
 6. **Run `pg_upgrade --link`** against the rehearsal volume. Capture stdout + stderr + exit status to a log file alongside the baseline.
 7. **Start the rehearsed PG18 cluster using the same custom image as runtime.** Bare `postgres:18-trixie` would not match the actual Phase 4a startup path: the runtime image is built from `docker/postgres/Dockerfile` (PGDG `postgres:18-trixie` + `postgresql-18-cron`), and runtime startup uses the compose `command:` block to set `shared_preload_libraries=pg_cron,pg_stat_statements` and the `track_*_io_timing` GUCs. Rehearsing with the bare image proves the wrong thing — pg_cron's preload would not run and you'd miss any pg_cron-vs-PG18 incompatibility. Build the runtime image first if not already cached, then start the rehearsed cluster with the same arguments compose would pass:
@@ -578,7 +604,7 @@ PR description includes:
    ```bash
    curl -X DELETE http://localhost:8083/connectors/wealthpay-outbox-connector
    ```
-6. **Drop the replication slots explicitly** (defence in depth). Connector deletion via the Kafka Connect REST API does **not** by default drop the underlying logical slot — the Debezium PostgreSQL connector's `drop.slots.on.stop` defaults to `false`. Today this is also harmless because `pg_upgrade --link` from a PG16 source cannot preserve logical slots regardless. But making the drop explicit removes a load-bearing assumption from the plan and means a future re-run on a PG17+ source (where slots *would* be preserved) doesn't silently inherit a stale slot. Target both the legacy `debezium` name AND `debezium_pg18` (Phase 6 Path C creates the latter; if a previous attempt got that far before being rolled back, the slot may still exist):
+6. **Drop the replication slots explicitly** (REQUIRED — promoted from "defence in depth" after the Phase 2.9 rehearsal). Connector deletion via the Kafka Connect REST API does **not** by default drop the underlying logical slot — the Debezium PostgreSQL connector's `drop.slots.on.stop` defaults to `false`. The Phase 2.9 rehearsal proved this step is *required* on this cluster, not just defensive: with the `debezium` slot still present at Phase 4a, `pg_upgrade`'s internal source-cluster startup falls back to `wal_level=replica` (because compose's `-c wal_level=logical` is not in the data-dir conf) and aborts with `logical replication slot "debezium" exists, but wal_level < logical`. `pg_upgrade --check` therefore exits non-zero — the upgrade is blocked until the slot is gone. The same explicit drop is also forward-compatible for a future re-run on a PG17+ source (where slots *would* be preserved by `pg_upgrade`) — it doesn't silently inherit a stale slot. Target both the legacy `debezium` name AND `debezium_pg18` (Phase 6 Path C creates the latter; if a previous attempt got that far before being rolled back, the slot may still exist):
    ```bash
    # Drop only inactive matching slots — pg_drop_replication_slot fails on active slots, by design.
    docker compose exec -T postgres psql -U user -d wealthpay -c \
@@ -657,9 +683,14 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
      find . -mindepth 1 -maxdepth 1 ! -name .stage-16 -exec mv {} .stage-16/ \;
      mkdir -p 16
      mv .stage-16 16/docker
+     # Wrapper dirs come out of the mkdir/mv as root:root mode 0755; postgres
+     # requires the data dir owned by postgres (UID 999) with mode 0700, or
+     # it refuses to start. Surfaced by the Phase 2.9 rehearsal.
+     chown -R 999:999 16
+     chmod 0700 16/docker
    '
    ```
-   This is a sequence of metadata-only `mv` operations within a single filesystem — no data copy, all renames are atomic per call. After it completes, the volume root contains exactly one entry, `/v/16/docker/` (the PG16 cluster), and PG18 will create `/v/18/docker/` once it starts. **Rollback for this step:** reverse the moves with `cd /v && mkdir -p .restore && find 16/docker -mindepth 1 -maxdepth 1 -exec mv {} .restore/ \; && rmdir 16/docker 16 && find .restore -mindepth 1 -maxdepth 1 -exec mv {} /v/ \; && rmdir .restore`.
+   This is a sequence of metadata-only `mv` operations within a single filesystem — no data copy, all renames are atomic per call. After it completes, the volume root contains exactly one entry, `/v/16/docker/` (the PG16 cluster) owned by `postgres:postgres` mode 0700, and PG18 will create `/v/18/docker/` once it starts. **Rollback for this step:** reverse the moves with `cd /v && mkdir -p .restore && find 16/docker -mindepth 1 -maxdepth 1 -exec mv {} .restore/ \; && rmdir 16/docker 16 && find .restore -mindepth 1 -maxdepth 1 -exec mv {} /v/ \; && rmdir .restore`.
 
 2. **Run pg_upgrade in a transient container** with both binaries installed. **Default to Option B (hand-rolled).** Option A (`pgautoupgrade`) is purpose-built for this scenario but its CLI surface is opinionated — `--link` is governed by environment variables and image-baked entrypoint behaviour, not a passthrough flag — and the plan should not load-bearingly assume those defaults without verifying the image's README. Option B has explicit `pg_upgrade` flags so what runs is what the plan reads.
 
@@ -691,7 +722,9 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
    ```
    STOP if the values differ from what Phase 2.9's rehearsal used; the rehearsal no longer represents the upgrade you're about to run, and Phase 2.9 must be re-rehearsed.
 
-   Then `initdb` the target — substitute the captured locale (and `--data-checksums` if `Data page checksum version: 1`):
+   Then `initdb` the target — substitute the captured locale. Note the two non-default flags below — they are load-bearing on this cluster (Phase 2.9 surfaced both):
+   - `--no-data-checksums` — PG18's `initdb` enables data page checksums **by default**, but our source cluster has `Data page checksum version: 0`. They must match or `pg_upgrade --check` fails. (If your source ever has `Data page checksum version: 1`, drop this flag and pass `--data-checksums` instead — but verify the source first.)
+   - `--username=user` — this cluster's superuser is `user` (POSTGRES_USER from compose), not the `postgres` default. Without this flag, `pg_upgrade --check` later fails on the new-cluster side with `role "user" does not exist`.
    ```bash
    docker run --rm \
      -v pg_data:/var/lib/postgresql \
@@ -701,11 +734,22 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
          rm -rf /var/lib/postgresql/18/docker
          mkdir -p /var/lib/postgresql/18/docker
          chown -R postgres:postgres /var/lib/postgresql/18
-         # Substitute the locale below with the value from pg_controldata above; add --data-checksums if source had checksums.
-         su postgres -c "/usr/lib/postgresql/18/bin/initdb -D /var/lib/postgresql/18/docker --encoding=UTF8 --locale=en_US.UTF-8"
+         chmod 0700 /var/lib/postgresql/18/docker
+         # Substitute the locale below with the value from pg_controldata above.
+         su postgres -c "/usr/lib/postgresql/18/bin/initdb \
+           -D /var/lib/postgresql/18/docker \
+           --encoding=UTF8 \
+           --locale=en_US.utf8 \
+           --no-data-checksums \
+           --username=user"
        '
    ```
-   **Run `pg_upgrade --check` first** (~30s), even though Phase 2.9 already passed it on a copy of this volume. Real-world drift between rehearsal and execution is cheap to catch here and catastrophic to discover after the `--link` cliff is crossed:
+   **Run `pg_upgrade --check` first** (~30s), even though Phase 2.9 already passed it on a copy of this volume. Real-world drift between rehearsal and execution is cheap to catch here and catastrophic to discover after the `--link` cliff is crossed.
+
+   Two flag groups below are load-bearing (Phase 2.9 surfaced both — same reasons as the `initdb` invocation above plus a third):
+   - `--username=user` — superuser name must match the source.
+   - `--old-options="..."` and `--new-options="..."` — `pg_upgrade` starts both clusters internally and does **not** re-read compose's `command:` `-c` flags. With `pg_cron` and `pg_stat_statements` only set via compose `command:` (not persisted in `postgresql.conf`/`postgresql.auto.conf`), the source startup falls back to `wal_level=replica` and `pg_cron` is not loadable on either side. Passing the preload through `-o`/`-O` makes both internal startups match production. The source-side startup also requires the `debezium` logical slot to be already gone — Phase 3 step 6 handles that.
+
    ```bash
    docker run --rm \
      -v pg_data:/var/lib/postgresql \
@@ -714,11 +758,14 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
          --old-bindir=/usr/lib/postgresql/16/bin \
          --new-bindir=/usr/lib/postgresql/18/bin \
          --old-datadir=/var/lib/postgresql/16/docker \
-         --new-datadir=/var/lib/postgresql/18/docker
+         --new-datadir=/var/lib/postgresql/18/docker \
+         --username=user \
+         --old-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay" \
+         --new-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay"
    ```
    STOP if `--check` exits non-zero — `--link` will fail in the same way and the cliff is uncrossed at this point. Investigate the diff between this volume and the Phase 2.9 rehearsal copy.
 
-   Then run the upgrade itself:
+   Then run the upgrade itself with the same flag set (only `--check` removed):
    ```bash
    docker run --rm \
      -v pg_data:/var/lib/postgresql \
@@ -727,9 +774,12 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
          --old-bindir=/usr/lib/postgresql/16/bin \
          --new-bindir=/usr/lib/postgresql/18/bin \
          --old-datadir=/var/lib/postgresql/16/docker \
-         --new-datadir=/var/lib/postgresql/18/docker
+         --new-datadir=/var/lib/postgresql/18/docker \
+         --username=user \
+         --old-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay" \
+         --new-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay"
    ```
-   If you prefer to keep the directory paths in env vars for readability, expand them inside the container via `sh -c`:
+   If you prefer to keep the directory paths in env vars for readability, expand them inside the container via `sh -c` — same flag set, just the datadirs hoisted:
    ```bash
    docker run --rm \
      -v pg_data:/var/lib/postgresql \
@@ -740,9 +790,12 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
          --old-bindir=/usr/lib/postgresql/16/bin \
          --new-bindir=/usr/lib/postgresql/18/bin \
          --old-datadir="$PGDATA_OLD" \
-         --new-datadir="$PGDATA_NEW"'
+         --new-datadir="$PGDATA_NEW" \
+         --username=user \
+         --old-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay" \
+         --new-options="-c shared_preload_libraries=pg_cron,pg_stat_statements -c cron.database_name=wealthpay"'
    ```
-   Either form is correct; the literal form is the documented default. Building this image is left as a sub-task; the upstream reference is [tianon/docker-postgres-upgrade](https://github.com/tianon/docker-postgres-upgrade).
+   Either form is correct; the literal form is the documented default. Building this image is left as a sub-task; the in-tree reference is [`docker/pg-upgrader/Dockerfile`](../docker/pg-upgrader/Dockerfile) (committed in Phase 2.9 as `wealthpay-pg-upgrader:18` — substitute that tag for `ghcr.io/<org>/pg-upgrader:18` if you have not pushed it to a registry).
 
 3. **Verify exit status is 0** and the new cluster directory exists:
    ```bash
@@ -757,11 +810,18 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
    ./scripts/infra.sh up -d
    ```
 
-6. **Run the post-upgrade analyze (HUMAN-OWNED).** PG18 preserves planner statistics through `pg_upgrade` from PG14+ sources, but the docs recommend a final pass to fill any gaps. Run **after** the cluster is up and accepting connections from step 5:
+6. **Run the post-upgrade analyze and the `update_extensions.sql` housekeeping (HUMAN-OWNED).** PG18 preserves planner statistics through `pg_upgrade` from PG14+ sources, but the docs recommend a final pass to fill any gaps. Run **after** the cluster is up and accepting connections from step 5:
    ```bash
    docker compose exec -T postgres vacuumdb -U user --all --analyze-in-stages --missing-stats-only
    ```
    This step *requires* the cluster to be running — that's why it lives on the human side of the boundary. An earlier draft of this plan placed the `vacuumdb` before `up -d` via a transient container; that was wrong because it would have started Postgres against the new layout before the human had reviewed the upgrade exit status.
+
+   Then apply the extension-version bump that `pg_upgrade` emitted (Phase 2.9 surfaced the contents — `pg_stat_statements` 1.10 → 1.12; `pg_cron` 1.6 → 1.6 = no change). The script is left in the new datadir alongside `pg_upgrade`'s logs:
+   ```bash
+   docker compose exec -T postgres psql -U user -d wealthpay -c "ALTER EXTENSION pg_stat_statements UPDATE;"
+   docker compose exec -T postgres psql -U user -d wealthpay -c "SELECT extname, extversion FROM pg_extension ORDER BY extname;"
+   ```
+   Expected post-update: `pg_cron 1.6`, `pg_stat_statements 1.12`, `plpgsql 1.0`. If the script left in the datadir lists more `ALTER EXTENSION ... UPDATE` lines than these (e.g. an extension was added between the rehearsal and execution), apply each one — re-extract the script from `/var/lib/postgresql/18/docker/pg_upgrade_output.d/<timestamp>/update_extensions.sql` (or wherever the upgrade log directory landed) before running.
 
 ### Acceptance criterion
 
