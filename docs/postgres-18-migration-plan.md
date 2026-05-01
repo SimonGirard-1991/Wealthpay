@@ -1,6 +1,11 @@
 # PostgreSQL 16 → 18 Migration Plan
 
 > **Status:** Candidate runbook (2026-05-01) — pending pg-upgrader image rehearsal ([Phase 2.9](#phase-29--build-and-rehearse-the-pg-upgrader-image-blocking-gate-before-phase-3)) and Debezium offset-path confirmation ([Phase 6 step 0](#phase-6--recreate-debezium-connector)). Once Phase 2.9 passes against a disposable volume copy and Phase 6's chosen offset path is documented in the PR, promote to "Ready for execution". Distributable to agents per phase, but the BLOCKING gates must be respected — agents executing Phase 3+ must verify Phase 2.9 has been signed off by the human owner.
+> **Execution progress.** Phase 0 executed 2026-05-01; baseline captured to `~/wealthpay-pg-upgrade-baseline/` (8 files, all acceptance criteria met — see [Phase 0 status block](#phase-0--pre-flight-inventory--baseline-read-only)). Phase 1 is doc-only and already DECIDED. **Next agent should start Phase 2** (the Java track 2.0 with `java-backend-architect`, in parallel with the infra track 2.1–2.8 with `general-purpose`).
+> **Plan-wide conventions (added after Phase 0 execution, applies to every phase that runs psql against the live cluster):**
+>   - **Compose invocation.** This repo's compose file is `docker-compose.local.yml` (and `docker-compose.local.linux.yml` on Linux), not the default `docker-compose.yml`. Plain `docker compose exec …` fails with `no configuration file provided`. Use `./scripts/infra.sh exec …` (it applies the right `-f` flags) — or pass `-f docker-compose.local.yml` explicitly. The Phase 0 commands have been rewritten to use `./scripts/infra.sh exec`; later phases still show plain `docker compose exec` and the executing agent must apply this same substitution.
+>   - **Flyway schema-history table location.** It lives in the **`account` schema** (Flyway is configured per-BC), so SQL must say `FROM account.flyway_schema_history` — not `FROM flyway_schema_history`. The Phase 0 step has been corrected; identical SQL appears in Phase 4.5 step 2 and Appendix A and must be qualified the same way.
+>   - **stderr noise from psql.** The DB currently emits `WARNING: database "wealthpay" has a collation version mismatch` (DB built with collation 2.41, OS provides 2.36). It is pre-existing and orthogonal to this migration. Capture commands MUST redirect only `stdout` to baseline files; merging `stderr` (`2>&1`) contaminates the strict-diff target. Phase 4.5/5 agents should re-check whether the post-upgrade PG18 image still emits this; either way, the `before` files captured in Phase 0 are clean.
 > **Owner:** _unassigned human_. Replace before circulation.
 > **Decisions locked in.** Method: `pg_upgrade --link`. Debezium: `snapshot.mode=never`. See [Appendix B — Decision log](#appendix-b--decision-log). Agents do not re-litigate these.
 > **Agent assignments.** Each phase header carries its `Assigned agent` line. The Java-side audit (Phase 2.0) goes to `java-backend-architect`; everything else is `general-purpose` with `code-reviewer` consulted at the Phase 7 PR gate. Irreversible steps ([Phase 4a step 5](#phase-4a--execute-pg_upgrade---link-chosen-method) and [Phase 8 merge](#phase-8--re-baseline-adr-008--merge)) end agent autonomy and require human action.
@@ -10,16 +15,17 @@
 
 ## TL;DR
 
-- **Goal.** Move the Wealthpay local stack from `postgres:16-bookworm` to `postgres:18` in one hop, skipping PG17 entirely.
+- **Goal.** Move the Wealthpay local stack from `postgres:16-bookworm` to `postgres:18-trixie` in one hop, skipping PG17 entirely. The base-OS flip from bookworm (Debian 12) to trixie (Debian 13) is deliberate — it restores the project's original pre-`bd3d365` "moving major-tag" convention and aligns the runtime glibc with the catalog's stamped collation version (resolves the pre-existing `collation version mismatch` WARNING at the same time as the major bump).
 - **Method (decided): `pg_upgrade --link`** via a transient upgrade container — see [Phase 4a](#phase-4a--execute-pg_upgrade---link-chosen-method). Chosen explicitly over `pg_dumpall + restore` because this is a learning project where production-realism matters more than rollback simplicity, and the planner-statistics preservation is a real benefit. Phase 4b is retained as a documented fallback only — it is **not** the chosen path and agents should not execute it without re-opening Phase 1.
 - **Debezium snapshot mode (decided): `snapshot.mode=never`.** Production-strict behaviour, no duplicate Kafka traffic. The trade-off is brittleness on the freshly-recreated slot (Phase 6.3 details the contract); this is accepted for production-realism reasons.
 - **Two hazards documented in the companion doc are real and must both be applied,** because we leapfrog PG17:
   1. PG17 hazard — `pg_stat_bgwriter` checkpoint columns relocate to `pg_stat_checkpointer`.
   2. PG18 hazard — `pg_stat_wal` WAL-I/O columns relocate to `pg_stat_io WHERE object='wal'`.
-- **Three additional concerns this plan introduces** that the companion doc does not cover:
+- **Four additional concerns this plan introduces** that the companion doc does not cover:
   - PG18 Docker image changes `PGDATA` from `/var/lib/postgresql/data` to `/var/lib/postgresql/18/docker` and changes the declared `VOLUME` to `/var/lib/postgresql`. The existing named-volume mount in [`docker-compose.local.yml`](../docker-compose.local.yml) breaks on a naive image-tag bump.
   - `pg_upgrade` preserves logical replication slots **only when the source cluster is ≥ PG17**. We are on PG16, so the Debezium slot will not survive — it must be drained, dropped, and recreated, with the connector restarted in `snapshot.mode=never`.
   - PG18 ships with `io_method=worker` enabled by default (asynchronous I/O). This is a behaviour change relative to PG16's synchronous I/O. The under-load baselines in [ADR-008](adr/008-db-observability-slos.md) need re-sampling after the upgrade — they are not invalid, but they are no longer the *current* baseline.
+  - The base-OS flip from bookworm to trixie bumps glibc from 2.36 to ~2.41 (and OpenSSL 3.0 → 3.5, libicu72 → libicu76). For B-tree text indexes the locale-library version is part of the sort-order contract — `pg_upgrade --check` validates it. The flip is *with* us here: it brings runtime glibc in line with the catalog's stamped 2.41, eliminating the pre-existing collation-version warning rather than leaving it as a latent index-correctness footgun. Same ADR-008 re-sample covers it; no extra acceptance burden, but Phase 5 should explicitly note all three drift sources (PG cumulative-stats reset, `io_method=worker`, glibc 2.36 → 2.41) when the new baseline is published.
 
 ---
 
@@ -48,6 +54,8 @@ Explicitly **out of scope** for this migration; do not let agents drag them in:
 
 ## Phase 0 — Pre-flight inventory & baseline (READ-ONLY)
 
+**Status (2026-05-01): EXECUTED.** Baseline captured at `~/wealthpay-pg-upgrade-baseline/` — 8 files, all acceptance criteria met. Slot lag was 916 KB (well under 50 MB), all 8 `pg_wal_stat_*` and 4 `pg_stat_bgwriter_checkpoint*` series present. Preserved row counts at baseline: `event_store=2 124 327`, `account_balance_view=718 004`, `account_snapshot=35`, `processed_transactions=1 159 354`, `processed_reservations=248 088`, `outbox_cleanup_log=19`. Outbox (informational): `41 681`. Flyway head: V17 (outbox enable pg cron), 18 history rows, all `success=t`. Active alerts: only the always-firing `Watchdog` (heartbeat alert; expected). **Pre-existing observation that is *expected to resolve itself* during the upgrade:** psql emits `WARNING: database "wealthpay" has a collation version mismatch` (DB built with collation 2.41, OS provides 2.36). The `2.41` matches glibc 2.41 (trixie); the `2.36` matches glibc 2.36 (bookworm). The Phase 2.1 image flip from `postgres:16-bookworm` to `postgres:18-trixie` aligns runtime glibc with the catalog's stamped value, so the warning **should disappear** on first connection to the post-upgrade cluster. Phase 5 step 1 (post-upgrade `psql -c "SELECT version();"`) is the natural place to confirm this. If the warning persists after Phase 5 step 1 against the trixie-based PG18 image, that's an unexpected outcome and should be escalated rather than ignored. **Next phase:** Phase 2 (the Java track 2.0 in parallel with the infra track 2.1–2.8). Phase 1 is decision-only and frozen.
+
 **Assigned agent.** `general-purpose`. Pure read-only Bash/curl/psql; nothing Java-side.
 
 **Goal.** Capture a complete pre-upgrade snapshot so post-upgrade verification has something to compare against. Nothing in this phase mutates the cluster, the volumes, or any compose service.
@@ -55,6 +63,8 @@ Explicitly **out of scope** for this migration; do not let agents drag them in:
 **Scope.** ~30 minutes including data capture.
 
 **Inputs.** Running PG16 stack, all dashboards green, Debezium connector in RUNNING state.
+
+**Repo invocation note.** This repository's compose file is `docker-compose.local.yml` (and `docker-compose.local.linux.yml` on Linux), not the default `docker-compose.yml`. Plain `docker compose exec …` therefore fails with `no configuration file provided`. Use `./scripts/infra.sh exec …` (it forwards args after applying the right `-f` flags) — or pass `-f docker-compose.local.yml` explicitly. The commands below use `./scripts/infra.sh exec`. This convention applies to every later phase that runs `psql` against the running cluster (Phase 3, Phase 4.5, Phase 5).
 
 **Steps.**
 
@@ -78,16 +88,16 @@ Explicitly **out of scope** for this migration; do not let agents drag them in:
    ```
 4. Confirm Debezium has fully drained the slot:
    ```bash
-   docker compose exec -T postgres psql -U user -d wealthpay -c \
+   ./scripts/infra.sh exec -T postgres psql -U user -d wealthpay -c \
      "SELECT slot_name, active, pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS lag_bytes,
              pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS retention_bytes
         FROM pg_replication_slots;"
    ```
    Confirm `active=t` and `lag_bytes` is single-digit MB or less. If lag > 50 MB, hold and let the consumer drain before progressing.
-5. Capture row counts for the data-preservation contract (R1) into **two separate files** — preserved-only and outbox-informational. Splitting them is what makes Phase 4.5 agent-safe: the strict diff is over the preserved file (must be empty), and the outbox count is captured for context (allowed to differ due to 3-day partition retention; not part of the preservation contract):
+5. Capture row counts for the data-preservation contract (R1) into **two separate files** — preserved-only and outbox-informational. Splitting them is what makes Phase 4.5 agent-safe: the strict diff is over the preserved file (must be empty), and the outbox count is captured for context (allowed to differ due to 3-day partition retention; not part of the preservation contract). The redirects deliberately keep stderr on the terminal — `psql` emits a `collation version mismatch` WARNING on this DB, and merging it into the file would contaminate the strict-diff target:
    ```bash
    # Preserved tables — strict diff target. The Phase 4.5 acceptance criterion is "this file's diff is empty."
-   docker compose exec -T postgres psql -U user -d wealthpay -F$'\t' -c \
+   ./scripts/infra.sh exec -T postgres psql -U user -d wealthpay -F$'\t' -c \
      "SELECT 'event_store' AS t, count(*) FROM account.event_store
       UNION ALL SELECT 'account_balance_view',     count(*) FROM account.account_balance_view
       UNION ALL SELECT 'account_snapshot',         count(*) FROM account.account_snapshot
@@ -96,14 +106,14 @@ Explicitly **out of scope** for this migration; do not let agents drag them in:
       UNION ALL SELECT 'outbox_cleanup_log',       count(*) FROM account.outbox_cleanup_log;" \
      > ~/wealthpay-pg-upgrade-baseline/row-counts.preserved.before
    # Outbox — informational only. Captured for the PR description; never part of an acceptance diff.
-   docker compose exec -T postgres psql -U user -d wealthpay -F$'\t' -c \
+   ./scripts/infra.sh exec -T postgres psql -U user -d wealthpay -F$'\t' -c \
      "SELECT 'outbox (all partitions)' AS t, count(*) FROM account.outbox;" \
      > ~/wealthpay-pg-upgrade-baseline/row-counts.outbox.before
    ```
-6. Capture the Flyway schema-history fingerprint:
+6. Capture the Flyway schema-history fingerprint. The history table lives in the **`account` schema** (not `public`) — Flyway is configured per-BC, so the fully-qualified `account.flyway_schema_history` is required:
    ```bash
-   docker compose exec -T postgres psql -U user -d wealthpay -c \
-     "SELECT installed_rank, version, description, success FROM flyway_schema_history ORDER BY installed_rank;" \
+   ./scripts/infra.sh exec -T postgres psql -U user -d wealthpay -c \
+     "SELECT installed_rank, version, description, success FROM account.flyway_schema_history ORDER BY installed_rank;" \
      > ~/wealthpay-pg-upgrade-baseline/flyway.before
    ```
 7. Capture the active alert state from Prometheus (so a post-upgrade silent-firing change is detectable):
@@ -141,7 +151,7 @@ Explicitly **out of scope** for this migration; do not let agents drag them in:
 | Logical replication slots preserved | **No** (requires source ≥ PG17; we are PG16) | No |
 | Rollback after new cluster starts writing | **Impossible** (hard links shared; old cluster is corrupted on first new-cluster write) | Possible (old volume untouched) |
 | Docker volume layout migration | Required (one-time `data/` → `16/docker/` rename) | Avoided (fresh PG18 volume) |
-| Container complexity | High — needs a transient container with both PG16 and PG18 binaries (e.g. `pgautoupgrade/pgautoupgrade:18`) | Low — two `docker compose` invocations |
+| Container complexity | High — needs a transient container with both PG16 and PG18 binaries (e.g. `pgautoupgrade/pgautoupgrade:18-trixie`) | Low — two `docker compose` invocations |
 | Production realism | High — same approach used in production | Low — production at scale cannot afford the dump time |
 
 **Decision (locked in 2026-04-30).** `pg_upgrade --link` (Phase 4a). Rationale captured for the audit trail:
@@ -186,9 +196,9 @@ The PR description for Phase 2 cites this section verbatim and includes the line
    -      new PostgreSQLContainer("postgres:16")
    +      new PostgreSQLContainer("postgres:18")
    ```
-   The Testcontainers image must match the runtime PostgreSQL **major version**. Earlier wording said the tag must match "exactly", but the runtime uses `postgres:18-bookworm` (because the local Dockerfile builds on it for pg_cron) while the Testcontainers image is the bare upstream `postgres:18` (no pg_cron, faster CI pull). That mismatch is intentional and correct — the integration tests don't exercise pg_cron, and forcing them onto `postgres:18-bookworm` would just slow down CI without testing anything new. The contract is: same major version (PG18 ↔ PG18), not byte-identical tags.
+   The Testcontainers image must match the runtime PostgreSQL **major version**. Earlier wording said the tag must match "exactly", but the runtime uses `postgres:18-trixie` (because the local Dockerfile builds on it for pg_cron) while the Testcontainers image is the bare upstream `postgres:18` (no pg_cron, faster CI pull). That mismatch is intentional and correct — the integration tests don't exercise pg_cron, and forcing them onto `postgres:18-trixie` would just slow down CI without testing anything new. The contract is: same major version (PG18 ↔ PG18), not byte-identical tags.
 
-   **Note:** [`AbstractContainerTest.java`](../src/test/java/org/girardsimon/wealthpay/account/infrastructure/db/repository/AbstractContainerTest.java) uses the stock `postgres:16` image, **not** the local custom Dockerfile. This is correct — the integration tests don't need pg_cron, and pulling the bare upstream image keeps CI fast. Do **not** switch this to `postgres:18-bookworm` unless a test specifically depends on the pg_cron extension being present (none currently do).
+   **Note:** [`AbstractContainerTest.java`](../src/test/java/org/girardsimon/wealthpay/account/infrastructure/db/repository/AbstractContainerTest.java) uses the stock `postgres:16` image, **not** the local custom Dockerfile. This is correct — the integration tests don't need pg_cron, and pulling the bare upstream image keeps CI fast. Do **not** switch this to `postgres:18-trixie` unless a test specifically depends on the pg_cron extension being present (none currently do).
 
 2. **Audit `pom.xml` for PG18 compatibility.** For each library version pinned in [`pom.xml`](../pom.xml), verify against upstream changelogs that the pinned version supports PG18. The current pins:
    - **Spring Boot 4.0.2** (line 8) — Spring Boot 4.x is PG18-aware out of the box.
@@ -240,11 +250,11 @@ A separate commit on the Phase 2 feature branch titled `chore(test): bump Testco
 
 ### 2.1 `docker/postgres/Dockerfile`
 
-Bump base image and pg_cron package version.
+Bump base image and pg_cron package version. **Base flavor flips from `bookworm` (Debian 12) to `trixie` (Debian 13)** — see rationale below.
 
 ```diff
 -FROM postgres:16-bookworm
-+FROM postgres:18-bookworm
++FROM postgres:18-trixie
 
  RUN apt-get update \
 -    && apt-get install -y --no-install-recommends postgresql-16-cron \
@@ -252,7 +262,9 @@ Bump base image and pg_cron package version.
      && rm -rf /var/lib/apt/lists/*
 ```
 
-The `postgresql-18-cron` package is published by `apt.postgresql.org` (PGDG); no third-party source needed.
+The `postgresql-18-cron` package is published by `apt.postgresql.org` (PGDG) for both `bookworm-pgdg` and `trixie-pgdg` on `arm64` (verified 2026-05-01); no third-party source needed.
+
+**Why trixie, not bookworm.** The project's original `docker-compose.local.yml` used bare `postgres:16` (a moving major-tag, glibc-flavor decided by upstream). The `postgres:16-bookworm` pin only landed at commit `bd3d365` *to make `postgresql-16-cron` install reliably* (PGDG packaging timing at the time). That tactical pin had a side-effect: the catalog had been initialized against a trixie-glibc base earlier, which is why `psql` currently emits `WARNING: database "wealthpay" has a collation version mismatch (DB 2.41 vs OS 2.36)` — `2.41` is glibc 2.41 (trixie), `2.36` is glibc 2.36 (bookworm). Going to `postgres:18-trixie` aligns the runtime glibc with the catalog's stamped version, resolves the warning *for the right reason* (rather than papering over it with `ALTER DATABASE … REFRESH COLLATION VERSION`), and matches the project's pre-bookworm convention. As a bonus, the upgrader image (`pgautoupgrade/pgautoupgrade:18-*`) is only published for trixie/debian/alpine — no bookworm — so trixie also aligns the source image with the upgrade tool, eliminating a glibc cross-image discrepancy during `pg_upgrade --link`.
 
 ### 2.2 `docker-compose.local.yml`
 
@@ -422,8 +434,8 @@ PR description includes:
    If the inspect fails, **stop and resolve the actual volume name** before continuing. Substitute the real name everywhere `pg_data` appears in this phase and Phase 4a — do not improvise.
 
 1. **Build the upgrader image.** Two acceptable shapes:
-   - Hand-rolled, based on `postgres:18-bookworm` with `apt-get install postgresql-16 postgresql-16-cron postgresql-18-cron`. This is the documented default — the build is reproducible from the Dockerfile alone and the binaries are PGDG-published.
-   - `pgautoupgrade/pgautoupgrade:18-bookworm`. Allowed if (and only if) its README documents `--link` mode for the version pulled, and the entrypoint behaviour matches what Phase 4a expects.
+   - Hand-rolled, based on `postgres:18-trixie` with `apt-get install postgresql-16 postgresql-16-cron postgresql-18-cron`. This is the documented default — the build is reproducible from the Dockerfile alone and the binaries are PGDG-published. **Trixie matches the main runtime image (Phase 2.1) and the upstream `pgautoupgrade` PG18 line — keeping glibc identical across all three avoids cross-image collation-version surprises during `pg_upgrade --link`.**
+   - `pgautoupgrade/pgautoupgrade:18-trixie`. Allowed if (and only if) its README documents `--link` mode for the version pulled, and the entrypoint behaviour matches what Phase 4a expects. Note: the `:18-bookworm` tag does not exist on Docker Hub — `:18-trixie` / `:18-debian` / `:18-alpine` are the published flavors as of 2026-04-26.
 2. **Create a disposable rehearsal volume from the real one — mount the real volume read-only** so the cp cannot accidentally write back. This makes the "real volume not touched" claim true *by construction*, not by inspection after the fact:
    ```bash
    docker volume create pg_data_rehearsal
@@ -469,7 +481,7 @@ PR description includes:
        --new-datadir=/var/lib/postgresql/18/docker
    ```
 6. **Run `pg_upgrade --link`** against the rehearsal volume. Capture stdout + stderr + exit status to a log file alongside the baseline.
-7. **Start the rehearsed PG18 cluster using the same custom image as runtime.** Bare `postgres:18-bookworm` would not match the actual Phase 4a startup path: the runtime image is built from `docker/postgres/Dockerfile` (PGDG `postgres:18-bookworm` + `postgresql-18-cron`), and runtime startup uses the compose `command:` block to set `shared_preload_libraries=pg_cron,pg_stat_statements` and the `track_*_io_timing` GUCs. Rehearsing with the bare image proves the wrong thing — pg_cron's preload would not run and you'd miss any pg_cron-vs-PG18 incompatibility. Build the runtime image first if not already cached, then start the rehearsed cluster with the same arguments compose would pass:
+7. **Start the rehearsed PG18 cluster using the same custom image as runtime.** Bare `postgres:18-trixie` would not match the actual Phase 4a startup path: the runtime image is built from `docker/postgres/Dockerfile` (PGDG `postgres:18-trixie` + `postgresql-18-cron`), and runtime startup uses the compose `command:` block to set `shared_preload_libraries=pg_cron,pg_stat_statements` and the `track_*_io_timing` GUCs. Rehearsing with the bare image proves the wrong thing — pg_cron's preload would not run and you'd miss any pg_cron-vs-PG18 incompatibility. Build the runtime image first if not already cached, then start the rehearsed cluster with the same arguments compose would pass:
    ```bash
    # Build the runtime image (no-op if already built):
    docker build -t wealthpay-postgres-local docker/postgres
@@ -645,14 +657,14 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
    Option A — `pgautoupgrade` (only if you have verified the image's documented behaviour for the version you pull):
    ```bash
    # Verify the image's CLI surface FIRST before running this:
-   docker run --rm pgautoupgrade/pgautoupgrade:18-bookworm --help 2>&1 | head -40
+   docker run --rm pgautoupgrade/pgautoupgrade:18-trixie --help 2>&1 | head -40
    # If the help output does not document a --link mode (or the equivalent
    # env var), abandon Option A and use Option B. Do NOT pass --link as a
    # flag without confirming the entrypoint forwards it.
    docker run --rm \
      -v pg_data:/var/lib/postgresql \
      -e PGAUTO_ONESHOT=yes \
-     pgautoupgrade/pgautoupgrade:18-bookworm
+     pgautoupgrade/pgautoupgrade:18-trixie
    ```
    The image detects the existing PG16 cluster, runs `pg_upgrade` (in `--link` mode by default per the project's docs at the time of writing), and exits.
 
@@ -1513,7 +1525,7 @@ at repo root, leave uncommitted) must include:
 
 STOP CONDITIONS — return immediately and escalate:
   - apt-get install postgresql-18-cron fails inside the new Dockerfile
-    build — may need to add the PGDG repo to the postgres:18-bookworm
+    build — may need to add the PGDG repo to the postgres:18-trixie
     base; flag and ask
   - the pg_stat_io WAL backend_type for sub-phase 2.4 cannot be confirmed
     against upstream PG18 docs — the plan flags this as the load-bearing
@@ -1550,7 +1562,7 @@ JOB: the nine numbered steps in Phase 2.9 (0 through 8) verbatim.
      succeed. If it does not, STOP and resolve the actual Compose
      volume name; do NOT improvise.
   1. Build (or pull) the pg-upgrader image (default: hand-rolled, based
-     on postgres:18-bookworm with postgresql-16, postgresql-16-cron,
+     on postgres:18-trixie with postgresql-16, postgresql-16-cron,
      postgresql-18-cron added).
   2. Create a disposable rehearsal volume from the real pg_data volume
      via cp -a. The real volume must remain untouched.
@@ -1565,7 +1577,7 @@ JOB: the nine numbered steps in Phase 2.9 (0 through 8) verbatim.
   7. Start the rehearsed PG18 cluster using the SAME custom image
      (wealthpay-postgres-local) and SAME GUCs as runtime. Verify
      version, row counts, pg_extension, and SHOW shared_preload_libraries.
-     Do NOT use bare postgres:18-bookworm.
+     Do NOT use bare postgres:18-trixie.
   8. Destroy the rehearsal volume.
 
 DELIVERABLE: a markdown report covering:
@@ -1730,7 +1742,7 @@ STOP CONDITIONS — return immediately and escalate:
     rmdir 16/docker 16). Do NOT run it without human approval — surface
     the failure first. Do NOT use the older single-line `mv /v/16/docker
     /v/data` form (it does not match the actual volume layout).
-  - pgautoupgrade/pgautoupgrade:18-bookworm image is unavailable for the
+  - pgautoupgrade/pgautoupgrade:18-trixie image is unavailable for the
     host architecture. Escalate; do NOT fall back to dump/restore.
   - vacuumdb fails (likely indicates the upgrade left the cluster in a
     broken state)
