@@ -1378,23 +1378,46 @@ Step 8 (Grafana visual) verified by proxy — all three named dashboards (`Datab
    diff ~/wealthpay-pg-upgrade-baseline/sql-exporter.before     ~/wealthpay-pg-upgrade-baseline/sql-exporter.after
    ```
 
-2. **R3 — no silent CDC data loss:** the smoke test from Phase 6.7 covers one happy-path event. To exercise the failure-mode coverage, run a Gatling spike and confirm the projection catches up. The two tables grow on different axes — `event_store` is **per event** (open + N credits/debits + close per account), `account_balance_view` is **per aggregate** (one row per opened account, updated in place by subsequent events) — so they do not grow proportionally. Use two narrower invariants instead of comparing raw counts:
+2. **R3 — no silent CDC data loss:** the smoke test from Phase 6.7 covers one happy-path event. To exercise the failure-mode coverage, run a Gatling spike and confirm the projection catches up. The two tables grow on different axes — `event_store` is **per event** (open + N credits/debits + close per account), `account_balance_view` is **per aggregate** (one row per opened account, updated in place by subsequent events) — so they do not grow proportionally. Use two narrower invariants instead of comparing raw counts. **Capture `pg_postmaster_start_time` first** so invariant 2 can be cutover-anchored (the question the migration must answer is "did the *new* cluster's CDC drop anything?", not "is there any drift across all of history?" — pre-cutover drift carried over by `pg_upgrade --link` is preserved data, not a migration-induced regression):
    ```bash
    mvn -Pgatling gatling:test
    sleep 30
+
+   # Capture cutover boundary (pg_postmaster_start_time of the PG18 cluster)
+   CUTOVER_TS=$(docker compose exec -T postgres psql -U user -d wealthpay -At -c \
+     "SELECT pg_postmaster_start_time();")
+   echo "cutover boundary: ${CUTOVER_TS}"
+
    # Invariant 1: both counts strictly increased vs Phase 0 baseline (proves CDC produced *some* output)
    docker compose exec -T postgres psql -U user -d wealthpay -c \
      "SELECT count(*) AS event_store_count FROM account.event_store;"
    docker compose exec -T postgres psql -U user -d wealthpay -c \
      "SELECT count(*) AS balance_view_count FROM account.account_balance_view;"
-   # Invariant 2: every aggregate that has an event in event_store is projected exactly once into account_balance_view.
-   # This is the load-bearing check — it catches silent per-aggregate drops, which the count-comparison cannot.
+
+   # Invariant 2 (LOAD-BEARING, cutover-anchored): every aggregate whose
+   # FIRST event landed AFTER the PG18 cluster started must be projected
+   # into account_balance_view. This is the migration-relevant question.
+   docker compose exec -T postgres psql -U user -d wealthpay -c "
+     WITH post_cutover_aggregates AS (
+       SELECT account_id
+         FROM account.event_store
+        GROUP BY account_id
+       HAVING min(created_at) > '${CUTOVER_TS}'
+     )
+     SELECT count(*) AS post_cutover_aggregates_missing_from_projection
+       FROM (SELECT account_id FROM post_cutover_aggregates
+             EXCEPT
+             SELECT account_id FROM account.account_balance_view) miss;
+   "
+
+   # Invariant 2 — strict form (forensics only): catches ALL drift, including
+   # pre-cutover legacy state. Use to surface debt, not as a stop condition.
    docker compose exec -T postgres psql -U user -d wealthpay -c \
      "SELECT
         (SELECT count(DISTINCT account_id) FROM account.event_store)        AS distinct_aggregates_in_event_store,
         (SELECT count(*)                   FROM account.account_balance_view) AS rows_in_balance_view;"
    ```
-   Pass conditions: (a) both counts in invariant 1 are strictly greater than the Phase 0 baseline; (b) the two columns in invariant 2 are equal. If invariant 2 disagrees, an aggregate's events made it into the source-of-truth event store but never reached the projection — that is a silent CDC drop and Phase 7 fails.
+   Pass conditions: (a) both counts in invariant 1 are strictly greater than the Phase 0 baseline; (b) `post_cutover_aggregates_missing_from_projection = 0` — every aggregate created after the new cluster started is projected. The strict form may be unequal when pre-cutover drift exists in the source data; in that case run the per-aggregate forensic queries (date-bucket the missing set, inspect event-type mix, check whether all misses fall in a bounded historical window) and document the root cause in the PR. **A non-zero result for the cutover-anchored form is a silent CDC drop and Phase 7 fails.**
 
 3. **R3 — slot retention healthy.** Filter by `${SLOT_NAME}` (set in Phase 6 — under Path C this is `debezium_pg18`):
    ```bash
@@ -1420,8 +1443,8 @@ Step 8 (Grafana visual) verified by proxy — all three named dashboards (`Datab
 ### Acceptance criterion
 
 - R1 was already proved in [Phase 4.5](#phase-45--post-upgrade-data-preservation-check-before-any-new-write); Phase 7 inherits that result.
-- R2 (step 1): the metric inventory diffs are exactly the bounded set documented in Phase 5.2 (the four checkpointer renames + new pg_stat_io byte counters + the new inactive_since_seconds metric). No other deltas.
-- R3 (step 2): both invariants pass — counts are strictly greater than baseline, and `count(distinct account_id)` from event_store equals `count(*)` from account_balance_view. A mismatch is a silent CDC drop and Phase 7 fails.
+- R2 (step 1): the metric inventory diffs match Phase 5.2's bounded set. On postgres-exporter v0.19.x against PG18 this is dominated by (a) the bgwriter→checkpointer rename family — Phase 5.2 requires the four core renames present (`num_timed`, `num_requested`, `write_time`, `sync_time`); the exporter actually emits ≥9 `pg_stat_checkpointer_*` series, which is fine — and (b) PG18 `pg_settings_*` GUC churn (added/removed/renamed parameters between PG16 and PG18). Items predicted by earlier drafts that may legitimately be absent on this stack: `pg_stat_io_*_bytes_total` (postgres-exporter v0.19 doesn't emit them) and `pg_replication_slots_inactive_since_seconds` (only present when the slot is inactive — an active slot correctly emits no series). No deltas outside the checkpointer-rename + GUC-churn families.
+- R3 (step 2): both invariants pass — counts are strictly greater than baseline, and the cutover-anchored projection check (`post_cutover_aggregates_missing_from_projection`) returns 0. The strict-equality form is forensics-only; a strict mismatch is acceptable iff every missing aggregate's first event predates `pg_postmaster_start_time` of the new cluster (pre-cutover drift faithfully preserved by `pg_upgrade --link`). A non-zero post-cutover miss is a silent CDC drop and Phase 7 fails.
 - R3 (step 3): replication-slot lag and retention are both single-digit MB or less.
 - (Step 4): alert-state diff is empty or trivial; any new firing alert is investigated and explicitly accepted in the PR.
 - The PR description gets a "Verification" section embedding each diff inline.
@@ -2194,10 +2217,15 @@ STOP CONDITIONS — return immediately and escalate:
     pass, Phase 7 cannot proceed. Do NOT re-derive R1 here — Phase 6's
     smoke test and this phase's Gatling spike both legitimately mutate
     the preserved tables, so a row-count diff would fail-by-design.
-  - the projection-consistency invariant fails: count(distinct
-    account_id) from event_store does NOT equal count(*) from
-    account_balance_view. This is a silent CDC drop and is the
-    load-bearing R3 check.
+  - the cutover-anchored projection invariant fails:
+    `post_cutover_aggregates_missing_from_projection > 0` (any aggregate
+    whose FIRST event landed after pg_postmaster_start_time is missing
+    from account_balance_view). This is a silent CDC drop on the new
+    cluster and is the load-bearing R3 check. The strict-equality form
+    may be unequal due to pre-cutover legacy drift faithfully preserved
+    by pg_upgrade --link — investigate via per-aggregate date forensics
+    and document; do NOT treat as a stop condition unless a post-cutover
+    aggregate is among the misses.
   - any unexpected metric series diff (one not in the expected set
     spelled out in Phase 5)
   - any new firing alert that wasn't firing before
