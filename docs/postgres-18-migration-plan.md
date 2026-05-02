@@ -671,7 +671,8 @@ PR description includes:
 - **Findings folded back into the runbook.** Two new findings surfaced during real-volume execution that the rehearsal had not exercised. Each is *recoverable* but each adds friction the next operator should not rediscover.
   1. **Step 2 (`pg_upgrade --check` and `--link`)** — `pg_upgrade` requires a writable cwd for its log files (`pg_upgrade_internal.log`, `pg_upgrade_server.log`, `pg_upgrade_output.d/`). The upgrader image's default `WORKDIR` is not writable by the `postgres` user, so the bare `docker run` fails with `You must have read and write access in the current directory. Failure, exiting`. Both invocations now pass `--user postgres` and `--workdir <writable path>` (`/tmp` for `--check`, `/var/lib/postgresql/18/docker` for `--link` so the `pg_upgrade_output.d/` directory lands inside the new datadir where Phase 4a step 6 expects it).
   2. **Step 5 (right before `up -d`)** — `pg_upgrade` does not copy `pg_hba.conf` (its docs are explicit about this). The new cluster ships with the default initdb file, which is **localhost-only**. The PG16 cluster had `host all all all scram-sha-256` appended by docker-entrypoint.sh during PG16's first boot via `POSTGRES_HOST_AUTH_METHOD`. Without that line, sibling containers in the Docker network (Spring app, kafka-connect, postgres-exporter, sql-exporter) hit `FATAL: no pg_hba.conf entry for host …` after `up -d`. Phase 2.9's rehearsal missed this because its `psql` probes used localhost-only TCP, hitting the `127.0.0.1/32 trust` line that *does* exist in defaults. A pre-cliff `cp /v/16/docker/pg_hba.conf /v/18/docker/pg_hba.conf` is now folded into step 5.
-- **Real-volume state at end of Phase 4a.** Stack up; PG18.3 healthy; `wealthpay-postgres:latest` rebuilt from the committed PG18 Dockerfile (digest changed from the pre-Phase-2 cached `749ac7761e02`); `/v/16/docker` is an inert hard-link husk (must NOT be started — `pg_control.old` enforces this); `/v/18/docker/update_extensions.sql` already executed; `/v/18/docker/delete_old_cluster.sh` left in place — **do not run** until [Phase 7](#phase-7--final-verification-cdc-consistency--metrics-behaviour) passes and Phase 4.5 has signed off the data-preservation contract.
+- **Real-volume state at end of Phase 4a.** Stack up; PG18.3 healthy; `wealthpay-postgres:latest` rebuilt from the committed PG18 Dockerfile (digest changed from the pre-Phase-2 cached `749ac7761e02`); `/v/16/docker` is an inert hard-link husk (must NOT be started — `pg_control.old` enforces this); `/v/18/docker/update_extensions.sql` ran but did not fully reach the wealthpay DB (see below); `/v/18/docker/delete_old_cluster.sh` left in place — **do not run** until [Phase 7](#phase-7--final-verification-cdc-consistency--metrics-behaviour) passes and Phase 4.5 has signed off the data-preservation contract.
+- **Post-execution finding (2026-05-02): `pg_stat_statements` extension stayed at 1.10 in the wealthpay DB.** Discovered ~4 hours post-cutover via postgres-exporter container logs: `ERROR: column pg_stat_statements.shared_blk_read_time does not exist` on every scrape (the column was renamed in pgss 1.11). Critically, `up{job="wealthpay-db"}=1` throughout — per-query SQL errors inside postgres-exporter v0.19.1 do not fail the HTTP scrape, so `InstanceDown` did not fire. Healed by `docker compose exec -T postgres psql -U user -d wealthpay -c "ALTER EXTENSION pg_stat_statements UPDATE;"` (1.10 → 1.12). Two runbook gaps folded back: (i) Phase 4a step 6 now includes a per-database assertion query that fails loud if any extension in wealthpay is below `default_version` (the bare `\dx` previously listed could show "1.12" while wealthpay was still at 1.10 if the operator queried the wrong DB); (ii) Phase 5 step 1 now greps the exporter container logs for SQL errors and checks the per-target `lastError` field in `/api/v1/targets`, since `up=1` is necessary but not sufficient — extending the WAL/checkpointer-presence checks the phase already had with this third detector. The bootstrap [`docker/postgres/bootstrap/03-pg-stat-statements.sql`](../docker/postgres/bootstrap/03-pg-stat-statements.sql) was hardened to self-heal version drift on fresh clones, but `pg_upgrade --link` reuses `PGDATA` so the bootstrap path is bypassed on cutover — the runbook step in Phase 4a step 6 remains the only safeguard for that path.
 - **Watch-items deferred.** (i) The Phase 2.9 deferred check that `pg_stat_io WHERE object='wal' AND backend_type='walwriter'` produces the four `pg_wal_stat_*` series via sql-exporter — natural place is [Phase 5](#phase-5--bring-up-new-stack--verify-metric-pipeline) step 1's `curl localhost:9399/metrics | grep pg_wal_stat`. (ii) `delete_old_cluster.sh` deletion is owed at the end of Phase 7 once the new cluster has soaked.
 - **Next phase:** [Phase 4.5](#phase-45--post-upgrade-data-preservation-check-before-any-new-write) — strict diff of preserved row counts against the Phase 0 baseline. Phase 4.5 is the gate before Phase 5; do not skip.
 
@@ -874,12 +875,26 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
    ```
    This step *requires* the cluster to be running — that's why it lives on the human side of the boundary. An earlier draft of this plan placed the `vacuumdb` before `up -d` via a transient container; that was wrong because it would have started Postgres against the new layout before the human had reviewed the upgrade exit status.
 
-   Then apply the extension-version bump that `pg_upgrade` emitted (Phase 2.9 surfaced the contents — `pg_stat_statements` 1.10 → 1.12; `pg_cron` 1.6 → 1.6 = no change). The script is left in the new datadir alongside `pg_upgrade`'s logs:
+   Then apply the extension-version bump that `pg_upgrade` emitted (Phase 2.9 surfaced the contents — `pg_stat_statements` 1.10 → 1.12; `pg_cron` 1.6 → 1.6 = no change). The script is left in the new datadir alongside `pg_upgrade`'s logs.
+
+   **Extensions are per-database.** `pg_stat_statements` is registered separately in each database it is created in, so `ALTER EXTENSION ... UPDATE` must run **inside the database whose view postgres-exporter scrapes** (here: `wealthpay`, set by `DATA_SOURCE_URI` in [docker-compose.local.yml](../docker-compose.local.yml)). A `\dx` listing in the wrong DB can show "1.12" while `wealthpay` is still at 1.10 — and postgres-exporter v0.19.1+ then errors on every scrape with `column pg_stat_statements.shared_blk_read_time does not exist` (the column was renamed in pgss 1.11), with `up{job="wealthpay-db"}=1` throughout because per-query SQL errors do not fail the HTTP scrape. The post-execution finding on 2026-05-02 was exactly this. The bootstrap [`docker/postgres/bootstrap/03-pg-stat-statements.sql`](../docker/postgres/bootstrap/03-pg-stat-statements.sql) self-heals this on fresh clones, but `pg_upgrade --link` reuses an existing `PGDATA` so the bootstrap is **bypassed** on the cutover path — this step is the only line of defense.
    ```bash
+   # 1) Apply the bump in the wealthpay DB explicitly (-d wealthpay is load-bearing).
    docker compose exec -T postgres psql -U user -d wealthpay -c "ALTER EXTENSION pg_stat_statements UPDATE;"
+
+   # 2) ASSERT per-database: every installed extension in wealthpay must be at default_version.
+   #    Returns 0 rows on success; any output is a drift you must investigate before proceeding.
+   docker compose exec -T postgres psql -U user -d wealthpay -v ON_ERROR_STOP=1 -c "
+     SELECT e.extname, e.extversion AS installed, ae.default_version AS expected
+       FROM pg_extension e
+       JOIN pg_available_extensions ae ON ae.name = e.extname
+      WHERE e.extversion <> ae.default_version;
+   "
+
+   # 3) Visual confirmation (snapshot of post-update versions for the runbook log).
    docker compose exec -T postgres psql -U user -d wealthpay -c "SELECT extname, extversion FROM pg_extension ORDER BY extname;"
    ```
-   Expected post-update: `pg_cron 1.6`, `pg_stat_statements 1.12`, `plpgsql 1.0`. If the script left in the datadir lists more `ALTER EXTENSION ... UPDATE` lines than these (e.g. an extension was added between the rehearsal and execution), apply each one — re-extract the script from `/var/lib/postgresql/18/docker/pg_upgrade_output.d/<timestamp>/update_extensions.sql` (or wherever the upgrade log directory landed) before running.
+   Expected post-update: `pg_cron 1.6`, `pg_stat_statements 1.12`, `plpgsql 1.0`, and the assertion query (#2) returns **zero rows**. If #2 returns any row, **stop** and re-run `ALTER EXTENSION <extname> UPDATE` in the wealthpay DB until the assertion is empty. If the script left in the datadir lists more `ALTER EXTENSION ... UPDATE` lines than these (e.g. an extension was added between the rehearsal and execution), apply each one — re-extract the script from `/var/lib/postgresql/18/docker/pg_upgrade_output.d/<timestamp>/update_extensions.sql` (or wherever the upgrade log directory landed) before running. Sanity-check the `-d` flag: the per-DB nature of the failure mode means a successful-looking step here is not enough; the assertion query in #2 is what closes the gap.
 
 ### Acceptance criterion
 
@@ -1034,11 +1049,26 @@ If the inspect fails, **stop**; substitute the real volume name throughout the r
 
 **Steps.**
 
-1. Confirm both exporters are healthy:
+1. Confirm both exporters are healthy. **Three checks, not one** — the Phase 4a (2026-05-02) post-execution finding showed that `curl -sf` alone is insufficient: a per-query SQL error inside postgres-exporter v0.19.1 (e.g. `column pg_stat_statements.shared_blk_read_time does not exist` if Phase 4a step 6's extension bump was missed in the wealthpay DB) is logged at ERROR level but the scrape **still returns HTTP 200** with the surviving metrics, so `up{job="wealthpay-db"}` stays at `1` and `InstanceDown` does not fire. All three checks must pass:
    ```bash
-   curl -sf localhost:9187/metrics > /dev/null && echo "postgres-exporter OK"
-   curl -sf localhost:9399/metrics > /dev/null && echo "sql-exporter OK"
+   # (a) HTTP plane: exporter is up and serving /metrics.
+   curl -sf localhost:9187/metrics > /dev/null && echo "postgres-exporter HTTP OK"
+   curl -sf localhost:9399/metrics > /dev/null && echo "sql-exporter HTTP OK"
+
+   # (b) Container logs: no per-query SQL errors in the last 5 minutes.
+   #     Empty output = pass; any line is a wired-but-failing collector that (a) cannot detect.
+   docker logs --since 5m wealthpay-postgres-exporter 2>&1 | grep -iE 'error|level=err' || echo "postgres-exporter logs clean"
+   docker logs --since 5m wealthpay-sql-exporter      2>&1 | grep -iE 'error|level=err' || echo "sql-exporter logs clean"
+
+   # (c) Prometheus' view of every PG-related target: lastError must be empty.
+   #     This is the cross-check against (a) — Prometheus records the per-scrape error
+   #     even when `up=1` (errors during metric parsing, not connection refused).
+   curl -sG 'http://localhost:9090/api/v1/targets' \
+     | jq -r '.data.activeTargets[]
+              | select(.labels.job | test("postgres|sql.exporter|wealthpay"))
+              | "\(.labels.job)\t\(.health)\tlastError=\(.lastError)"'
    ```
+   Acceptance for (b) and (c): zero matching log lines and `lastError=""` for every PG-related target. **Any non-empty `lastError` or any error log line is a fail** — fix before proceeding to step 2; the metric-name diff in step 2 cannot detect a failing per-query collector if the failure leaves no surviving series at all in the post-baseline. Likeliest root cause if `pg_stat_statements_*` is the failing collector: the wealthpay DB's `pg_stat_statements` extension is still at 1.10 — return to [Phase 4a step 6](#phase-4a--execute-pg_upgrade---link-chosen-method) and run the per-database assertion query.
 2. **Capture the post-upgrade metric inventory and diff:**
    ```bash
    # Same label-stripping sed as Phase 0 — keep both captures parser-identical so the diff is meaningful.
