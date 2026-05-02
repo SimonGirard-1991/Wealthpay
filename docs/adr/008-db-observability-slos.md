@@ -46,10 +46,10 @@ a 100% baseline](#why-dbcachehitratiolow-exists-despite-a-100-baseline) for why 
 | Rule | Severity | Type | Threshold | At-rest baseline | Under-load baseline |
 |---|---|---|---|---|---|
 | `PostgresUnreachable` | critical | Detector | `up == 0 or pg_up == 0 or absent(pg_up)` for 1m | up=1, pg_up=1 | unchanged |
-| `ReplicationSlotWalRetentionHigh` | critical | Design-derived | > 1 GiB for 5m | 325 KiB | 23.48 MiB † |
+| `ReplicationSlotWalRetentionHigh` | critical | Design-derived | > 1 GiB for 5m | 325 KiB | 211–275 MiB ‡ |
 | `ReplicationSlotInactive` | warning | Design-derived | inactive_age > 300s for 1m | 0s (slot active) | 0s |
 | `DbConnectionsNearMax` | warning | Design-derived | numbackends/max_connections > 0.8 for 5m | 17% | 17% |
-| `DbCacheHitRatioLow` | warning | **Workload-derived** | < 0.90 for 15m | 98.7% | 100.000% |
+| `DbCacheHitRatioLow` | warning | **Workload-derived** | < 0.90 for 15m | 98.7% | 96.19% (PG18) ◊ |
 | `DbForcedCheckpointRatioHigh` | warning | Design-derived | req/total > 0.3 for 10m | 0.43% | 0.000% |
 | `PgStatStatementsLruEvicting` | warning | Detector | rate > 0 for 15m | 0/s | 0/s |
 | `IdleInTransactionTooLong` | warning | Design-derived | max idle-in-tx > 300s for 5m | 0s | 0s |
@@ -57,31 +57,56 @@ a 100% baseline](#why-dbcachehitratiolow-exists-despite-a-100-baseline) for why 
 Routing: the `severity` label drives the existing alertmanager split (critical → critical Discord
 webhook, warning → default Discord webhook). No alertmanager change was needed for these rules.
 
-† **WAL retention "under-load baseline" footnote.** The 23.48 MiB figure was sampled from Prometheus
-during the Gatling run, while Debezium was still consuming. The metric is a continuously-drained
-high-water mark, not a steady-state resting value: in a healthy stack the slot drains back to the
-325 KiB at-rest baseline within seconds of the producer pausing.
+† **WAL retention "under-load baseline" — historical PG16 figure.** The 23.48 MiB figure was sampled
+from Prometheus during the 2026-04-29 Gatling run on PG16, while Debezium was still consuming. The
+metric is a continuously-drained high-water mark, not a steady-state resting value: in a healthy
+stack the slot drains back to the 325 KiB at-rest baseline within seconds of the producer pausing.
 
-For the 3am operator: ~25 MiB is the implicit ceiling-when-healthy at this load profile (the
-high-water mark observed while consumer is keeping up). Anything sustained materially above ~25 MiB
-*without active write traffic* indicates the consumer is lagging or stalled, not "normal after
-load". There is no defensible steady-state number short of the 1 GiB rule threshold; the diagnostic
-heuristic is "does retention drain within minutes of write traffic ending?" — if no, investigate.
+‡ **WAL retention "under-load baseline" — PG18 (2026-05-02 re-baseline).** Two snapshots taken 31 s
+apart during the Gatling peak phase: 211 MiB and 275 MiB, with the slot active and Debezium
+consuming. PG18's revised checkpointer + async I/O move more work between checkpoints, so the
+in-flight WAL high-water mark is materially higher than PG16's 23.48 MiB while the slot is still
+draining cleanly. Both figures are well within the 1 GiB rule threshold (~26% of stop). Phase 7's
+post-spike measurement of 24 MiB at idle confirms the slot drains back to a small steady-state value
+within a checkpoint cycle — the diagnostic heuristic below is unchanged.
+
+For the 3am operator: under PG18 the implicit ceiling-when-healthy at this load profile is ~275 MiB
+mid-load, draining to ~25 MiB within minutes of write traffic ending. Anything sustained materially
+above ~275 MiB *with active write traffic*, or above ~50 MiB *without*, indicates the consumer is
+lagging or stalled, not "normal after load". There is no defensible steady-state number short of the
+1 GiB rule threshold; the diagnostic heuristic is "does retention drain within minutes of write
+traffic ending?" — if no, investigate.
+
+◊ **Cache-hit ratio under-load — PG18 (2026-05-02 re-baseline).** The PG16 baseline was 100.000%
+(working set fit comfortably in `shared_buffers` and the workload's first-pass reads were negligible
+within the cumulative window). On PG18 the **delta-based** under-load ratio over a 31 s peak window
+is 0.9619 — measured as Δblks_hit / (Δblks_hit + Δblks_read) between two snapshots, which is the
+same shape Prometheus's `rate()` uses for the alert evaluation. The ~4% drop is consistent with
+PG18's async I/O issuing more cold reads against the same logical workload; the figure remains above
+the 0.95 re-baseline trigger documented below, so the structural-safety-net framing of this alert
+remains valid. Cumulative `pg_stat_database_blks_hit / (blks_hit + blks_read)` from a single `curl`
+returns ~0.853, but that mixes the cluster's entire history (including cold cache after every
+restart) with the live workload — do **not** use the cumulative form for the re-baseline check.
 
 ### Calibration log
 
 | Date | Workload | Tooling | Result |
 |---|---|---|---|
-| 2026-04-29 | Account lifecycle: ramp 1→100 RPS over 30s, hold 60s, ramp down. Reservation flow at 50 RPS same shape. Heavy-account: 1000 sequential deposits on a single aggregate. | `mvn -Pgatling gatling:test` against `localhost:8080`. | 41,681 requests / 100% success / p50=2ms / p95=4ms / p99=7ms / max=289ms. All Gatling assertions passed. |
+| 2026-04-29 | Account lifecycle: ramp 1→100 RPS over 30s, hold 60s, ramp down. Reservation flow at 50 RPS same shape. Heavy-account: 1000 sequential deposits on a single aggregate. | `mvn -Pgatling gatling:test` against `localhost:8080`. PG16. | 41,681 requests / 100% success / p50=2ms / p95=4ms / p99=7ms / max=289ms. All Gatling assertions passed. |
+| 2026-05-02 | PG18 post-upgrade re-baseline. Same workload shape as the 2026-04-29 run (no simulation changes). | `mvn -Pgatling gatling:test` against `localhost:8080`. PG18.3 via `pg_upgrade --link` from PG16. | 41,681 requests / 100% success / p50=3ms / p95=6ms / p99=9ms / max=249ms. All Gatling assertions passed. Under-load cache-hit ratio (delta) = 0.9619 (above 0.95 re-baseline trigger ✓). WAL retention high-water 211–275 MiB mid-load (~26% of 1 GiB stop). |
 
 The under-load baseline column above is sampled from Prometheus immediately after this run. Per-metric
-sampling queries are recorded inline in `db.rules.yml` rule comments.
+sampling queries are recorded inline in `db.rules.yml` rule comments. **Cache-hit ratio sampling
+note:** delta-based (two `pg_stat_database_blks_*` snapshots ≥30 s apart inside the peak window),
+not cumulative. The cumulative form mixes cluster lifetime cold reads with the live workload and
+will silently understate the under-load ratio.
 
-### Why `DbCacheHitRatioLow` exists despite a 100% baseline
+### Why `DbCacheHitRatioLow` exists despite a near-100% baseline
 
-The Wealthpay working set is small enough to fit comfortably in `shared_buffers`. Both at-rest (98.7%)
-and under-load (100.000%) buffer-cache hit ratios are above the 0.90 threshold by a wide margin, and
-no plausible day-to-day workload shift will push the metric below 0.90.
+The Wealthpay working set is small enough to fit comfortably in `shared_buffers`. Both at-rest
+(98.7%) and under-load buffer-cache hit ratios remain well above the 0.90 threshold (PG16 under-load
+was 100.000%; PG18 under-load is 96.19% delta-based — see the ◊ footnote in the SLI inventory). No
+plausible day-to-day workload shift will push the metric below 0.90.
 
 The alert is kept because its *failure modes* are still real:
 
@@ -132,27 +157,36 @@ and decide whether `DbCacheHitRatioLow` has crossed from structural-safety-net t
 At that point the threshold may need re-tuning, the `shared_buffers` setting may need raising, or
 both.
 
-### Why `inactive_age_seconds` is a recording rule, not a SQL metric
+### Why `inactive_age_seconds` was a recording rule on PG16 (historical context)
 
-`pg_replication_slots.inactive_since` was added in PostgreSQL 17. This stack pins
-`postgres:16` in `docker-compose.local.yml`. Joining `pg_stat_replication` does not work as a
+> **2026-05-02 update — applied.** This stack now runs PG18.3. The PG16-era recording rule
+> `pg_replication_slot:inactive_age_seconds` has been removed; `ReplicationSlotInactive` now
+> references `pg_replication_slots_inactive_since_seconds` directly (emitted by the sql-exporter
+> collector, sourced from `pg_replication_slots.inactive_since` natively in PG17+). Section retained
+> as historical context for the original mechanism and its rationale.
+
+`pg_replication_slots.inactive_since` was added in PostgreSQL 17. While this stack pinned
+`postgres:16` in `docker-compose.local.yml`, joining `pg_stat_replication` did not work as a
 fallback because that view has *no row* for an inactive slot — there is nothing to subtract a
 timestamp from.
 
-Deriving the inactivity age in PromQL is the correct PG16 mechanism. The recording rule's subquery
-uses a 7-day window:
+Deriving the inactivity age in PromQL was the correct PG16 mechanism. The recording rule's subquery
+used a 7-day window:
 
 ```promql
 time() - last_over_time(timestamp(pg_replication_slots_active == 1)[7d:1m])
 ```
 
-Cardinality cost is unchanged (one sample per slot per evaluation). The 7-day window guarantees the
-rule survives a Prometheus restart for a week of inactivity AND continues to fire if a slot is
+Cardinality cost was unchanged (one sample per slot per evaluation). The 7-day window guaranteed the
+rule survived a Prometheus restart for a week of inactivity AND continued to fire if a slot was
 inactive for the whole week.
 
-**PG17 migration step:** drop the recording rule, add a `SELECT inactive_since` column to
-`docker/sql-exporter/replication.collector.yml`, and have `ReplicationSlotInactive` reference the new
-SQL-side metric directly. Tracked in the collector header comment.
+**PG17 migration step (now applied as part of the 2026-05-02 PG18 upgrade):** drop the recording
+rule, add a `SELECT inactive_since` column to `docker/sql-exporter/replication.collector.yml`, and
+have `ReplicationSlotInactive` reference the new SQL-side metric directly. Tracked in the collector
+header comment. Active behavior on PG18: the series is emitted only while the slot is inactive
+(`inactive_since IS NULL` produces no row when active), so absence of the series is the correct
+"slot is healthy" signal.
 
 ### Why `IdleInTransactionTooLong` cannot name the offending session
 

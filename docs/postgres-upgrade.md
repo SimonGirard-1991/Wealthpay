@@ -5,11 +5,19 @@ where a PostgreSQL major-version upgrade silently breaks a dashboard or
 collector query without producing an obvious error signal. Each entry
 describes the mechanism, the symptom, and the concrete fix recipe.
 
-Current stack version: **PostgreSQL 16** (pinned in `docker-compose.local.yml`).
+Current stack version: **PostgreSQL 18** (pinned in `docker-compose.local.yml`; cut over from PG16
+on 2026-05-01 via `pg_upgrade --link` per [postgres-18-migration-plan.md](postgres-18-migration-plan.md)).
+Both PG17 and PG18 hazards documented below have been applied — sections retained as historical
+context and as a template for future major-version bumps (PG19 will introduce its own hazards).
 
 ---
 
 ## PG17 — `pg_stat_bgwriter` columns relocate to `pg_stat_checkpointer`
+
+> **Status: Applied** — fix recipe wired in during the PG18 migration; see
+> [postgres-18-migration-plan.md](postgres-18-migration-plan.md) Phase 2.6
+> (`docker/prometheus/rules/db.rules.yml` and `docker/grafana/dashboards/db-server-health.json`
+> updates) and the `--collector.stat_checkpointer` flag in `docker-compose.local.yml`.
 
 ### Mechanism
 
@@ -75,6 +83,12 @@ reference these by name and must be updated in the same change.
 ---
 
 ## PG18 — `pg_stat_wal` columns relocate to `pg_stat_io`
+
+> **Status: Applied** — fix recipe wired in during the PG18 migration; see
+> [postgres-18-migration-plan.md](postgres-18-migration-plan.md) Phase 2.4
+> (`docker/sql-exporter/wal-io.collector.yml` split into reduced `pg_stat_wal` query +
+> `pg_stat_io_wal` aggregation query). Phase 5 (2026-05-02) on the live PG18 cluster surfaced
+> and corrected the `SUM(...)` aggregation issue documented in step 2 below.
 
 ### Mechanism
 
