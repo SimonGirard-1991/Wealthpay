@@ -37,3 +37,36 @@ END
 $$;
 
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- After pg_upgrade, the extension is preserved at the OLD cluster's installed
+-- version (e.g. 1.10 from PG 16) even though the new server ships a newer
+-- default_version (1.12 on PG 18). The view definition is then out of sync
+-- with what postgres-exporter v0.19.1+ queries: it expects the 1.11 split of
+-- blk_*_time into shared_blk_*_time / local_blk_*_time, so every scrape errors
+-- with `column pg_stat_statements.shared_blk_read_time does not exist`.
+--
+-- Idempotency: only run ALTER EXTENSION ... UPDATE when there is actual drift
+-- between installed_version and default_version. A bare ALTER would succeed on
+-- every bootstrap but emit `NOTICE: version "X" already installed`, which is
+-- log noise on the steady-state path (this script runs on every container
+-- start). The version check below makes the no-op path silent and the upgrade
+-- path explicit.
+DO $$
+DECLARE
+  installed text;
+  available text;
+BEGIN
+  SELECT extversion INTO installed
+    FROM pg_extension
+   WHERE extname = 'pg_stat_statements';
+
+  SELECT default_version INTO available
+    FROM pg_available_extensions
+   WHERE name = 'pg_stat_statements';
+
+  IF installed IS DISTINCT FROM available THEN
+    RAISE NOTICE 'Upgrading pg_stat_statements: % -> %', installed, available;
+    EXECUTE 'ALTER EXTENSION pg_stat_statements UPDATE';
+  END IF;
+END
+$$;
