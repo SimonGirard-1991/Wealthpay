@@ -125,19 +125,29 @@ Split the single `pg_stat_wal` query in
    ```
 
 2. An addition to the existing `pg_stat_io` query to surface the `object='wal'`
-   rows as named metrics:
+   rows as named metrics. The legacy `pg_stat_wal.{wal_write,wal_sync,wal_write_time,wal_sync_time}`
+   columns were **cluster-wide totals**; on PG18 GA, `pg_stat_io` exposes them
+   split by `(backend_type, object, context)`. The semantically faithful
+   reconstruction is therefore `SUM(...)` across the whole `object='wal'`
+   partition — narrowing to a single backend type understates writes by an
+   order of magnitude (this stack: `walwriter`=23 writes vs cluster total=819
+   at the same instant, with `standalone backend`, `client backend`,
+   `checkpointer`, `autovacuum worker`, `startup`, `walsender` all contributing).
+   Aggregating with `SUM` also collapses the per-row `(init, normal)` context
+   split that PG18 GA emits — without aggregation, two rows arrive for
+   labels-free metrics and Prometheus rejects with `"was collected before with
+   the same name and label values"`. **Do not filter by `backend_type` here.**
 
    ```yaml
    - query_name: pg_stat_io_wal
      query: |
        SELECT
-         writes        AS wal_write,
-         fsyncs        AS wal_sync,
-         write_time    AS wal_write_time,
-         fsync_time    AS wal_sync_time
+         SUM(writes)     AS wal_write,
+         SUM(fsyncs)     AS wal_sync,
+         SUM(write_time) AS wal_write_time,
+         SUM(fsync_time) AS wal_sync_time
        FROM pg_stat_io
        WHERE object = 'wal'
-         AND backend_type = 'walwriter'   -- narrow to the single relevant row
    ```
 
    Then update the 4 affected metric definitions
@@ -146,11 +156,16 @@ Split the single `pg_stat_wal` query in
    `pg_wal_stat_sync_time_milliseconds_total`) to reference the new query via
    `query_ref: pg_stat_io_wal`.
 
-3. Verify the exact `backend_type` filter against live PG18 output before
-   committing — the WAL I/O attribution may surface under a different
-   backend type depending on upstream decisions during the PG18 release
-   cycle. Confirm with `SELECT backend_type, object, context, writes
-   FROM pg_stat_io WHERE object = 'wal'` on a PG18 instance.
+3. Verify the per-row shape against live PG18 output before committing.
+   Confirm with `SELECT backend_type, object, context, writes
+   FROM pg_stat_io WHERE object = 'wal'` on a PG18 instance — on PG18.3
+   this returns 28 rows (14 backend types × 2 contexts: `init` and `normal`).
+   Earlier drafts of this recipe filtered to `backend_type='walwriter'`
+   under the assumption that PG18 would attribute all WAL writes there;
+   that filter (a) returns two rows due to the context split, breaking
+   labels-free emission, and (b) understates cluster-wide writes by ~36×.
+   Phase 5 (2026-05-02) on the live PG18 cluster surfaced both issues
+   simultaneously; the `SUM(...)` form above corrects both.
 
 4. Dashboard panels #8–#11 reference the same metric names and require no
    changes if the metric names are preserved (which the split above does).
