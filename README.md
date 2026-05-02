@@ -108,6 +108,20 @@ Windows (PowerShell):
 powershell -ExecutionPolicy Bypass -File .\scripts\infra.ps1
 ```
 
+> **Migrating from a pre-PG18 stack? (Both `infra.sh` and `infra.ps1` enforce this.)**
+> If your local `pg_data` volume dates from before the PostgreSQL 18 upgrade,
+> the bring-up script refuses to start (the volume's on-disk layout no longer
+> matches what the current stack expects). See
+> [docs/postgres-18-migration-plan.md](docs/postgres-18-migration-plan.md)
+> to migrate the existing data, or `docker volume rm wealthpay_pg_data`
+> (PowerShell: `docker volume rm wealthpay_pg_data`) to discard it and start
+> fresh on PG18. Both scripts also auto-inject `--build` on `up` invocations
+> so a cached pre-cutover `wealthpay-postgres` image cannot silently mask a
+> Dockerfile change; pass `--no-build` explicitly when you know your cache is
+> fresh. Future major-version cutovers may trip the same guard with an
+> updated marker — the script's error message always points at the current
+> migration runbook.
+
 The Unix script adds `docker-compose.local.linux.yml` automatically on native Linux and uses only
 `docker-compose.local.yml` on macOS.
 
