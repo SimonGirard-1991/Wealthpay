@@ -63,25 +63,38 @@ queries:
         wal_buffers_full
       FROM pg_stat_wal
   # PG18 source for what used to be pg_stat_wal.{wal_write, wal_sync,
-  # wal_write_time, wal_sync_time}. Narrowed to backend_type='walwriter'
-  # to keep the metric labels-free (single matching row on a primary; on
-  # a replica an additional 'walreceiver' row exists, which this stack
-  # does not run). This filter is the load-bearing assumption of the
-  # PG18 fix recipe and must be re-verified against live PG18 output
-  # during Phase 2.9 rehearsal — the postgres-upgrade.md runbook flags
-  # the same. The four metric names exposed downstream
+  # wal_write_time, wal_sync_time}. The legacy pg_stat_wal columns were
+  # CLUSTER-WIDE totals; in PG18 pg_stat_io exposes them split by
+  # backend_type × context. The semantically faithful reconstruction is
+  # therefore SUM across the whole object='wal' partition — narrowing
+  # to a single backend_type understates writes by an order of magnitude
+  # because walwriter is only one of seven+ backend types that issue WAL
+  # writes (standalone backend, client backend, checkpointer, autovacuum
+  # worker, startup, walsender all contribute on this stack).
+  #
+  # The earlier draft of this collector filtered to backend_type='walwriter'
+  # under the (incorrect) assumption that PG18 would attribute all WAL
+  # writes there. Phase 5 step 1 (2026-05-02) on the live PG18 cluster
+  # surfaced the bug via the sql-exporter "was collected before with the
+  # same name and label values" error: pg_stat_io has TWO rows per
+  # backend_type (one per context: 'init' and 'normal'), so the filter
+  # returned two rows for a labels-free metric → duplicate-collection
+  # rejection by Prometheus. Aggregating with SUM also collapses the
+  # init/normal split, which is the right answer because the legacy
+  # column counted both.
+  #
+  # The four metric names downstream
   # (pg_wal_stat_{write,sync}_total, pg_wal_stat_{write,sync}_time_*)
   # are intentionally preserved across the relocation.
   - query_name: pg_stat_io_wal
     query: |
       SELECT
-        writes     AS wal_write,
-        fsyncs     AS wal_sync,
-        write_time AS wal_write_time,
-        fsync_time AS wal_sync_time
+        SUM(writes)     AS wal_write,
+        SUM(fsyncs)     AS wal_sync,
+        SUM(write_time) AS wal_write_time,
+        SUM(fsync_time) AS wal_sync_time
       FROM pg_stat_io
       WHERE object = 'wal'
-        AND backend_type = 'walwriter'
   - query_name: pg_stat_io
     query: |
       SELECT
