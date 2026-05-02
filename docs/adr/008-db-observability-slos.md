@@ -79,14 +79,34 @@ traffic ending?" — if no, investigate.
 
 ◊ **Cache-hit ratio under-load — PG18 (2026-05-02 re-baseline).** The PG16 baseline was 100.000%
 (working set fit comfortably in `shared_buffers` and the workload's first-pass reads were negligible
-within the cumulative window). On PG18 the **delta-based** under-load ratio over a 31 s peak window
-is 0.9619 — measured as Δblks_hit / (Δblks_hit + Δblks_read) between two snapshots, which is the
-same shape Prometheus's `rate()` uses for the alert evaluation. The ~4% drop is consistent with
-PG18's async I/O issuing more cold reads against the same logical workload; the figure remains above
-the 0.95 re-baseline trigger documented below, so the structural-safety-net framing of this alert
-remains valid. Cumulative `pg_stat_database_blks_hit / (blks_hit + blks_read)` from a single `curl`
-returns ~0.853, but that mixes the cluster's entire history (including cold cache after every
-restart) with the live workload — do **not** use the cumulative form for the re-baseline check.
+within the cumulative window). On PG18 the **31 s peak-window delta** ratio is 0.9619 — measured as
+Δblks_hit / (Δblks_hit + Δblks_read) between two snapshots taken inside the Gatling constant-load
+phase. The ~4% drop is consistent with PG18's async I/O issuing more cold reads against the same
+logical workload.
+
+**Three measurement forms — do not confuse them when checking the re-baseline trigger:**
+1. **Cumulative single-curl ratio** (`pg_stat_database_blks_hit / (blks_hit + blks_read)`) returns
+   ~0.853 on this stack. This mixes the cluster's entire history (including cold cache after every
+   restart) with the live workload. **Do NOT use** for the re-baseline check — it will spuriously
+   trip the 0.95 trigger.
+2. **31 s peak-window delta** (the 0.9619 figure above) is the *calibration* number — useful for
+   "did the engine's behavior shift materially?" between major-version bumps, but tighter than
+   what the alert actually evaluates.
+3. **Production alert evaluation** uses Prometheus `rate(...)[10m]`, which dilutes the peak with
+   the 9.5 minutes of surrounding load tail and idle time. On PG18 immediately post-Gatling this
+   evaluates to ~0.913 (Phase 7 captured this value on the live PromQL expression), already below
+   the 0.95 re-baseline trigger.
+
+**Re-baseline trigger evaluation (load-bearing):** evaluate against the *production alert form*
+(`rate()` over `[10m]`), not against the calibration delta. Phase 7's 0.913 reading means the alert
+is in `pending`/`firing` territory immediately after a load spike on the idle stack; this is the
+expected workload-tail behavior the ADR's structural-safety-net framing anticipates and is
+**resolved by Phase 8's under-load re-sample**, not by lowering the threshold. If the live `rate()`
+expression evaluates ≥0.95 during sustained nominal load (i.e. the application is serving real
+traffic, not a cold-cache idle stack), the structural-safety-net framing remains valid; if it
+durably evaluates below 0.95 during nominal traffic, the working set has genuinely outgrown
+shared_buffers and the alert moves from structural to workload-derived (see "Re-baseline trigger
+(size-driven)" below).
 
 ### Calibration log
 

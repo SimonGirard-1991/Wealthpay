@@ -1,7 +1,18 @@
 -- Register pg_stat_statements for per-query latency and I/O attribution.
 -- Idempotent: safe to re-run on already-initialized volumes.
 --
--- The extension ships with the stock postgres:16 image (contrib), so no
+-- RUNTIME CONTRACT — read this before assuming this script "always runs":
+-- Files under /docker-entrypoint-initdb.d/ execute ONLY on initial DB
+-- initialization (PGDATA empty at container start). On the pg_upgrade --link
+-- path the new cluster's PGDATA is pre-initialized, so this script does NOT
+-- run during the upgrade — the equivalent ALTER EXTENSION ... UPDATE step is
+-- performed manually per docs/postgres-18-migration-plan.md Phase 4a step 6.
+-- Coverage matrix:
+--   * fresh `./scripts/infra.sh up`  → this script runs           ✓
+--   * pg_upgrade --link cutover      → manual ALTER per Phase 4a  ✓ (not here)
+--   * pg_dumpall + restore (Path 4b) → this script runs on init   ✓
+--
+-- The extension ships with the stock postgres:18 image (contrib), so no
 -- Dockerfile change is required. It still must be loaded via
 -- shared_preload_libraries in docker-compose.local.yml — without that, the
 -- CREATE EXTENSION below will succeed syntactically but the view will be
