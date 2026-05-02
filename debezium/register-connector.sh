@@ -1,9 +1,9 @@
 #!/bin/bash
-curl -s -o /dev/null -X DELETE http://localhost:8083/connectors/wealthpay-outbox-connector 2>/dev/null || true
+curl -s -o /dev/null -X DELETE http://localhost:8083/connectors/wealthpay-outbox-connector-pg18 2>/dev/null || true
 curl -X POST http://localhost:8083/connectors \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "wealthpay-outbox-connector",
+    "name": "wealthpay-outbox-connector-pg18",
     "config": {
         "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
         "tasks.max": "1",
@@ -22,6 +22,8 @@ curl -X POST http://localhost:8083/connectors \
         "schema.include.list": "account",
         "table.include.list": "account.outbox",
         "plugin.name": "pgoutput",
+        "slot.name": "debezium_pg18",
+        "snapshot.mode": "never",
         "key.converter": "org.apache.kafka.connect.storage.StringConverter",
         "transforms": "outbox",
         "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
