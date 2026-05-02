@@ -160,13 +160,13 @@ metrics:
 
   - metric_name: pg_wal_stat_write_time_milliseconds_total
     type: counter
-    help: "Total time spent writing WAL buffers to disk, in milliseconds. Only non-zero when track_io_timing is on (PG18 sources this from pg_stat_io.write_time, which is governed by track_io_timing rather than the legacy track_wal_io_timing)."
+    help: "Total time spent writing WAL buffers to disk, in milliseconds. Only non-zero when track_wal_io_timing is on (PG18 still controls WAL timing collection via this GUC; track_io_timing covers non-WAL I/O only). Pair with pg_wal_stat_write_total to compute avg ms per WAL write."
     values: [wal_write_time]
     query_ref: pg_stat_io_wal
 
   - metric_name: pg_wal_stat_sync_time_milliseconds_total
     type: counter
-    help: "Total time spent syncing WAL files to disk, in milliseconds. Only non-zero when track_io_timing is on. Rising values indicate fsync pressure on the WAL device."
+    help: "Total time spent syncing WAL files to disk, in milliseconds. Only non-zero when track_wal_io_timing is on (track_io_timing does NOT control WAL timing on PG18). Rising values indicate fsync pressure on the WAL device."
     values: [wal_sync_time]
     query_ref: pg_stat_io_wal
 
