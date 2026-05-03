@@ -93,7 +93,8 @@ class HexagonalArchitectureTest {
               "tools.jackson..",
               "io.micrometer..",
               "jakarta.servlet..",
-              "org.aspectj..")
+              "org.aspectj..",
+              "com.github.f4b6a3..")
           .as("Domain must remain framework-free")
           .because(
               "Domain is the inner ring of the hexagon: pure business logic with no persistence,"
@@ -121,7 +122,8 @@ class HexagonalArchitectureTest {
               "com.fasterxml.jackson..",
               "tools.jackson..",
               "io.micrometer.core..",
-              "org.aspectj..")
+              "org.aspectj..",
+              "com.github.f4b6a3..")
           .as("Application must orchestrate via ports, not infrastructure libraries")
           .because(
               "Application use-case logic must stay framework-light. Spring stereotypes"
