@@ -66,9 +66,9 @@ stack the slot drains back to the 325 KiB at-rest baseline within seconds of the
 apart during the Gatling peak phase: 211 MiB and 275 MiB, with the slot active and Debezium
 consuming. PG18's revised checkpointer + async I/O move more work between checkpoints, so the
 in-flight WAL high-water mark is materially higher than PG16's 23.48 MiB while the slot is still
-draining cleanly. Both figures are well within the 1 GiB rule threshold (~26% of stop). Phase 7's
-post-spike measurement of 24 MiB at idle confirms the slot drains back to a small steady-state value
-within a checkpoint cycle — the diagnostic heuristic below is unchanged.
+draining cleanly. Both figures are well within the 1 GiB rule threshold (~26% of stop). A post-spike
+sample of 24 MiB at idle confirms the slot drains back to a small steady-state value within a
+checkpoint cycle — the diagnostic heuristic below is unchanged.
 
 For the 3am operator: under PG18 the implicit ceiling-when-healthy at this load profile is ~275 MiB
 mid-load, draining to ~25 MiB within minutes of write traffic ending. Anything sustained materially
@@ -94,19 +94,18 @@ logical workload.
    what the alert actually evaluates.
 3. **Production alert evaluation** uses Prometheus `rate(...)[10m]`, which dilutes the peak with
    the 9.5 minutes of surrounding load tail and idle time. On PG18 immediately post-Gatling this
-   evaluates to ~0.913 (Phase 7 captured this value on the live PromQL expression), already below
-   the 0.95 re-baseline trigger.
+   evaluates to ~0.913 (captured on the live PromQL expression during the 2026-05-02 re-baseline),
+   already below the 0.95 re-baseline trigger.
 
 **Re-baseline trigger evaluation (load-bearing):** evaluate against the *production alert form*
-(`rate()` over `[10m]`), not against the calibration delta. Phase 7's 0.913 reading means the alert
-is in `pending`/`firing` territory immediately after a load spike on the idle stack; this is the
-expected workload-tail behavior the ADR's structural-safety-net framing anticipates and is
-**resolved by Phase 8's under-load re-sample**, not by lowering the threshold. If the live `rate()`
-expression evaluates ≥0.95 during sustained nominal load (i.e. the application is serving real
-traffic, not a cold-cache idle stack), the structural-safety-net framing remains valid; if it
-durably evaluates below 0.95 during nominal traffic, the working set has genuinely outgrown
-shared_buffers and the alert moves from structural to workload-derived (see "Re-baseline trigger
-(size-driven)" below).
+(`rate()` over `[10m]`), not against the calibration delta. The 0.913 reading immediately after a
+load spike on the idle stack is the expected workload-tail behavior the ADR's structural-safety-net
+framing anticipates, and is **resolved by re-sampling under sustained nominal load**, not by lowering
+the threshold. If the live `rate()` expression evaluates ≥0.95 during sustained nominal load (i.e.
+the application is serving real traffic, not a cold-cache idle stack), the structural-safety-net
+framing remains valid; if it durably evaluates below 0.95 during nominal traffic, the working set
+has genuinely outgrown shared_buffers and the alert moves from structural to workload-derived
+(see "Re-baseline trigger (size-driven)" below).
 
 ### Calibration log
 
@@ -247,8 +246,9 @@ of the Discord delivery before the alert is considered production-ready. Procedu
 | `ReplicationSlotInactive` | `docker compose stop kafka-connect` and wait 7m. (Math: recording rule starts ticking from 0 immediately when the slot goes inactive, crosses 300s at t=5m, `for: 1m` window completes at t=6m. 6m is at-the-boundary — same race condition that pushed `PostgresUnreachable` to 2m. 7m gives slack.) | Warning alert. Recover with `docker compose start kafka-connect`. |
 | `IdleInTransactionTooLong` | Open an interactive psql session: `docker compose exec postgres psql -U user -d wealthpay`. Inside the session run `BEGIN; SELECT 1;` and leave the terminal alone for 11 minutes. (Critical: the session must be in `state='idle in transaction'` — i.e. transaction open, no query running. Do NOT use `BEGIN; SELECT pg_sleep(900);` — `pg_sleep` keeps `state='active'` for the entire sleep, the rule's `state="idle in transaction"` filter never matches, and the drill silently does nothing. Math after the session is in the right state: `max_tx_duration` ticks from `xact_start`, crosses 300s at t=5m, `for: 5m` window completes at ~t=10m → wait 11m for slack.) | Warning alert. Recover with `COMMIT;` or `\q` in the psql session. |
 
-The fire-drill log lives in the PR description for the step-7 closing commit, not here — drills are
-performed once and recorded; this ADR captures the *procedure*.
+Fire-drill execution evidence (Discord screenshots, recovery confirmation) lives in the closing
+PR's description, not here — drills are performed once and recorded; this ADR captures the
+*procedure*.
 
 ## Consequences
 

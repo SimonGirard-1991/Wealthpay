@@ -5,12 +5,14 @@
 -- Files under /docker-entrypoint-initdb.d/ execute ONLY on initial DB
 -- initialization (PGDATA empty at container start). On the pg_upgrade --link
 -- path the new cluster's PGDATA is pre-initialized, so this script does NOT
--- run during the upgrade — the equivalent ALTER EXTENSION ... UPDATE step is
--- performed manually per docs/postgres-18-migration-plan.md Phase 4a step 6.
+-- run during the upgrade — the equivalent ALTER EXTENSION ... UPDATE step
+-- must be applied manually as part of the cutover (see the ALTER below for
+-- the same logic, and docs/postgres-upgrade.md § "Upgrade procedure" for
+-- where this fits in the major-version-bump checklist).
 -- Coverage matrix:
---   * fresh `./scripts/infra.sh up`  → this script runs           ✓
---   * pg_upgrade --link cutover      → manual ALTER per Phase 4a  ✓ (not here)
---   * pg_dumpall + restore (Path 4b) → this script runs on init   ✓
+--   * fresh `./scripts/infra.sh up`  → this script runs                ✓
+--   * pg_upgrade --link cutover      → manual ALTER (mirror of below)  ✓ (not here)
+--   * pg_dumpall + restore           → this script runs on init        ✓
 --
 -- The extension ships with the stock postgres:18 image (contrib), so no
 -- Dockerfile change is required. It still must be loaded via

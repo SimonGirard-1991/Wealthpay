@@ -108,19 +108,27 @@ Windows (PowerShell):
 powershell -ExecutionPolicy Bypass -File .\scripts\infra.ps1
 ```
 
-> **Migrating from a pre-PG18 stack? (Both `infra.sh` and `infra.ps1` enforce this.)**
-> If your local `pg_data` volume dates from before the PostgreSQL 18 upgrade,
-> the bring-up script refuses to start (the volume's on-disk layout no longer
-> matches what the current stack expects). See
-> [docs/postgres-18-migration-plan.md](docs/postgres-18-migration-plan.md)
-> to migrate the existing data, or `docker volume rm wealthpay_pg_data`
-> (PowerShell: `docker volume rm wealthpay_pg_data`) to discard it and start
-> fresh on PG18. Both scripts also auto-inject `--build` on `up` invocations
-> so a cached pre-cutover `wealthpay-postgres` image cannot silently mask a
-> Dockerfile change; pass `--no-build` explicitly when you know your cache is
-> fresh. Future major-version cutovers may trip the same guard with an
-> updated marker — the script's error message always points at the current
-> migration runbook.
+> **Stale `pg_data` volume from a pre-PG18 checkout? (Both `infra.sh` and `infra.ps1` enforce this.)**
+> If your local `pg_data` volume dates from before the PostgreSQL 18 cutover,
+> the bring-up script refuses to start — the volume's on-disk layout no
+> longer matches what the current stack expects. The supported recovery is
+> to discard the volume and start fresh on PG18:
+>
+> ```bash
+> docker volume rm wealthpay_pg_data
+> ./scripts/infra.sh up -d --build
+> ```
+>
+> (PowerShell: `docker volume rm wealthpay_pg_data` then re-run `infra.ps1`.)
+> This stack is PG18-only; there is no in-place migration path from a local
+> dev volume. If you need to preserve data, take a logical dump from the
+> running pre-PG18 stack before discarding the volume and reload it after
+> bring-up. Both scripts also auto-inject `--build` on `up` invocations so a
+> cached pre-cutover `wealthpay-postgres` image cannot silently mask a
+> Dockerfile change; pass `--no-build` explicitly when you know your cache
+> is fresh. Future major-version cutovers may trip the same guard with an
+> updated marker — see [docs/postgres-upgrade.md](docs/postgres-upgrade.md)
+> for the observability-side hazards to watch on any major-version bump.
 
 The Unix script adds `docker-compose.local.linux.yml` automatically on native Linux and uses only
 `docker-compose.local.yml` on macOS.

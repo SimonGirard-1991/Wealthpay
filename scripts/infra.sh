@@ -69,8 +69,10 @@ if [[ "${1:-}" == "up" ]] && docker volume inspect "${PG_DATA_VOLUME}" &>/dev/nu
     echo "       PGDATA under ./data/. Starting against the old layout risks" >&2
     echo "       abandoning the prior cluster files or initdb failure." >&2
     echo "" >&2
-    echo "       To migrate existing data: see docs/postgres-18-migration-plan.md" >&2
-    echo "       To start fresh (DESTROYS DATA):" >&2
+    echo "       This stack is PG18-only; no in-place migration from a local dev volume." >&2
+    echo "       To preserve data: take a logical dump from the running pre-PG18 stack" >&2
+    echo "         before discarding the volume, then reload it after bring-up." >&2
+    echo "       To discard and start fresh (DESTROYS DATA):" >&2
     echo "         docker volume rm ${PG_DATA_VOLUME} && ./scripts/infra.sh up -d --build" >&2
     exit 1
   fi

@@ -42,8 +42,10 @@ if ($userArgs[0] -eq "up") {
             Write-Host "       PGDATA under ./data/. Starting against the old layout risks"
             Write-Host "       abandoning the prior cluster files or initdb failure."
             Write-Host ""
-            Write-Host "       To migrate existing data: see docs/postgres-18-migration-plan.md"
-            Write-Host "       To start fresh (DESTROYS DATA):"
+            Write-Host "       This stack is PG18-only; no in-place migration from a local dev volume."
+            Write-Host "       To preserve data: take a logical dump from the running pre-PG18 stack"
+            Write-Host "         before discarding the volume, then reload it after bring-up."
+            Write-Host "       To discard and start fresh (DESTROYS DATA):"
             Write-Host "         docker volume rm $pgDataVolume; .\scripts\infra.ps1 up -d --build"
             exit 1
         }
