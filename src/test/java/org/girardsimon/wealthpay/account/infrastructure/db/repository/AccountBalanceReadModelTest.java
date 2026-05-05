@@ -26,12 +26,17 @@ import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
-import org.girardsimon.wealthpay.account.domain.model.EventId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
+import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountBalanceViewEntryToDomainMapper;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +50,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import({AccountBalanceReadModel.class, AccountBalanceViewEntryToDomainMapper.class})
 class AccountBalanceReadModelTest extends AbstractContainerTest {
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
+  private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();
+  private final ReservationIdGenerator reservationIdGenerator = new TestReservationIdGenerator();
+
   @Autowired private DSLContext dslContext;
   @Autowired private PlatformTransactionManager transactionManager;
 
@@ -53,7 +62,7 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
   @Test
   void getAccountBalance_should_returns_expected_account_balance_view() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     String currency = "USD";
     BigDecimal balance = BigDecimal.valueOf(100.5000).setScale(4, RoundingMode.HALF_UP);
     BigDecimal reserved = BigDecimal.valueOf(0.0000).setScale(4, RoundingMode.HALF_UP);
@@ -91,34 +100,40 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
   @Test
   void project_update_account_balance_view_as_expected() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    AccountEventMeta meta1 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountId accountId = accountIdGenerator.newId();
+    AccountEventMeta meta1 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened =
         new AccountOpened(
             meta1,
             SupportedCurrency.USD,
             Money.of(BigDecimal.valueOf(1000L), SupportedCurrency.USD));
-    AccountEventMeta meta2 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    AccountEventMeta meta2 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsCredited fundsCredited =
         new FundsCredited(
             meta2,
-            TransactionId.newId(),
+            TransactionId.of(UUID.randomUUID()),
             Money.of(BigDecimal.valueOf(500L), SupportedCurrency.USD));
-    ReservationId reservationId = ReservationId.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
     Money moneyReserved = Money.of(BigDecimal.valueOf(200L), SupportedCurrency.USD);
-    AccountEventMeta meta3 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 3L);
+    AccountEventMeta meta3 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 3L);
     FundsReserved fundsReserved =
-        new FundsReserved(meta3, TransactionId.newId(), reservationId, moneyReserved);
-    AccountEventMeta meta4 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 4L);
+        new FundsReserved(meta3, TransactionId.of(UUID.randomUUID()), reservationId, moneyReserved);
+    AccountEventMeta meta4 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 4L);
     ReservationCanceled reservationCanceled =
         new ReservationCanceled(meta4, reservationId, moneyReserved);
-    AccountEventMeta meta5 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 5L);
+    AccountEventMeta meta5 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 5L);
     FundsDebited fundsDebited =
         new FundsDebited(
             meta5,
-            TransactionId.newId(),
+            TransactionId.of(UUID.randomUUID()),
             Money.of(BigDecimal.valueOf(1500L), SupportedCurrency.USD));
-    AccountEventMeta meta6 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 6L);
+    AccountEventMeta meta6 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 6L);
     AccountClosed accountClosed = new AccountClosed(meta6);
     List<AccountEvent> events =
         List.of(
@@ -152,19 +167,22 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
   @Test
   void account_balance_reservation_lifecycle() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    AccountEventMeta meta1 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountId accountId = accountIdGenerator.newId();
+    AccountEventMeta meta1 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened =
         new AccountOpened(
             meta1,
             SupportedCurrency.USD,
             Money.of(BigDecimal.valueOf(1000L), SupportedCurrency.USD));
-    ReservationId reservationId = ReservationId.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
     Money moneyReserved = Money.of(BigDecimal.valueOf(200L), SupportedCurrency.USD);
-    AccountEventMeta meta2 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    AccountEventMeta meta2 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
-        new FundsReserved(meta2, TransactionId.newId(), reservationId, moneyReserved);
-    AccountEventMeta meta3 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 3L);
+        new FundsReserved(meta2, TransactionId.of(UUID.randomUUID()), reservationId, moneyReserved);
+    AccountEventMeta meta3 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 3L);
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(meta3, reservationId, moneyReserved);
 
@@ -210,10 +228,13 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
         .set(ACCOUNT_BALANCE_VIEW.VERSION, version)
         .execute();
     AccountEventMeta meta =
-        AccountEventMeta.of(EventId.newId(), AccountId.of(accountId), Instant.now(), version + 10L);
+        AccountEventMeta.of(
+            eventIdGenerator.newId(), AccountId.of(accountId), Instant.now(), version + 10L);
     FundsCredited fundsCredited =
         new FundsCredited(
-            meta, TransactionId.newId(), Money.of(BigDecimal.valueOf(500L), SupportedCurrency.USD));
+            meta,
+            TransactionId.of(UUID.randomUUID()),
+            Money.of(BigDecimal.valueOf(500L), SupportedCurrency.USD));
 
     List<AccountEvent> events = List.of(fundsCredited);
 
@@ -225,7 +246,7 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
   @Test
   void project_should_be_idempotent() throws Exception {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     long initialVersion = 55L;
     TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
     // REQUIRES_NEW forces the actual commit (otherwise @JooqTest rolls back everything)
@@ -261,11 +282,11 @@ class AccountBalanceReadModelTest extends AbstractContainerTest {
                 go.await();
                 AccountEventMeta metaCredited =
                     AccountEventMeta.of(
-                        EventId.newId(), accountId, Instant.now(), initialVersion + 1L);
+                        eventIdGenerator.newId(), accountId, Instant.now(), initialVersion + 1L);
                 FundsCredited credited =
                     new FundsCredited(
                         metaCredited,
-                        TransactionId.newId(),
+                        TransactionId.of(UUID.randomUUID()),
                         Money.of(BigDecimal.TEN, SupportedCurrency.USD));
 
                 txTemplate.execute(

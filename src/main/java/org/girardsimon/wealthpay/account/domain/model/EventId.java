@@ -9,10 +9,6 @@ public record EventId(UUID id) {
     }
   }
 
-  public static EventId newId() {
-    return new EventId(UUID.randomUUID());
-  }
-
   public static EventId of(UUID id) {
     return new EventId(id);
   }

@@ -3,6 +3,7 @@ package org.girardsimon.wealthpay.architecture;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -283,6 +284,35 @@ class HexagonalArchitectureTest {
           .because(
               "Class-level @Transactional applies to all public methods of the bean — same"
                   + " constraints as method-level.")
+          .allowEmptyShould(true);
+
+  /**
+   * Prevents domain value objects from offering a {@code newId()} static factory. ID minting must
+   * go through a domain-defined generator port (e.g. {@code AccountIdGenerator}) so the
+   * randomness/UUID-version policy lives in exactly one place — the production adapter — and tests
+   * exercise the same seam (test generators implementing the same port) instead of bypassing it.
+   * The rule is type-agnostic: any future {@code FooId} value object inherits the constraint
+   * automatically. It also catches a non-ID class in {@code ..domain.model..} that grows a static
+   * {@code newId()} — intentional, since domain-model classes should not self-mint identifiers.
+   */
+  @ArchTest
+  static final ArchRule domain_model_must_not_expose_newId_static_factory =
+      noMethods()
+          .that()
+          .areStatic()
+          .and()
+          .haveName("newId")
+          .should()
+          .beDeclaredInClassesThat()
+          .resideInAPackage("..domain.model..")
+          .as("Domain value objects must not expose a static newId() factory")
+          .because(
+              "ID minting must go through a domain-defined generator port (e.g."
+                  + " AccountIdGenerator) so the policy (UUIDv4 vs UUIDv7, random source) lives in"
+                  + " one place — the production adapter — and tests use test generators"
+                  + " implementing the same port instead of bypassing it. The same constraint"
+                  + " applies to any other domain-model class: they should not self-mint"
+                  + " identifiers.")
           .allowEmptyShould(true);
 
   @ArchTest

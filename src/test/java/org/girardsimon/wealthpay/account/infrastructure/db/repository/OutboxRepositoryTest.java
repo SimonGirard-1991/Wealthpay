@@ -11,11 +11,15 @@ import java.util.List;
 import org.girardsimon.wealthpay.account.domain.event.AccountEventMeta;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
+import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountEventSerializer;
 import org.girardsimon.wealthpay.account.jooq.tables.records.OutboxRecord;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
 import org.girardsimon.wealthpay.shared.config.TimeConfig;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;
@@ -33,6 +37,9 @@ import tools.jackson.databind.ObjectMapper;
 })
 class OutboxRepositoryTest extends AbstractContainerTest {
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
+  private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();
+
   @Autowired private DSLContext dsl;
   @Autowired private Clock clock;
   @Autowired private OutboxRepository outboxRepository;
@@ -40,8 +47,8 @@ class OutboxRepositoryTest extends AbstractContainerTest {
   @Test
   void publish_should_persist_events_in_outbox() {
     // Arrange
-    EventId eventId = EventId.newId();
-    AccountId accountId = AccountId.newId();
+    EventId eventId = eventIdGenerator.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.TEN, usd);
     Instant occurredAt = Instant.now(clock);

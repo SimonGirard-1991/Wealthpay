@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -17,9 +18,11 @@ import org.girardsimon.wealthpay.account.domain.command.CreditAccount;
 import org.girardsimon.wealthpay.account.domain.command.DebitAccount;
 import org.girardsimon.wealthpay.account.domain.exception.TransactionIdConflictException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
 import org.girardsimon.wealthpay.shared.config.TimeConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +37,8 @@ import tools.jackson.databind.ObjectMapper;
 @Import({ProcessedTransactionRepository.class, ObjectMapper.class, TimeConfig.class})
 class ProcessedTransactionRepositoryTest extends AbstractContainerTest {
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
+
   @Autowired private PlatformTransactionManager transactionManager;
 
   @Autowired private ProcessedTransactionStore processedTransactionStore;
@@ -43,8 +48,8 @@ class ProcessedTransactionRepositoryTest extends AbstractContainerTest {
       register_transaction_should_only_insert_one_transaction_between_many_with_same_transaction_id()
           throws Exception {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     Instant occurredAt = Instant.now();
     TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
     txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -104,8 +109,8 @@ class ProcessedTransactionRepositoryTest extends AbstractContainerTest {
   @Test
   void register_should_throw_when_transaction_id_exists_with_different_fingerprint() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     Instant occurredAt = Instant.now();
     CreditAccount creditAccount =
         new CreditAccount(

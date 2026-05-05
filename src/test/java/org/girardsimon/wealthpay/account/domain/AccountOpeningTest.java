@@ -14,22 +14,25 @@ import org.girardsimon.wealthpay.account.domain.exception.AccountCurrencyMismatc
 import org.girardsimon.wealthpay.account.domain.exception.InvalidInitialBalanceException;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.HandleResult;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
 import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
 import org.junit.jupiter.api.Test;
 
 class AccountOpeningTest {
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
   private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();
 
   @Test
   void openAccountCommand_produces_accountOpenedEvent() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency currency = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), currency);
     OpenAccount openAccount = new OpenAccount(currency, initialBalance);
@@ -53,7 +56,7 @@ class AccountOpeningTest {
   @Test
   void openAccountCommand_requires_initial_balance_in_same_currency_as_currency_of_account() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     SupportedCurrency eur = SupportedCurrency.EUR;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
@@ -68,7 +71,7 @@ class AccountOpeningTest {
   @Test
   void openAccountCommand_does_not_permit_negative_initial_balance() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency currency = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(-10L), currency);
     OpenAccount openAccount = new OpenAccount(currency, initialBalance);
@@ -82,7 +85,7 @@ class AccountOpeningTest {
   @Test
   void openAccountCommand_permits_zero_initial_balance() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency currency = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.ZERO, currency);
     OpenAccount openAccount = new OpenAccount(currency, initialBalance);

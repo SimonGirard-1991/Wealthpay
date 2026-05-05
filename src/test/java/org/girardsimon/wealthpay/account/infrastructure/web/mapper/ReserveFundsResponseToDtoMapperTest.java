@@ -8,16 +8,20 @@ import org.girardsimon.wealthpay.account.api.generated.model.ReserveFundsRespons
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.junit.jupiter.api.Test;
 
 class ReserveFundsResponseToDtoMapperTest {
+
+  private final ReservationIdGenerator reservationIdGenerator = new TestReservationIdGenerator();
 
   ReserveFundsResponseToDtoMapper mapper = new ReserveFundsResponseToDtoMapper();
 
   @Test
   void map_reserve_funds_response_to_dto() {
     // Arrange
-    ReservationId reservationId = ReservationId.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
     ReserveFundsResponse reserveFundsResponse =
         new ReserveFundsResponse(reservationId, ReservationResult.RESERVED);
 

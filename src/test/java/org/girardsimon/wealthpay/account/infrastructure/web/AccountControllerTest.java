@@ -24,10 +24,12 @@ import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.command.CloseAccount;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.AccountBalanceViewDomainToDtoMapper;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CloseAccountDtoToDomainMapper;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.CloseAccountResponseToDtoMapper;
 import org.girardsimon.wealthpay.account.infrastructure.web.mapper.OpenAccountDtoToDomainMapper;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
 import org.girardsimon.wealthpay.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,8 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(AccountController.class)
 @Import(GlobalExceptionHandler.class)
 class AccountControllerTest {
+
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
 
   @MockitoBean AccountApplicationService accountApplicationService;
 
@@ -68,7 +72,7 @@ class AccountControllerTest {
             .initialAmountCurrency(SupportedCurrencyDto.USD);
     OpenAccount openAccount = mock(OpenAccount.class);
     when(openAccountDtoToDomainMapper.apply(openAccountRequestDto)).thenReturn(openAccount);
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     when(accountApplicationService.openAccount(openAccount)).thenReturn(accountId);
 
     // Act ... Assert
@@ -127,7 +131,7 @@ class AccountControllerTest {
   @Test
   void getAccountById_should_return_200_with_account_response() throws Exception {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     AccountBalanceView accountBalanceView = mock(AccountBalanceView.class);
     when(accountReadService.getAccountBalance(accountId)).thenReturn(accountBalanceView);
     when(accountBalanceViewDomainToDtoMapper.apply(accountBalanceView))

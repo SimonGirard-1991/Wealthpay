@@ -23,11 +23,15 @@ import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
+import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -35,6 +39,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.ObjectMapper;
 
 class AccountEventDeserializerTest {
+
+  private static final AccountIdGenerator ACCOUNT_ID_GENERATOR = new TestAccountIdGenerator();
+  private static final EventIdGenerator EVENT_ID_GENERATOR = new TestEventIdGenerator();
 
   AccountEventDeserializer accountEventDeserializer =
       new AccountEventDeserializer(new ObjectMapper());
@@ -69,12 +76,12 @@ class AccountEventDeserializerTest {
   }
 
   static Stream<Arguments> consumerRecordAndExpectedEvent() {
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
     String openAccountPayload =
         """
         {"currency":"USD","initialBalance":100.00,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
-    EventId openAccountEventId = EventId.newId();
+    EventId openAccountEventId = EVENT_ID_GENERATOR.newId();
     Instant occuredAt = Instant.parse("2025-11-16T15:00:00Z");
     ConsumerRecord<String, Object> accountOpened =
         buildConsumerRecord(
@@ -89,7 +96,7 @@ class AccountEventDeserializerTest {
         """
         {"transactionId":"6a19786d-7b2a-466a-b0c7-e82997b0d979","currency":"SGD","amount":50.0,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
-    EventId fundsCreditedEventId = EventId.newId();
+    EventId fundsCreditedEventId = EVENT_ID_GENERATOR.newId();
     ConsumerRecord<String, Object> fundsCredited =
         buildConsumerRecord(
             accountId, fundsCreditedEventId, "FundsCredited", occuredAt, 2L, fundsCreditedPayload);
@@ -106,7 +113,7 @@ class AccountEventDeserializerTest {
         """
         {"transactionId":"5235b2a6-0e18-4f6e-a2b3-a3753256913c","currency":"EUR","amount":25.0,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
-    EventId fundsDebitedEventId = EventId.newId();
+    EventId fundsDebitedEventId = EVENT_ID_GENERATOR.newId();
     ConsumerRecord<String, Object> fundsDebited =
         buildConsumerRecord(
             accountId, fundsDebitedEventId, "FundsDebited", occuredAt, 3L, fundsDebitedPayload);
@@ -123,7 +130,7 @@ class AccountEventDeserializerTest {
         """
         {"transactionId":"c18916a0-1d63-417b-a871-9c845bbe80aa","reservationId":"a8129cdf-801a-430f-9b77-06d2c5377304","currency":"GBP","amount":75.0,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
-    EventId fundsReservedEventId = EventId.newId();
+    EventId fundsReservedEventId = EVENT_ID_GENERATOR.newId();
     ConsumerRecord<String, Object> fundsReserved =
         buildConsumerRecord(
             accountId, fundsReservedEventId, "FundsReserved", occuredAt, 4L, fundsReservedPayload);
@@ -143,7 +150,7 @@ class AccountEventDeserializerTest {
         """
         {"reservationId":"eb5739f5-d653-4716-8731-07136a5f9891","currency":"JPY","amount":100.0,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
-    EventId reservationCanceledEventId = EventId.newId();
+    EventId reservationCanceledEventId = EVENT_ID_GENERATOR.newId();
     ConsumerRecord<String, Object> reservationCanceled =
         buildConsumerRecord(
             accountId,
@@ -166,7 +173,7 @@ class AccountEventDeserializerTest {
         """
         {"reservationId":"b28ebaea-ffa5-4810-9bda-1ceef89135ef","currency":"CAD","amount":150.0,"occurredAt":"2025-11-16T15:00:00Z"}
         """;
-    EventId reservationCapturedEventId = EventId.newId();
+    EventId reservationCapturedEventId = EVENT_ID_GENERATOR.newId();
     ConsumerRecord<String, Object> reservationCaptured =
         buildConsumerRecord(
             accountId,
@@ -186,7 +193,7 @@ class AccountEventDeserializerTest {
             Money.of(new BigDecimal("150.00"), SupportedCurrency.CAD));
 
     String accountClosedPayload = "{}";
-    EventId accountClosedEventId = EventId.newId();
+    EventId accountClosedEventId = EVENT_ID_GENERATOR.newId();
     ConsumerRecord<String, Object> accountClosed =
         buildConsumerRecord(
             accountId, accountClosedEventId, "AccountClosed", occuredAt, 7L, accountClosedPayload);
@@ -204,7 +211,7 @@ class AccountEventDeserializerTest {
   }
 
   static Stream<Arguments> consumerRecordsWithMissingHeaders() {
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
     String payload =
         """
         {"currency":"USD","initialBalance":100.00,"occurredAt":"2025-11-16T15:00:00Z"}
@@ -300,8 +307,8 @@ class AccountEventDeserializerTest {
   }
 
   static Stream<Arguments> consumerRecordsWithMissingFields() {
-    AccountId accountId = AccountId.newId();
-    EventId eventId = EventId.newId();
+    AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
+    EventId eventId = EVENT_ID_GENERATOR.newId();
     Instant occurredAt = Instant.parse("2025-11-16T15:00:00Z");
 
     // AccountOpened missing currency
@@ -358,8 +365,8 @@ class AccountEventDeserializerTest {
   }
 
   static Stream<Arguments> consumerRecordsWithInvalidUUIDs() {
-    AccountId accountId = AccountId.newId();
-    EventId eventId = EventId.newId();
+    AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
+    EventId eventId = EVENT_ID_GENERATOR.newId();
     Instant occurredAt = Instant.parse("2025-11-16T15:00:00Z");
 
     // Invalid transactionId UUID
@@ -449,8 +456,8 @@ class AccountEventDeserializerTest {
   @Test
   void apply_should_throw_UnsupportedCurrencyException_when_currency_is_invalid() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    EventId eventId = EventId.newId();
+    AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
+    EventId eventId = EVENT_ID_GENERATOR.newId();
     Instant occurredAt = Instant.parse("2026-02-13T22:00:00Z");
     String payload =
         """
@@ -467,8 +474,8 @@ class AccountEventDeserializerTest {
   @Test
   void apply_should_throw_IllegalArgumentException_when_event_type_is_invalid() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    EventId eventId = EventId.newId();
+    AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
+    EventId eventId = EVENT_ID_GENERATOR.newId();
     Instant occurredAt = Instant.parse("2025-11-16T15:00:00Z");
     String payload =
         """

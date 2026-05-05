@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.girardsimon.wealthpay.account.application.AccountSnapshotStore;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.AccountSnapshot;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
 import org.girardsimon.wealthpay.account.domain.model.Money;
@@ -18,6 +19,7 @@ import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountSnapshotDeserializer;
 import org.girardsimon.wealthpay.account.infrastructure.db.repository.mapper.AccountSnapshotSerializer;
 import org.girardsimon.wealthpay.account.jooq.tables.records.AccountSnapshotRecord;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,13 +36,15 @@ import tools.jackson.databind.ObjectMapper;
 })
 class AccountSnapshotRepositoryTest extends AbstractContainerTest {
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
+
   @Autowired private DSLContext dslContext;
   @Autowired private AccountSnapshotStore accountSnapshotStore;
 
   @Test
   void load_should_return_empty_when_account_snapshot_does_not_exist() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
 
     // Act
     Optional<AccountSnapshot> snapshotLookup = accountSnapshotStore.load(accountId);
@@ -90,7 +94,7 @@ class AccountSnapshotRepositoryTest extends AbstractContainerTest {
   @Test
   void saveSnapshot_should_update_existing_snapshot_when_incoming_version_is_higher() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     AccountSnapshot initialSnapshot =
         new AccountSnapshot(
@@ -133,7 +137,7 @@ class AccountSnapshotRepositoryTest extends AbstractContainerTest {
   @Test
   void saveSnapshot_should_ignore_write_when_version_is_not_newer() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     AccountSnapshot currentSnapshot =
         new AccountSnapshot(

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.girardsimon.wealthpay.account.domain.command.OpenAccount;
 import org.girardsimon.wealthpay.account.domain.command.ReserveFunds;
@@ -23,31 +24,36 @@ import org.girardsimon.wealthpay.account.domain.exception.AmountMustBePositiveEx
 import org.girardsimon.wealthpay.account.domain.exception.InsufficientFundsException;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
-import org.girardsimon.wealthpay.account.domain.model.EventId;
 import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.HandleResult;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
 import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.junit.jupiter.api.Test;
 
 class ReserveFundsTest {
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
   private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();
+  private final ReservationIdGenerator reservationIdGenerator = new TestReservationIdGenerator();
 
   @Test
   void reserveFunds_emits_FundsReserved_event_and_update_account_reservations() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency currency = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(15L), currency);
     OpenAccount openAccount = new OpenAccount(currency, initialBalance);
     Money reservationAmount = Money.of(BigDecimal.valueOf(5L), currency);
-    ReservationId reservationId = ReservationId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, reservationAmount);
 
     // Act
@@ -78,16 +84,17 @@ class ReserveFundsTest {
   @Test
   void reserveFunds_requires_same_currency_as_account() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
-    AccountEventMeta meta = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountEventMeta meta =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(meta, usd, initialBalance);
     Account account = Account.rehydrate(List.of(accountOpened));
     SupportedCurrency chf = SupportedCurrency.CHF;
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), chf);
-    ReservationId reservationId = ReservationId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, reservedAmount);
 
     // Act ... Assert
@@ -100,16 +107,17 @@ class ReserveFundsTest {
   @Test
   void reserveFunds_requires_same_id_as_account() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
-    AccountEventMeta meta = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountEventMeta meta =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(meta, usd, initialBalance);
     Account account = Account.rehydrate(List.of(accountOpened));
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    AccountId otherAccountId = AccountId.newId();
-    ReservationId reservationId = ReservationId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    AccountId otherAccountId = accountIdGenerator.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, otherAccountId, reservedAmount);
 
     // Act ... Assert
@@ -122,15 +130,16 @@ class ReserveFundsTest {
   @Test
   void reserveFunds_requires_strictly_positive_amount() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
-    AccountEventMeta meta = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountEventMeta meta =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(meta, usd, initialBalance);
     Account account = Account.rehydrate(List.of(accountOpened));
     Money reservedAmount = Money.of(BigDecimal.valueOf(-5L), usd);
-    ReservationId reservationId = ReservationId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, reservedAmount);
 
     // Act ... Assert
@@ -143,19 +152,23 @@ class ReserveFundsTest {
   @Test
   void reserveFunds_requires_account_to_be_opened() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
-    AccountEventMeta meta1 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountEventMeta meta1 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened opened = new AccountOpened(meta1, usd, initialBalance);
-    AccountEventMeta meta2 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
-    FundsDebited debited = new FundsDebited(meta2, TransactionId.newId(), initialBalance);
+    AccountEventMeta meta2 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 2L);
+    FundsDebited debited =
+        new FundsDebited(meta2, TransactionId.of(UUID.randomUUID()), initialBalance);
     AccountClosed closed =
-        new AccountClosed(AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 3L));
+        new AccountClosed(
+            AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 3L));
     Account closedAccount = Account.rehydrate(List.of(opened, debited, closed));
     Money reservedAmount = Money.of(BigDecimal.valueOf(10L), usd);
-    ReservationId reservationId = ReservationId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, reservedAmount);
 
     // Act + Assert
@@ -168,23 +181,30 @@ class ReserveFundsTest {
   @Test
   void reserveFunds_requires_reserved_amount_to_be_less_than_account_available_balance() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(100L), usd);
-    AccountEventMeta meta1 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountEventMeta meta1 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened opened = new AccountOpened(meta1, usd, initialBalance);
     Money firstReservedAmount = Money.of(BigDecimal.valueOf(60L), usd);
-    AccountEventMeta meta2 = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+    AccountEventMeta meta2 =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
-        new FundsReserved(meta2, TransactionId.newId(), ReservationId.newId(), firstReservedAmount);
+        new FundsReserved(
+            meta2,
+            TransactionId.of(UUID.randomUUID()),
+            reservationIdGenerator.newId(),
+            firstReservedAmount);
     Account account = Account.rehydrate(List.of(opened, fundsReserved));
     Money reservedAmount =
         Money.of(BigDecimal.valueOf(50L), usd); // 50 > 100 - 60 = 40 available balance
-    ReserveFunds reserveFunds = new ReserveFunds(TransactionId.newId(), accountId, reservedAmount);
+    ReserveFunds reserveFunds =
+        new ReserveFunds(TransactionId.of(UUID.randomUUID()), accountId, reservedAmount);
 
     // Act ... Assert
     Instant occurredAt = Instant.now();
-    ReservationId reservationId = ReservationId.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
     assertThatExceptionOfType(InsufficientFundsException.class)
         .isThrownBy(
             () -> account.handle(reserveFunds, eventIdGenerator, reservationId, occurredAt));

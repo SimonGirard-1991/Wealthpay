@@ -9,18 +9,22 @@ import org.girardsimon.wealthpay.account.api.generated.model.AccountStatusDto;
 import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDto;
 import org.girardsimon.wealthpay.account.application.view.AccountBalanceView;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
 import org.junit.jupiter.api.Test;
 
 class AccountBalanceViewDomainToDtoMapperTest {
+
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
 
   AccountBalanceViewDomainToDtoMapper mapper = new AccountBalanceViewDomainToDtoMapper();
 
   @Test
   void map_account_balance_view_to_dto() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     Money balance = Money.of(BigDecimal.valueOf(100L), SupportedCurrency.USD);
     Money reserved = Money.of(BigDecimal.valueOf(50L), SupportedCurrency.USD);
     AccountBalanceView accountBalanceView =

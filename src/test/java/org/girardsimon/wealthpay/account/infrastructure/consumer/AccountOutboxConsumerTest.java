@@ -12,8 +12,12 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.girardsimon.wealthpay.account.application.AccountBalanceProjector;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.EventId;
+import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.infrastructure.consumer.mapper.AccountEventDeserializer;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
 import org.girardsimon.wealthpay.shared.config.KafkaErrorConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,14 +48,17 @@ class AccountOutboxConsumerTest {
 
   public static final String ACCOUNT_EVENT_TOPIC = "wealthpay.AccountEvent";
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
+  private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();
+
   @MockitoBean AccountBalanceProjector accountBalanceProjector;
   @Autowired KafkaTemplate<String, String> kafkaTemplate;
 
   @Test
   void should_deserialize_and_project_account_opened_event() throws Exception {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    EventId eventId = EventId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    EventId eventId = eventIdGenerator.newId();
     Instant now = Instant.now();
     String payload =
         """

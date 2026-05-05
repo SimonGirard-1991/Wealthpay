@@ -15,12 +15,14 @@ import org.girardsimon.wealthpay.account.domain.event.FundsDebited;
 import org.girardsimon.wealthpay.account.domain.event.FundsReserved;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCanceled;
 import org.girardsimon.wealthpay.account.domain.event.ReservationCaptured;
-import org.girardsimon.wealthpay.account.domain.model.AccountId;
-import org.girardsimon.wealthpay.account.domain.model.EventId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
+import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
 import org.jooq.JSONB;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -29,6 +31,9 @@ import tools.jackson.databind.ObjectMapper;
 
 class AccountEventSerializerTest {
 
+  private static final AccountIdGenerator ACCOUNT_ID_GENERATOR = new TestAccountIdGenerator();
+  private static final EventIdGenerator EVENT_ID_GENERATOR = new TestEventIdGenerator();
+
   AccountEventSerializer accountEventSerializer = new AccountEventSerializer(new ObjectMapper());
 
   public static Stream<Arguments> accountEventProvider() {
@@ -36,7 +41,8 @@ class AccountEventSerializerTest {
     Money initialBalance = Money.of(BigDecimal.valueOf(10), usd);
     Instant occurredAt = Instant.parse("2025-11-16T15:00:00Z");
     AccountEventMeta metaOpened =
-        AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 1L);
+        AccountEventMeta.of(
+            EVENT_ID_GENERATOR.newId(), ACCOUNT_ID_GENERATOR.newId(), occurredAt, 1L);
     AccountOpened accountOpened = new AccountOpened(metaOpened, usd, initialBalance);
     JSONB payloadAccountOpened =
         JSONB.valueOf(
@@ -50,7 +56,8 @@ class AccountEventSerializerTest {
     ReservationId reservationId =
         ReservationId.of(UUID.fromString("09518c66-ff5e-4596-9049-74dfbdf6f6db"));
     AccountEventMeta metaCaptured =
-        AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 3L);
+        AccountEventMeta.of(
+            EVENT_ID_GENERATOR.newId(), ACCOUNT_ID_GENERATOR.newId(), occurredAt, 3L);
     ReservationCaptured reservationCaptured =
         new ReservationCaptured(
             metaCaptured, reservationId, Money.of(BigDecimal.valueOf(40), SupportedCurrency.EUR));
@@ -65,7 +72,8 @@ class AccountEventSerializerTest {
             }
             """);
     AccountEventMeta metaClosed =
-        AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 10L);
+        AccountEventMeta.of(
+            EVENT_ID_GENERATOR.newId(), ACCOUNT_ID_GENERATOR.newId(), occurredAt, 10L);
     AccountClosed accountClosed = new AccountClosed(metaClosed);
     JSONB payloadAccountClosed =
         JSONB.valueOf(
@@ -75,7 +83,8 @@ class AccountEventSerializerTest {
             }
             """);
     AccountEventMeta metaCredited =
-        AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 2L);
+        AccountEventMeta.of(
+            EVENT_ID_GENERATOR.newId(), ACCOUNT_ID_GENERATOR.newId(), occurredAt, 2L);
     FundsCredited fundsCredited =
         new FundsCredited(
             metaCredited,
@@ -92,7 +101,8 @@ class AccountEventSerializerTest {
             }
             """);
     AccountEventMeta metaDebited =
-        AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 2L);
+        AccountEventMeta.of(
+            EVENT_ID_GENERATOR.newId(), ACCOUNT_ID_GENERATOR.newId(), occurredAt, 2L);
     FundsDebited fundsDebited =
         new FundsDebited(
             metaDebited,
@@ -109,7 +119,8 @@ class AccountEventSerializerTest {
             }
             """);
     AccountEventMeta metaReserved =
-        AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 2L);
+        AccountEventMeta.of(
+            EVENT_ID_GENERATOR.newId(), ACCOUNT_ID_GENERATOR.newId(), occurredAt, 2L);
     TransactionId transactionIdFundsReserved =
         TransactionId.of(UUID.fromString("48df9a88-50f0-47c6-96fd-f2afff2abf8d"));
     FundsReserved fundsReserved =
@@ -130,7 +141,8 @@ class AccountEventSerializerTest {
             }
             """);
     AccountEventMeta metaCanceled =
-        AccountEventMeta.of(EventId.newId(), AccountId.newId(), occurredAt, 2L);
+        AccountEventMeta.of(
+            EVENT_ID_GENERATOR.newId(), ACCOUNT_ID_GENERATOR.newId(), occurredAt, 2L);
     ReservationCanceled reservationCanceled =
         new ReservationCanceled(
             metaCanceled,

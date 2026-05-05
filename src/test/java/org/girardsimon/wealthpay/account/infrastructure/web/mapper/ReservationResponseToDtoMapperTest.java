@@ -10,20 +10,27 @@ import org.girardsimon.wealthpay.account.api.generated.model.SupportedCurrencyDt
 import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.junit.jupiter.api.Test;
 
 class ReservationResponseToDtoMapperTest {
+
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
+  private final ReservationIdGenerator reservationIdGenerator = new TestReservationIdGenerator();
 
   ReservationResponseToDtoMapper mapper = new ReservationResponseToDtoMapper();
 
   @Test
   void map_cancel_reservation_response_to_dto() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    ReservationId reservationId = ReservationId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
     Money money = Money.of(BigDecimal.valueOf(50.25), SupportedCurrency.USD);
     ReservationResponse reservationResponse =
         new ReservationResponse(
@@ -50,8 +57,8 @@ class ReservationResponseToDtoMapperTest {
   @Test
   void map_cancel_reservation_response_without_money_to_dto() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    ReservationId reservationId = ReservationId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
     ReservationResponse reservationResponse =
         new ReservationResponse(
             accountId, reservationId, Optional.empty(), ReservationResult.NO_EFFECT);

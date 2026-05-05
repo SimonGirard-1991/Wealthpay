@@ -9,18 +9,24 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.girardsimon.wealthpay.account.domain.event.AccountEventMeta;
 import org.girardsimon.wealthpay.account.domain.event.AccountOpened;
 import org.girardsimon.wealthpay.account.domain.event.FundsCredited;
 import org.girardsimon.wealthpay.account.domain.model.Account;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.AccountSnapshot;
 import org.girardsimon.wealthpay.account.domain.model.AccountStatus;
-import org.girardsimon.wealthpay.account.domain.model.EventId;
+import org.girardsimon.wealthpay.account.domain.model.EventIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -30,6 +36,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AccountLoaderTest {
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
+  private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();
+  private final ReservationIdGenerator reservationIdGenerator = new TestReservationIdGenerator();
+
   @Mock AccountEventStore accountEventStore;
   @Mock AccountSnapshotStore accountSnapshotStore;
 
@@ -38,11 +48,12 @@ class AccountLoaderTest {
   @Test
   void loadAccount_should_rehydrate_all_account_events_when_no_snapshot_exists() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     when(accountSnapshotStore.load(accountId)).thenReturn(Optional.empty());
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
-    AccountEventMeta meta = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+    AccountEventMeta meta =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(meta, usd, initialBalance);
     when(accountEventStore.loadEvents(accountId)).thenReturn(List.of(accountOpened));
 
@@ -61,18 +72,20 @@ class AccountLoaderTest {
   @Test
   void loadAccount_should_rehydrate_account_events_after_snapshot_when_snapshot_is_found() {
     // Arrange
-    AccountId accountId = AccountId.newId();
+    AccountId accountId = accountIdGenerator.newId();
     SupportedCurrency usd = SupportedCurrency.USD;
     Money balance = Money.of(new BigDecimal("5555555.00"), usd);
     Map<ReservationId, Money> reservations =
-        Map.of(ReservationId.newId(), Money.of(new BigDecimal("15.00"), usd));
+        Map.of(reservationIdGenerator.newId(), Money.of(new BigDecimal("15.00"), usd));
     long version = 400L;
     AccountSnapshot snapshot =
         new AccountSnapshot(accountId, usd, balance, AccountStatus.OPENED, reservations, version);
     when(accountSnapshotStore.load(accountId)).thenReturn(Optional.of(snapshot));
     Money credit = Money.of(new BigDecimal("10.00"), usd);
-    AccountEventMeta meta = AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 401L);
-    FundsCredited fundsCredited = new FundsCredited(meta, TransactionId.newId(), credit);
+    AccountEventMeta meta =
+        AccountEventMeta.of(eventIdGenerator.newId(), accountId, Instant.now(), 401L);
+    FundsCredited fundsCredited =
+        new FundsCredited(meta, TransactionId.of(UUID.randomUUID()), credit);
     when(accountEventStore.loadEventsAfterVersion(accountId, version))
         .thenReturn(List.of(fundsCredited));
 

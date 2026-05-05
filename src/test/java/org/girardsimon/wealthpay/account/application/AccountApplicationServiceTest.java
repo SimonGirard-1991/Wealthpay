@@ -19,6 +19,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
 import org.girardsimon.wealthpay.account.application.response.ReserveFundsResponse;
@@ -55,6 +56,9 @@ import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.ReservationPhase;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestEventIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -75,9 +79,18 @@ class AccountApplicationServiceTest {
 
   Clock clock = Clock.fixed(INSTANT_FOR_TESTS, ZoneOffset.UTC);
 
-  AccountId accountId = AccountId.newId();
-  EventId eventId = EventId.newId();
-  ReservationId reservationId = ReservationId.newId();
+  // Fixture generators — produce distinct, deterministic IDs for both the SUT-injected
+  // fixed IDs (below) and any extra IDs the test bodies need.
+  private final AccountIdGenerator fixtureAccountIdGenerator = new TestAccountIdGenerator();
+  private final EventIdGenerator fixtureEventIdGenerator = new TestEventIdGenerator();
+  private final ReservationIdGenerator fixtureReservationIdGenerator =
+      new TestReservationIdGenerator();
+
+  // SUT-injected fixed IDs: the application service receives these via the lambdas below,
+  // and assertions compare its outputs against these exact values.
+  AccountId accountId = fixtureAccountIdGenerator.newId();
+  EventId eventId = fixtureEventIdGenerator.newId();
+  ReservationId reservationId = fixtureReservationIdGenerator.newId();
 
   AccountIdGenerator accountIdGenerator = () -> accountId;
   EventIdGenerator eventIdGenerator = () -> eventId;
@@ -144,12 +157,12 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
@@ -186,17 +199,17 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
-    ReservationId otherReservationId = ReservationId.newId();
+    ReservationId otherReservationId = fixtureReservationIdGenerator.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.of(ReservationPhase.CAPTURED));
@@ -223,17 +236,17 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
-    ReservationId otherReservationId = ReservationId.newId();
+    ReservationId otherReservationId = fixtureReservationIdGenerator.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.empty());
@@ -250,17 +263,17 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
-    ReservationId otherReservationId = ReservationId.newId();
+    ReservationId otherReservationId = fixtureReservationIdGenerator.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.of(ReservationPhase.CANCELED));
@@ -276,12 +289,12 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
@@ -318,17 +331,17 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
-    ReservationId otherReservationId = ReservationId.newId();
+    ReservationId otherReservationId = fixtureReservationIdGenerator.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.of(ReservationPhase.CANCELED));
@@ -356,17 +369,17 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
-    ReservationId otherReservationId = ReservationId.newId();
+    ReservationId otherReservationId = fixtureReservationIdGenerator.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.empty());
@@ -383,17 +396,17 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Money reservedAmount = Money.of(BigDecimal.valueOf(5L), usd);
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     FundsReserved fundsReserved =
         new FundsReserved(accountEventMeta2, transactionId, reservationId, reservedAmount);
     List<AccountEvent> accountEvents = List.of(accountOpened, fundsReserved);
     when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
-    ReservationId otherReservationId = ReservationId.newId();
+    ReservationId otherReservationId = fixtureReservationIdGenerator.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, otherReservationId);
     when(processedReservationStore.lookupPhase(accountId, otherReservationId))
         .thenReturn(Optional.of(ReservationPhase.CAPTURED));
@@ -411,11 +424,11 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta, usd, initialBalance);
     when(accountLoader.loadAccount(accountId))
         .thenReturn(Account.rehydrate(List.of(accountOpened)));
-    ReservationId orphanReservationId = ReservationId.newId();
+    ReservationId orphanReservationId = fixtureReservationIdGenerator.newId();
     CancelReservation cancelReservation = new CancelReservation(accountId, orphanReservationId);
     when(processedReservationStore.lookupPhase(accountId, orphanReservationId))
         .thenReturn(Optional.of(ReservationPhase.RESERVED));
@@ -433,11 +446,11 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.valueOf(10L), usd);
     AccountEventMeta accountEventMeta =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta, usd, initialBalance);
     when(accountLoader.loadAccount(accountId))
         .thenReturn(Account.rehydrate(List.of(accountOpened)));
-    ReservationId orphanReservationId = ReservationId.newId();
+    ReservationId orphanReservationId = fixtureReservationIdGenerator.newId();
     CaptureReservation captureReservation = new CaptureReservation(accountId, orphanReservationId);
     when(processedReservationStore.lookupPhase(accountId, orphanReservationId))
         .thenReturn(Optional.of(ReservationPhase.RESERVED));
@@ -451,7 +464,7 @@ class AccountApplicationServiceTest {
   @Test
   void creditAccount_should_not_persist_event_when_transaction_status_is_no_effect() {
     // Arrange
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.EUR);
     CreditAccount creditAccount = new CreditAccount(transactionId, accountId, money);
     when(processedTransactionStore.register(
@@ -470,11 +483,11 @@ class AccountApplicationServiceTest {
   @Test
   void creditAccount_should_save_funds_credited_event_when_transaction_status_is_committed() {
     // Arrange
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     List<AccountEvent> accountEvents = List.of(accountOpened);
     when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
@@ -500,7 +513,7 @@ class AccountApplicationServiceTest {
   @Test
   void creditAccount_should_save_snapshot_when_threshold_is_crossed_without_initial_snapshot() {
     // Arrange
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     SupportedCurrency usd = SupportedCurrency.USD;
     List<AccountEvent> historyUntilVersion99 =
         buildHistory(accountId, usd, SNAPSHOT_THRESHOLD - 1L);
@@ -537,7 +550,7 @@ class AccountApplicationServiceTest {
   @Test
   void debitAccount_should_not_persist_event_when_transaction_status_is_no_effect() {
     // Arrange
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.EUR);
     DebitAccount debitAccount = new DebitAccount(transactionId, accountId, money);
     when(processedTransactionStore.register(
@@ -556,11 +569,11 @@ class AccountApplicationServiceTest {
   @Test
   void debitAccount_should_save_funds_debited_event_when_transaction_status_is_committed() {
     // Arrange
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     List<AccountEvent> accountEvents = List.of(accountOpened);
     when(accountLoader.loadAccount(accountId)).thenReturn(Account.rehydrate(accountEvents));
@@ -586,7 +599,7 @@ class AccountApplicationServiceTest {
   @Test
   void reserveFunds_should_not_persist_event_when_transaction_status_is_no_effect() {
     // Arrange
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     Money money = Money.of(new BigDecimal("100.00"), SupportedCurrency.USD);
     ReserveFunds reserveFunds = new ReserveFunds(transactionId, accountId, money);
     when(processedTransactionStore.register(
@@ -613,11 +626,11 @@ class AccountApplicationServiceTest {
   @Test
   void reserveFunds_should_save_funds_reserved_event_when_transaction_status_is_committed() {
     // Arrange
-    TransactionId transactionId = TransactionId.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(new BigDecimal("10.00"), usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     when(accountLoader.loadAccount(accountId))
         .thenReturn(Account.rehydrate(List.of(accountOpened)));
@@ -656,10 +669,10 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.ZERO, usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     AccountEventMeta accountEventMeta2 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 2L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 2L);
     AccountClosed accountClosed = new AccountClosed(accountEventMeta2);
     Account accountAlreadyClosed = Account.rehydrate(List.of(accountOpened, accountClosed));
     when(accountLoader.loadAccount(accountId)).thenReturn(accountAlreadyClosed);
@@ -680,7 +693,7 @@ class AccountApplicationServiceTest {
     SupportedCurrency usd = SupportedCurrency.USD;
     Money initialBalance = Money.of(BigDecimal.ZERO, usd);
     AccountEventMeta accountEventMeta1 =
-        AccountEventMeta.of(EventId.newId(), accountId, Instant.now(), 1L);
+        AccountEventMeta.of(fixtureEventIdGenerator.newId(), accountId, Instant.now(), 1L);
     AccountOpened accountOpened = new AccountOpened(accountEventMeta1, usd, initialBalance);
     Account accountToBeClosed = Account.rehydrate(List.of(accountOpened));
     when(accountLoader.loadAccount(accountId)).thenReturn(accountToBeClosed);
@@ -705,16 +718,21 @@ class AccountApplicationServiceTest {
 
     Money initialBalance = Money.of(new BigDecimal("10.00"), currency);
     AccountEventMeta accountOpenedMeta =
-        AccountEventMeta.of(EventId.newId(), accountId, INSTANT_FOR_TESTS.minusSeconds(99L), 1L);
+        AccountEventMeta.of(
+            fixtureEventIdGenerator.newId(), accountId, INSTANT_FOR_TESTS.minusSeconds(99L), 1L);
     events.add(new AccountOpened(accountOpenedMeta, currency, initialBalance));
 
     Money historicalCreditAmount = Money.of(BigDecimal.ONE, currency);
     for (long version = 2L; version <= numberOfEvents; version++) {
       AccountEventMeta fundsCreditedMeta =
           AccountEventMeta.of(
-              EventId.newId(), accountId, INSTANT_FOR_TESTS.minusSeconds(100L - version), version);
+              fixtureEventIdGenerator.newId(),
+              accountId,
+              INSTANT_FOR_TESTS.minusSeconds(100L - version),
+              version);
       events.add(
-          new FundsCredited(fundsCreditedMeta, TransactionId.newId(), historicalCreditAmount));
+          new FundsCredited(
+              fundsCreditedMeta, TransactionId.of(UUID.randomUUID()), historicalCreditAmount));
     }
     return events;
   }

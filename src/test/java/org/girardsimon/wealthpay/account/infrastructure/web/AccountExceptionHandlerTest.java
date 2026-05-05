@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.girardsimon.wealthpay.account.domain.exception.AccountBalanceNotFoundException;
 import org.girardsimon.wealthpay.account.domain.exception.AccountCurrencyMismatchException;
@@ -23,10 +24,14 @@ import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundExc
 import org.girardsimon.wealthpay.account.domain.exception.TransactionIdConflictException;
 import org.girardsimon.wealthpay.account.domain.exception.UnsupportedCurrencyException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.Money;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.SupportedCurrency;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.girardsimon.wealthpay.shared.infrastructure.web.FakeController;
 import org.girardsimon.wealthpay.shared.infrastructure.web.FakeService;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,13 +47,17 @@ import org.springframework.test.web.servlet.MockMvc;
 @ActiveProfiles("test")
 class AccountExceptionHandlerTest {
 
+  private static final AccountIdGenerator ACCOUNT_ID_GENERATOR = new TestAccountIdGenerator();
+  private static final ReservationIdGenerator RESERVATION_ID_GENERATOR =
+      new TestReservationIdGenerator();
+
   @MockitoBean FakeService fakeService;
 
   @Autowired MockMvc mockMvc;
 
   private static Stream<Arguments> allBadRequestExceptions() {
-    AccountId accountId1 = AccountId.newId();
-    AccountId accountId2 = AccountId.newId();
+    AccountId accountId1 = ACCOUNT_ID_GENERATOR.newId();
+    AccountId accountId2 = ACCOUNT_ID_GENERATOR.newId();
     return Stream.of(
         Arguments.of(new IllegalArgumentException("Illegal Argument"), "Illegal Argument"),
         Arguments.of(
@@ -57,8 +66,8 @@ class AccountExceptionHandlerTest {
   }
 
   private static Stream<Arguments> allNotFoundExceptions() {
-    ReservationId reservationId = ReservationId.newId();
-    AccountId accountId = AccountId.newId();
+    ReservationId reservationId = RESERVATION_ID_GENERATOR.newId();
+    AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
     return Stream.of(
         Arguments.of(
             new ReservationNotFoundException(reservationId),
@@ -70,8 +79,8 @@ class AccountExceptionHandlerTest {
   }
 
   private static Stream<Arguments> allConflictExceptions() {
-    AccountId accountId = AccountId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
     return Stream.of(
         Arguments.of(new AccountInactiveException(), "Account is inactive"),
         Arguments.of(new ReservationAlreadyCanceledException("message"), "message"),

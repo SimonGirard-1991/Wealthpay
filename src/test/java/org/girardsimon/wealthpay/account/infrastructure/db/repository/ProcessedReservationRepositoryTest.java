@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,10 +17,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.girardsimon.wealthpay.account.application.ProcessedReservationStore;
 import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.ReservationPhase;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.girardsimon.wealthpay.account.jooq.tables.records.ProcessedReservationsRecord;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.girardsimon.wealthpay.shared.config.TimeConfig;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;
@@ -35,6 +40,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import({ProcessedReservationRepository.class, TimeConfig.class})
 class ProcessedReservationRepositoryTest extends AbstractContainerTest {
 
+  private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
+  private final ReservationIdGenerator reservationIdGenerator = new TestReservationIdGenerator();
+
   @Autowired private DSLContext dslContext;
   @Autowired private PlatformTransactionManager transactionManager;
 
@@ -43,9 +51,9 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
   @Test
   void register_should_persist_reservation_and_support_lookups() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    TransactionId transactionId = TransactionId.newId();
-    ReservationId reservationId = ReservationId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
+    ReservationId reservationId = reservationIdGenerator.newId();
     ReservationPhase reservationPhase = ReservationPhase.RESERVED;
     Instant occurredAt = Instant.parse("2026-02-17T01:00:00Z");
 
@@ -79,8 +87,8 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
   @Test
   void lookup_Phase_by_reservation_id_should_return_empty_when_reservation_is_not_found() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    ReservationId reservationId = ReservationId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    ReservationId reservationId = reservationIdGenerator.newId();
 
     // Act
     Optional<ReservationPhase> lookup =
@@ -93,8 +101,8 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
   @Test
   void lookup_by_transaction_should_throw_reservation_not_found_when_reservation_is_not_found() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    TransactionId transactionId = TransactionId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
 
     // Act ... Assert
     assertThatExceptionOfType(ReservationNotFoundException.class)
@@ -105,9 +113,9 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
   @Test
   void update_phase_should_update_phase_and_occurred_at() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    TransactionId transactionId = TransactionId.newId();
-    ReservationId reservationId = ReservationId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
+    ReservationId reservationId = reservationIdGenerator.newId();
     Instant initialOccurredAt = Instant.parse("2026-02-17T01:00:00Z");
     Instant updatedOccurredAt = Instant.parse("2026-02-17T01:10:00Z");
     processedReservationStore.register(
@@ -135,9 +143,9 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
   @Test
   void register_should_be_idempotent_for_same_account_and_reservation() throws Exception {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    TransactionId transactionId = TransactionId.newId();
-    ReservationId reservationId = ReservationId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
+    ReservationId reservationId = reservationIdGenerator.newId();
     Instant occurredAt = Instant.now();
     TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
     txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -191,10 +199,10 @@ class ProcessedReservationRepositoryTest extends AbstractContainerTest {
   @Test
   void register_should_fail_when_transaction_id_is_already_linked_to_other_reservation() {
     // Arrange
-    AccountId accountId = AccountId.newId();
-    TransactionId transactionId = TransactionId.newId();
-    ReservationId reservationId = ReservationId.newId();
-    ReservationId otherReservationId = ReservationId.newId();
+    AccountId accountId = accountIdGenerator.newId();
+    TransactionId transactionId = TransactionId.of(UUID.randomUUID());
+    ReservationId reservationId = reservationIdGenerator.newId();
+    ReservationId otherReservationId = reservationIdGenerator.newId();
     Instant occurredAt = Instant.parse("2026-02-17T01:00:00Z");
     processedReservationStore.register(
         accountId, transactionId, reservationId, ReservationPhase.RESERVED, occurredAt);

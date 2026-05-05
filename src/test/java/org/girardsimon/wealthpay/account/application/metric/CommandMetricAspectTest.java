@@ -11,6 +11,7 @@ import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.core.instrument.distribution.pause.PauseDetector;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.girardsimon.wealthpay.account.application.response.ReservationResponse;
 import org.girardsimon.wealthpay.account.application.response.ReservationResult;
@@ -22,8 +23,12 @@ import org.girardsimon.wealthpay.account.domain.exception.ReservationNotFoundExc
 import org.girardsimon.wealthpay.account.domain.exception.ReservationStoreInconsistencyException;
 import org.girardsimon.wealthpay.account.domain.exception.TransactionIdConflictException;
 import org.girardsimon.wealthpay.account.domain.model.AccountId;
+import org.girardsimon.wealthpay.account.domain.model.AccountIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.ReservationId;
+import org.girardsimon.wealthpay.account.domain.model.ReservationIdGenerator;
 import org.girardsimon.wealthpay.account.domain.model.TransactionId;
+import org.girardsimon.wealthpay.account.testsupport.TestAccountIdGenerator;
+import org.girardsimon.wealthpay.account.testsupport.TestReservationIdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
@@ -32,6 +37,10 @@ import org.springframework.dao.OptimisticLockingFailureException;
 class CommandMetricAspectTest {
 
   private static final String METRIC = "wealthpay.account.command";
+
+  private static final AccountIdGenerator ACCOUNT_ID_GENERATOR = new TestAccountIdGenerator();
+  private static final ReservationIdGenerator RESERVATION_ID_GENERATOR =
+      new TestReservationIdGenerator();
 
   private MeterRegistry meterRegistry;
   private CommandMetricAspect aspect;
@@ -164,7 +173,8 @@ class CommandMetricAspectTest {
     // Arrange
     TestTarget target = proxy(new TestTarget(), aspect);
     TransactionIdConflictException conflict =
-        new TransactionIdConflictException(AccountId.newId(), TransactionId.newId());
+        new TransactionIdConflictException(
+            ACCOUNT_ID_GENERATOR.newId(), TransactionId.of(UUID.randomUUID()));
 
     // Act + Assert
     assertThatExceptionOfType(TransactionIdConflictException.class)
@@ -345,13 +355,14 @@ class CommandMetricAspectTest {
 
     @CommandMetric(command = "cancel")
     public ReservationResponse cancelCommand(ReservationResult result) {
-      return new ReservationResponse(
-          AccountId.newId(), ReservationId.newId(), Optional.empty(), result);
+      AccountId accountId = ACCOUNT_ID_GENERATOR.newId();
+      ReservationId reservationId = RESERVATION_ID_GENERATOR.newId();
+      return new ReservationResponse(accountId, reservationId, Optional.empty(), result);
     }
 
     @CommandMetric(command = "reserve")
     public ReserveFundsResponse reserveCommand(ReservationResult result) {
-      return new ReserveFundsResponse(ReservationId.newId(), result);
+      return new ReserveFundsResponse(RESERVATION_ID_GENERATOR.newId(), result);
     }
 
     @CommandMetric(command = "nullable")

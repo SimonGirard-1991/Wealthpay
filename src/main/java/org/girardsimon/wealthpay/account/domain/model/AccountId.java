@@ -9,10 +9,6 @@ public record AccountId(UUID id) {
     }
   }
 
-  public static AccountId newId() {
-    return new AccountId(UUID.randomUUID());
-  }
-
   public static AccountId of(UUID id) {
     return new AccountId(id);
   }
