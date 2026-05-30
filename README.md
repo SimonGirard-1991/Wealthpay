@@ -61,6 +61,18 @@ cancel reservation, close account) using techniques common in real financial sys
 
 ---
 
+## 📚 Documentation
+
+Visual, audience-friendly docs live under [`docs/`](docs/), one folder per bounded context:
+
+- **[Account](docs/account/README.md)** — diagrams at a glance, plus
+  [business flows](docs/account/business-flows.md) (the domain rules) and
+  [runtime architecture](docs/account/architecture.md) (how a request flows end to end).
+
+Design decisions are recorded as ADRs in [`docs/adr/`](docs/adr/).
+
+---
+
 ## 💾 Persistence Layer
 
 ### ✔ PostgreSQL (Dockerized)
@@ -127,7 +139,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\infra.ps1
 > cached pre-cutover `wealthpay-postgres` image cannot silently mask a
 > Dockerfile change; pass `--no-build` explicitly when you know your cache
 > is fresh. Future major-version cutovers may trip the same guard with an
-> updated marker — see [docs/postgres-upgrade.md](docs/postgres-upgrade.md)
+> updated marker — see [docs/postgres-upgrade.md](docs/migration/postgres-upgrade.md)
 > for the observability-side hazards to watch on any major-version bump.
 
 The Unix script adds `docker-compose.local.linux.yml` automatically on native Linux and uses only
