@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WealthPay — Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400&family=Hanken+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     WealthPay — Console back-office
+     Direction : « banque privée suisse × terminal fintech »
+     Encre profonde, ivoire, accent laiton. Chiffres tabulaires.
+     ============================================================ */
+  :root{
+    --ink:        #0c0f0e;
+    --ink-2:      #111514;
+    --panel:      #161b19;
+    --panel-2:    #1b211f;
+    --line:       #262d2a;
+    --line-soft:  #1e2422;
+    --ivory:      #ece7da;
+    --ivory-dim:  #a7a89c;
+    --muted:      #6f756c;
+    --brass:      #c8a25c;
+    --brass-soft: #d8bd86;
+    --emerald:    #6fae8c;
+    --emerald-bg: rgba(111,174,140,.12);
+    --rose:       #d08470;
+    --rose-bg:    rgba(208,132,112,.12);
+    --amber:      #d6a14a;
+    --radius:     14px;
+    --shadow:     0 18px 50px -22px rgba(0,0,0,.75);
+    font-synthesis: none;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{
+    background:var(--ink);
+    color:var(--ivory);
+    font-family:"Hanken Grotesk",sans-serif;
+    font-weight:400;
+    line-height:1.45;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  /* grain + atmosphère */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(900px 500px at 78% -10%, rgba(200,162,92,.10), transparent 60%),
+      radial-gradient(700px 600px at -10% 110%, rgba(111,174,140,.06), transparent 55%);
+  }
+  body::after{
+    content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
+  .serif{font-family:"Fraunces",serif}
+
+  /* ---------- Shell ---------- */
+  .app{position:relative;z-index:2;display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+
+  /* ---------- Sidebar ---------- */
+  aside{
+    border-right:1px solid var(--line-soft);
+    background:linear-gradient(180deg,var(--ink-2),var(--ink));
+    padding:26px 18px;display:flex;flex-direction:column;gap:30px;
+    position:sticky;top:0;height:100vh;
+  }
+  .brand{display:flex;align-items:center;gap:12px;padding:0 6px}
+  .brand .mark{
+    width:38px;height:38px;border-radius:11px;flex:none;
+    background:linear-gradient(145deg,var(--brass),#8a6e34);
+    display:grid;place-items:center;color:#1a1408;font-weight:700;
+    font-family:"Fraunces",serif;font-size:20px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 6px 16px -6px rgba(200,162,92,.6);
+  }
+  .brand .name{font-family:"Fraunces",serif;font-size:21px;font-weight:600;letter-spacing:.2px}
+  .brand .name b{color:var(--brass-soft);font-weight:600}
+  .brand small{display:block;font-size:10.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--muted);margin-top:1px}
+
+  nav{display:flex;flex-direction:column;gap:3px}
+  .nav-label{font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);padding:14px 12px 6px}
+  .nav-item{
+    display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;
+    color:var(--ivory-dim);font-size:14px;font-weight:500;cursor:pointer;
+    border:1px solid transparent;transition:.18s;
+  }
+  .nav-item svg{width:17px;height:17px;flex:none;opacity:.85}
+  .nav-item:hover{background:var(--panel);color:var(--ivory)}
+  .nav-item.active{
+    background:linear-gradient(90deg,rgba(200,162,92,.14),rgba(200,162,92,.02));
+    color:var(--ivory);border-color:rgba(200,162,92,.28);
+  }
+  .nav-item.active svg{opacity:1;color:var(--brass-soft)}
+  .nav-item .badge-new{
+    margin-left:auto;font-size:9px;letter-spacing:.12em;font-weight:700;
+    background:var(--emerald-bg);color:var(--emerald);padding:2px 7px;border-radius:20px;border:1px solid rgba(111,174,140,.3);
+  }
+
+  .ctx-card{
+    margin-top:auto;border:1px solid var(--line);border-radius:12px;padding:14px;
+    background:var(--panel);font-size:12px;color:var(--ivory-dim);
+  }
+  .ctx-card .row{display:flex;justify-content:space-between;padding:3px 0}
+  .ctx-card .row b{color:var(--ivory);font-weight:500}
+  .ctx-card .dot{width:7px;height:7px;border-radius:50%;background:var(--emerald);display:inline-block;box-shadow:0 0 0 3px var(--emerald-bg);margin-right:6px}
+
+  /* ---------- Main ---------- */
+  main{min-width:0;display:flex;flex-direction:column}
+  .topbar{
+    display:flex;align-items:center;gap:18px;padding:18px 32px;
+    border-bottom:1px solid var(--line-soft);position:sticky;top:0;z-index:20;
+    background:rgba(12,15,14,.78);backdrop-filter:blur(14px);
+  }
+  .search{
+    flex:1;max-width:440px;display:flex;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:9px 14px;color:var(--muted);font-size:13.5px;
+  }
+  .search svg{width:16px;height:16px}
+  .search kbd{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:11px;background:var(--ink);border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--ivory-dim)}
+  .topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .env{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--amber);border:1px solid rgba(214,161,74,.35);background:rgba(214,161,74,.08);padding:5px 10px;border-radius:8px}
+  .icon-btn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--panel);display:grid;place-items:center;color:var(--ivory-dim);cursor:pointer;transition:.18s}
+  .icon-btn:hover{color:var(--ivory);border-color:var(--brass)}
+  .icon-btn svg{width:17px;height:17px}
+  .avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(145deg,#3a3326,#221d12);border:1px solid var(--brass);display:grid;place-items:center;font-family:"Fraunces",serif;color:var(--brass-soft);font-size:15px;cursor:pointer}
+
+  .view{padding:32px;display:none;animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+  .view.active{display:block}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .stagger>*{animation:rise .55s cubic-bezier(.2,.7,.2,1) both}
+  .stagger>*:nth-child(1){animation-delay:.03s}
+  .stagger>*:nth-child(2){animation-delay:.08s}
+  .stagger>*:nth-child(3){animation-delay:.13s}
+  .stagger>*:nth-child(4){animation-delay:.18s}
+  .stagger>*:nth-child(5){animation-delay:.23s}
+  .stagger>*:nth-child(6){animation-delay:.28s}
+
+  /* page header */
+  .ph{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:26px;flex-wrap:wrap}
+  .ph .eyebrow{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--brass);margin-bottom:8px}
+  .ph h1{font-family:"Fraunces",serif;font-weight:400;font-size:38px;line-height:1.05;letter-spacing:-.5px}
+  .ph p{color:var(--ivory-dim);font-size:14px;margin-top:8px;max-width:560px}
+
+  .btn{
+    font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;border-radius:10px;
+    padding:10px 18px;border:1px solid var(--line);background:var(--panel);color:var(--ivory);
+    display:inline-flex;align-items:center;gap:8px;transition:.18s;white-space:nowrap;
+  }
+  .btn svg{width:16px;height:16px}
+  .btn:hover{border-color:var(--brass);transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(145deg,var(--brass),#a07f3c);color:#15100a;border-color:transparent;box-shadow:0 10px 24px -12px rgba(200,162,92,.7)}
+  .btn.primary:hover{filter:brightness(1.05)}
+  .btn.ghost{background:transparent}
+
+  /* cards / grid */
+  .grid{display:grid;gap:18px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card-pad{padding:22px}
+
+  .kpi{padding:22px 22px 20px;position:relative;overflow:hidden}
+  .kpi .lab{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ivory-dim)}
+  .kpi .val{font-family:"Fraunces",serif;font-size:34px;font-weight:500;margin-top:12px;letter-spacing:-.5px}
+  .kpi .val .cur{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--muted);margin-left:6px}
+  .kpi .delta{font-family:"JetBrains Mono",monospace;font-size:12px;margin-top:10px;display:inline-flex;align-items:center;gap:5px}
+  .up{color:var(--emerald)} .down{color:var(--rose)}
+  .kpi .spark{position:absolute;right:18px;bottom:16px;opacity:.5}
+
+  .section-title{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line-soft)}
+  .section-title h3{font-family:"Fraunces",serif;font-weight:500;font-size:18px}
+  .section-title .count{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);background:var(--ink);border:1px solid var(--line);padding:2px 8px;border-radius:20px}
+  .section-title .link{margin-left:auto;color:var(--brass-soft);font-size:13px;cursor:pointer;font-weight:500}
+  .section-title .link:hover{text-decoration:underline}
+
+  /* table */
+  table{width:100%;border-collapse:collapse}
+  thead th{
+    text-align:left;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;padding:12px 22px;border-bottom:1px solid var(--line-soft);
+  }
+  tbody td{padding:15px 22px;border-bottom:1px solid var(--line-soft);font-size:14px}
+  tbody tr{cursor:pointer;transition:.15s}
+  tbody tr:hover{background:var(--panel-2)}
+  tbody tr:last-child td{border-bottom:none}
+  td.num{text-align:right;font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
+
+  .who{display:flex;align-items:center;gap:12px}
+  .who . av{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;font-family:"Fraunces",serif;font-size:14px;color:#15100a;font-weight:600}
+  .who .nm{font-weight:600;font-size:14px}
+  .who .sub{font-size:12px;color:var(--muted);font-family:"JetBrains Mono",monospace}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid transparent;white-space:nowrap}
+  .pill .d{width:6px;height:6px;border-radius:50%}
+  .pill.ok{color:var(--emerald);background:var(--emerald-bg);border-color:rgba(111,174,140,.28)} .pill.ok .d{background:var(--emerald)}
+  .pill.warn{color:var(--amber);background:rgba(214,161,74,.1);border-color:rgba(214,161,74,.3)} .pill.warn .d{background:var(--amber)}
+  .pill.bad{color:var(--rose);background:var(--rose-bg);border-color:rgba(208,132,112,.3)} .pill.bad .d{background:var(--rose)}
+  .pill.neutral{color:var(--ivory-dim);background:var(--ink);border-color:var(--line)} .pill.neutral .d{background:var(--muted)}
+
+  .seg{display:inline-flex;align-items:center;gap:6px;font-family:"Fraunces",serif;font-size:13px;color:var(--brass-soft)}
+  .seg::before{content:"◆";font-size:9px;color:var(--brass)}
+
+  /* customer 360 */
+  .c360{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start}
+  .profile .hero{padding:26px;text-align:center;border-bottom:1px solid var(--line-soft)}
+  .profile .hero .big-av{width:84px;height:84px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;font-family:"Fraunces",serif;font-size:32px;color:#15100a;font-weight:600;box-shadow:0 0 0 4px var(--ink),0 0 0 5px var(--brass)}
+  .profile .hero h2{font-family:"Fraunces",serif;font-weight:500;font-size:24px}
+  .profile .hero .id{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--muted);margin-top:6px}
+  .deflist{padding:8px 0}
+  .deflist .r{display:flex;justify-content:space-between;align-items:center;padding:11px 26px;font-size:13.5px;gap:14px}
+  .deflist .r span{color:var(--ivory-dim)}
+  .deflist .r b{font-weight:600;text-align:right}
+  .deflist .r .mono{font-size:12.5px;color:var(--ivory)}
+
+  /* mini account cards */
+  .acct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:18px}
+  .acct{
+    border:1px solid var(--line);border-radius:12px;padding:16px;background:linear-gradient(160deg,var(--panel-2),var(--panel));
+    cursor:pointer;transition:.18s;position:relative;overflow:hidden;
+  }
+  .acct:hover{border-color:var(--brass);transform:translateY(-2px)}
+  .acct .flag{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+  .acct .bal{font-family:"Fraunces",serif;font-size:25px;font-weight:500;margin:12px 0 2px}
+  .acct .bal .c{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--muted);margin-left:4px}
+  .acct .avail{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--ivory-dim)}
+  .acct .avail b{color:var(--emerald)}
+  .acct .ribbon{position:absolute;top:14px;right:-1px}
+
+  /* event stream / ledger */
+  .stream{padding:8px 22px 20px;position:relative}
+  .ev{display:grid;grid-template-columns:30px 1fr auto;gap:14px;padding:14px 0;border-bottom:1px solid var(--line-soft);position:relative}
+  .ev:last-child{border-bottom:none}
+  .ev .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;border:1px solid var(--line)}
+  .ev .ic svg{width:15px;height:15px}
+  .ev.credit .ic{color:var(--emerald);background:var(--emerald-bg);border-color:rgba(111,174,140,.3)}
+  .ev.debit .ic{color:var(--rose);background:var(--rose-bg);border-color:rgba(208,132,112,.3)}
+  .ev.reserve .ic{color:var(--amber);background:rgba(214,161,74,.1);border-color:rgba(214,161,74,.3)}
+  .ev.system .ic{color:var(--brass-soft);background:rgba(200,162,92,.1);border-color:rgba(200,162,92,.3)}
+  .ev .ev-name{font-weight:600;font-size:14px;font-family:"JetBrains Mono",monospace;letter-spacing:-.2px}
+  .ev .ev-meta{font-size:12px;color:var(--muted);margin-top:3px}
+  .ev .ev-meta .v{color:var(--ivory-dim)}
+  .ev .ev-amt{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:500;text-align:right;align-self:center}
+  .ev .ev-amt small{display:block;font-size:10.5px;color:var(--muted);font-weight:400;margin-top:2px}
+
+  /* balance hero (account) */
+  .bal-hero{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:0}
+  .bal-hero>div{padding:24px 26px;border-right:1px solid var(--line-soft)}
+  .bal-hero>div:last-child{border-right:none}
+  .bal-hero .lab{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ivory-dim)}
+  .bal-hero .big{font-family:"Fraunces",serif;font-size:44px;font-weight:500;letter-spacing:-1px;margin-top:10px;line-height:1}
+  .bal-hero .big .c{font-family:"JetBrains Mono",monospace;font-size:16px;color:var(--muted);margin-left:8px}
+  .bal-hero .sub{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);margin-top:10px}
+  .bal-hero .med{font-family:"Fraunces",serif;font-size:30px;font-weight:500;margin-top:10px}
+  .bal-hero .med.res{color:var(--amber)} .bal-hero .med.av{color:var(--emerald)}
+
+  .actions-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
+
+  /* roadmap note */
+  .note{
+    display:flex;gap:14px;align-items:flex-start;padding:18px 22px;border-radius:12px;
+    border:1px dashed rgba(111,174,140,.4);background:var(--emerald-bg);
+  }
+  .note svg{width:20px;height:20px;color:var(--emerald);flex:none;margin-top:1px}
+  .note h4{font-size:14px;font-weight:600;color:var(--emerald);margin-bottom:4px}
+  .note p{font-size:13px;color:var(--ivory-dim);max-width:760px}
+  .note code{font-family:"JetBrains Mono",monospace;font-size:12px;background:var(--ink);padding:1px 6px;border-radius:5px;color:var(--brass-soft)}
+
+  .col-2{grid-template-columns:1fr 1fr}
+  .col-3{grid-template-columns:repeat(3,1fr)}
+  .col-4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:1100px){.c360{grid-template-columns:1fr}.col-3,.col-4{grid-template-columns:1fr 1fr}.bal-hero{grid-template-columns:1fr}.bal-hero>div{border-right:none;border-bottom:1px solid var(--line-soft)}}
+  @media(max-width:860px){.app{grid-template-columns:1fr}aside{display:none}.col-2,.col-3,.col-4{grid-template-columns:1fr}}
+
+  /* modal mock */
+  .scrim{position:fixed;inset:0;background:rgba(5,7,6,.7);backdrop-filter:blur(4px);z-index:50;display:none;place-items:center;animation:fade .25s both}
+  .scrim.show{display:grid}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{width:min(440px,92vw);animation:rise .35s both}
+  .modal .mh{padding:22px 24px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;justify-content:space-between}
+  .modal .mh h3{font-family:"Fraunces",serif;font-weight:500;font-size:21px}
+  .modal .mb{padding:22px 24px;display:flex;flex-direction:column;gap:16px}
+  .field label{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ivory-dim);margin-bottom:7px}
+  .field .inp{display:flex;align-items:center;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 14px;gap:10px}
+  .field .inp input,.field .inp select{background:transparent;border:none;outline:none;color:var(--ivory);font-family:"JetBrains Mono",monospace;font-size:15px;width:100%}
+  .field .inp .pre{color:var(--muted);font-family:"JetBrains Mono",monospace}
+  .field .inp select option{background:var(--panel)}
+  .modal .mf{padding:18px 24px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:10px}
+  .hint{font-size:11.5px;color:var(--muted)}
+  .hint code{font-family:"JetBrains Mono",monospace;color:var(--brass-soft)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside>
+    <div class="brand">
+      <div class="mark">W</div>
+      <div>
+        <div class="name">Wealth<b>Pay</b></div>
+        <small>Console</small>
+      </div>
+    </div>
+
+    <nav>
+      <div class="nav-label">Pilotage</div>
+      <div class="nav-item active" data-view="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Vue d'ensemble
+      </div>
+
+      <div class="nav-label">Bounded contexts</div>
+      <div class="nav-item" data-view="customers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 6.5a3 3 0 0 1 0 5.8M18 19c0-2.4-1.2-4-3-4.6"/></svg>
+        Clients
+        <span class="badge-new">NOUVEAU</span>
+      </div>
+      <div class="nav-item" data-view="account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg>
+        Comptes
+      </div>
+      <div class="nav-item" data-view="account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M5 8l7-5 7 5M5 8v8l7 5 7-5V8"/></svg>
+        Réservations
+      </div>
+
+      <div class="nav-label">Plateforme</div>
+      <div class="nav-item" data-view="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V8m5 10V4m5 14v-7m5 7V9"/></svg>
+        Flux d'événements
+      </div>
+      <div class="nav-item" data-view="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 1-.1 1.2l2 1.5-2 3.4-2.3-1a7 7 0 0 1-2 1.2l-.3 2.5H10l-.3-2.5a7 7 0 0 1-2-1.2l-2.3 1-2-3.4 2-1.5A7 7 0 0 1 5 12c0-.4 0-.8.1-1.2l-2-1.5 2-3.4 2.3 1a7 7 0 0 1 2-1.2L11.7 3h2.6l.3 2.5a7 7 0 0 1 2 1.2l2.3-1 2 3.4-2 1.5c.1.4.1.8.1 1.2Z"/></svg>
+        Paramètres
+      </div>
+    </nav>
+
+    <div class="ctx-card">
+      <div class="row"><span><span class="dot"></span>event-store</span><b>sain</b></div>
+      <div class="row"><span>Kafka · 3 brokers</span><b class="mono">9092-94</b></div>
+      <div class="row"><span>Debezium CDC</span><b>actif</b></div>
+      <div class="row"><span>Projection lag</span><b class="mono">38 ms</b></div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main>
+    <div class="topbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+        Rechercher un client, un compte, un événement…
+        <kbd>⌘K</kbd>
+      </div>
+      <div class="topbar-right">
+        <span class="env">env · local</span>
+        <div class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        </div>
+        <div class="avatar">SG</div>
+      </div>
+    </div>
+
+    <!-- ======================================================= -->
+    <!-- VIEW : OVERVIEW                                          -->
+    <!-- ======================================================= -->
+    <section class="view active" id="view-overview">
+      <div class="ph">
+        <div>
+          <div class="eyebrow">Tableau de bord · banque privée</div>
+          <h1 class="serif">Bonsoir, Simon.</h1>
+          <p>Vue consolidée du portefeuille clients et de l'activité des comptes, alimentée en temps quasi réel par le flux d'événements de l'event-store.</p>
+        </div>
+        <button class="btn primary" onclick="openModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Ouvrir un compte
+        </button>
+      </div>
+
+      <div class="grid col-4 stagger" style="margin-bottom:18px">
+        <div class="panel kpi">
+          <div class="lab">Encours sous gestion</div>
+          <div class="val serif">128,4<span class="cur">M€</span></div>
+          <div class="delta up">▲ 4,2 % <span style="color:var(--muted)">30 j</span></div>
+          <svg class="spark" width="84" height="34" viewBox="0 0 84 34" fill="none"><path d="M2 28 14 22 26 24 38 14 50 18 62 8 72 12 82 4" stroke="var(--emerald)" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="panel kpi">
+          <div class="lab">Clients actifs</div>
+          <div class="val serif">1 842</div>
+          <div class="delta up">▲ 36 <span style="color:var(--muted)">ce mois</span></div>
+          <svg class="spark" width="84" height="34" viewBox="0 0 84 34" fill="none"><path d="M2 26 14 24 26 20 38 21 50 14 62 15 72 9 82 7" stroke="var(--brass)" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="panel kpi">
+          <div class="lab">Comptes ouverts</div>
+          <div class="val serif">3 207</div>
+          <div class="delta up">▲ 1,8 %</div>
+          <svg class="spark" width="84" height="34" viewBox="0 0 84 34" fill="none"><path d="M2 22 14 20 26 23 38 16 50 17 62 11 72 13 82 9" stroke="var(--brass)" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="panel kpi">
+          <div class="lab">Fonds réservés</div>
+          <div class="val serif">6,1<span class="cur">M€</span></div>
+          <div class="delta down">▼ 0,9 % <span style="color:var(--muted)">en cours</span></div>
+          <svg class="spark" width="84" height="34" viewBox="0 0 84 34" fill="none"><path d="M2 10 14 14 26 12 38 18 50 16 62 22 72 20 82 26" stroke="var(--amber)" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+
+      <div class="grid col-2 stagger">
+        <!-- recent customers -->
+        <div class="panel">
+          <div class="section-title">
+            <h3 class="serif">Derniers clients</h3>
+            <span class="count">BC · customer</span>
+            <span class="link" data-goto="customers">Tout voir →</span>
+          </div>
+          <table>
+            <tbody>
+              <tr data-goto="customer360">
+                <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#d8bd86,#a07f3c)">AM</div><div><div class="nm">Aurélie Mercier</div><div class="sub">cus_8f21…a4</div></div></div></td>
+                <td><span class="seg">Private Wealth</span></td>
+                <td><span class="pill ok"><span class="d"></span>Vérifié</span></td>
+              </tr>
+              <tr>
+                <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#9cb8a8,#5b7d6b)">KN</div><div><div class="nm">Karim Nadir</div><div class="sub">cus_3c90…71</div></div></div></td>
+                <td><span class="seg">Premier</span></td>
+                <td><span class="pill warn"><span class="d"></span>KYC en cours</span></td>
+              </tr>
+              <tr>
+                <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#c8a25c,#7a5f2e)">LR</div><div><div class="nm">Lucia Romano</div><div class="sub">cus_7b12…0d</div></div></div></td>
+                <td><span class="seg">Retail</span></td>
+                <td><span class="pill ok"><span class="d"></span>Vérifié</span></td>
+              </tr>
+              <tr>
+                <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#d0a0a0,#8a5151)">TB</div><div><div class="nm">Thomas Berg</div><div class="sub">cus_1a55…e9</div></div></div></td>
+                <td><span class="seg">Premier</span></td>
+                <td><span class="pill bad"><span class="d"></span>Suspendu</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- live event stream -->
+        <div class="panel">
+          <div class="section-title">
+            <h3 class="serif">Flux d'événements</h3>
+            <span class="count">wealthpay.AccountEvent</span>
+            <span class="link">Live ●</span>
+          </div>
+          <div class="stream">
+            <div class="ev credit">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg></div>
+              <div><div class="ev-name">FundsCredited</div><div class="ev-meta">acc_4f2a · <span class="v">v.214</span> · 19:41:02</div></div>
+              <div class="ev-amt up">+12 500,00<small>EUR</small></div>
+            </div>
+            <div class="ev reserve">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="13" rx="2"/><path d="M8 6V4h8v2"/></svg></div>
+              <div><div class="ev-name">FundsReserved</div><div class="ev-meta">acc_91be · <span class="v">res_2d…</span> · 19:40:55</div></div>
+              <div class="ev-amt" style="color:var(--amber)">3 200,00<small>EUR</small></div>
+            </div>
+            <div class="ev debit">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg></div>
+              <div><div class="ev-name">FundsDebited</div><div class="ev-meta">acc_4f2a · <span class="v">v.213</span> · 19:40:31</div></div>
+              <div class="ev-amt down">−890,00<small>EUR</small></div>
+            </div>
+            <div class="ev system">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
+              <div><div class="ev-name">ReservationCaptured</div><div class="ev-meta">acc_91be · <span class="v">res_19…</span> · 19:39:48</div></div>
+              <div class="ev-amt">1 050,00<small>CHF</small></div>
+            </div>
+            <div class="ev system">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6m0 0 3-3m-3 3L9 5"/><circle cx="12" cy="15" r="6"/></svg></div>
+              <div><div class="ev-name">AccountOpened</div><div class="ev-meta">acc_7c03 · <span class="v">v.1</span> · 19:38:12</div></div>
+              <div class="ev-amt">5 000,00<small>USD</small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- VIEW : CUSTOMERS (nouveau BC)                            -->
+    <!-- ======================================================= -->
+    <section class="view" id="view-customers">
+      <div class="ph">
+        <div>
+          <div class="eyebrow">Bounded context · customer</div>
+          <h1 class="serif">Clients</h1>
+          <p>Le contexte <code style="font-family:'JetBrains Mono';font-size:13px;color:var(--brass-soft)">customer</code> détient l'identité, le segment et le statut KYC. Un client est l'agrégat racine qui possède un ou plusieurs comptes du contexte <code style="font-family:'JetBrains Mono';font-size:13px;color:var(--brass-soft)">account</code>.</p>
+        </div>
+        <button class="btn primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Onboarder un client
+        </button>
+      </div>
+
+      <div class="note" style="margin-bottom:22px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <div>
+          <h4>Maquette d'anticipation — contexte à venir</h4>
+          <p>Ces écrans préfigurent le futur module <code>customer</code> (CLOSED, dépend de <code>shared</code>). Le lien client → comptes se ferait via un identifiant <code>customerId</code> exposé par le contexte account, sans couplage de modèle entre les deux BCs (relation par référence, éventuellement orchestrée par événements <code>CustomerOnboarded</code> / <code>AccountOpened</code>).</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title">
+          <h3 class="serif">Portefeuille clients</h3>
+          <span class="count">1 842</span>
+          <span class="link">Filtres · Segment · KYC ⌄</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th><th>Segment</th><th>Statut KYC</th><th>Résidence</th><th style="text-align:right">Comptes</th><th style="text-align:right">Encours</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-goto="customer360">
+              <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#d8bd86,#a07f3c)">AM</div><div><div class="nm">Aurélie Mercier</div><div class="sub">cus_8f21d4a4</div></div></div></td>
+              <td><span class="seg">Private Wealth</span></td>
+              <td><span class="pill ok"><span class="d"></span>Vérifié · niv. 3</span></td>
+              <td>🇫🇷 France</td>
+              <td class="num">4</td>
+              <td class="num">2 410 880 €</td>
+            </tr>
+            <tr>
+              <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#9cb8a8,#5b7d6b)">KN</div><div><div class="nm">Karim Nadir</div><div class="sub">cus_3c9071e2</div></div></div></td>
+              <td><span class="seg">Premier</span></td>
+              <td><span class="pill warn"><span class="d"></span>KYC en cours</span></td>
+              <td>🇦🇪 EAU</td>
+              <td class="num">2</td>
+              <td class="num">318 200 €</td>
+            </tr>
+            <tr>
+              <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#c8a25c,#7a5f2e)">LR</div><div><div class="nm">Lucia Romano</div><div class="sub">cus_7b120dab</div></div></div></td>
+              <td><span class="seg">Retail</span></td>
+              <td><span class="pill ok"><span class="d"></span>Vérifié · niv. 2</span></td>
+              <td>🇮🇹 Italie</td>
+              <td class="num">1</td>
+              <td class="num">42 760 €</td>
+            </tr>
+            <tr>
+              <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#d0a0a0,#8a5151)">TB</div><div><div class="nm">Thomas Berg</div><div class="sub">cus_1a55e9c1</div></div></div></td>
+              <td><span class="seg">Premier</span></td>
+              <td><span class="pill bad"><span class="d"></span>Suspendu</span></td>
+              <td>🇩🇪 Allemagne</td>
+              <td class="num">3</td>
+              <td class="num">187 050 €</td>
+            </tr>
+            <tr>
+              <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#b9c8d8,#5e6e7d)">YS</div><div><div class="nm">Yuki Sato</div><div class="sub">cus_9d44f1b8</div></div></div></td>
+              <td><span class="seg">Private Wealth</span></td>
+              <td><span class="pill ok"><span class="d"></span>Vérifié · niv. 3</span></td>
+              <td>🇯🇵 Japon</td>
+              <td class="num">5</td>
+              <td class="num">5 902 410 €</td>
+            </tr>
+            <tr>
+              <td><div class="who"><div class="av" style="background:linear-gradient(145deg,#c9b8d8,#6e5e7d)">EM</div><div><div class="nm">Elena Moreau</div><div class="sub">cus_2f88c0aa</div></div></div></td>
+              <td><span class="seg">Retail</span></td>
+              <td><span class="pill neutral"><span class="d"></span>Brouillon</span></td>
+              <td>🇫🇷 France</td>
+              <td class="num">0</td>
+              <td class="num">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- VIEW : CUSTOMER 360                                      -->
+    <!-- ======================================================= -->
+    <section class="view" id="view-customer360">
+      <div class="ph">
+        <div>
+          <div class="eyebrow"><span style="cursor:pointer;color:var(--brass)" data-goto="customers">Clients</span> &nbsp;/&nbsp; Fiche client</div>
+          <h1 class="serif">Aurélie Mercier</h1>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 13v6h16v-6M12 3v12m0 0 4-4m-4 4-4-4"/></svg>Exporter</button>
+          <button class="btn primary" onclick="openModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Ouvrir un compte</button>
+        </div>
+      </div>
+
+      <div class="c360">
+        <!-- profile column -->
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div class="panel profile">
+            <div class="hero">
+              <div class="big-av" style="background:linear-gradient(145deg,#d8bd86,#a07f3c)">AM</div>
+              <h2 class="serif">Aurélie Mercier</h2>
+              <div class="id">cus_8f21d4a4-9b03-4e</div>
+              <div style="margin-top:14px;display:flex;gap:8px;justify-content:center">
+                <span class="seg">Private Wealth</span>
+                <span class="pill ok"><span class="d"></span>Vérifié · niv. 3</span>
+              </div>
+            </div>
+            <div class="deflist">
+              <div class="r"><span>Email</span><b class="mono">a.mercier@…com</b></div>
+              <div class="r"><span>Téléphone</span><b class="mono">+33 6 •• •• 18</b></div>
+              <div class="r"><span>Résidence</span><b>🇫🇷 France</b></div>
+              <div class="r"><span>Devise pivot</span><b class="mono">EUR</b></div>
+              <div class="r"><span>Note de risque</span><b><span class="pill ok"><span class="d"></span>Faible</span></b></div>
+              <div class="r"><span>Client depuis</span><b class="mono">14 mars 2022</b></div>
+              <div class="r"><span>Conseiller</span><b>S. Girard</b></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="section-title"><h3 class="serif">Conformité</h3></div>
+            <div class="stream" style="padding-top:14px">
+              <div class="ev system">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div>
+                <div><div class="ev-name" style="font-size:12.5px">KYC_LEVEL_3</div><div class="ev-meta">Revue annuelle validée</div></div>
+                <div class="ev-amt"><small>2026·01</small></div>
+              </div>
+              <div class="ev system">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg></div>
+                <div><div class="ev-name" style="font-size:12.5px">AML_SCREENING</div><div class="ev-meta">Aucune correspondance</div></div>
+                <div class="ev-amt"><small>2026·01</small></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- accounts + activity -->
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div class="panel">
+            <div class="section-title">
+              <h3 class="serif">Comptes détenus</h3>
+              <span class="count">4 · multi-devises</span>
+              <span class="link">Consolidé : 2 410 880 €</span>
+            </div>
+            <div class="acct-grid">
+              <div class="acct" data-goto="account">
+                <div class="flag"><span>EUR · Courant</span><span class="pill ok" style="padding:2px 8px"><span class="d"></span>OPENED</span></div>
+                <div class="bal">1 284 540<span class="c">€</span></div>
+                <div class="avail">dispo <b>1 281 340 €</b> · réservé 3 200 €</div>
+              </div>
+              <div class="acct" data-goto="account">
+                <div class="flag"><span>USD · Épargne</span><span class="pill ok" style="padding:2px 8px"><span class="d"></span>OPENED</span></div>
+                <div class="bal">612 900<span class="c">$</span></div>
+                <div class="avail">dispo <b>612 900 $</b></div>
+              </div>
+              <div class="acct" data-goto="account">
+                <div class="flag"><span>CHF · Mandat</span><span class="pill ok" style="padding:2px 8px"><span class="d"></span>OPENED</span></div>
+                <div class="bal">428 100<span class="c">₣</span></div>
+                <div class="avail">dispo <b>426 050 ₣</b> · réservé 2 050 ₣</div>
+              </div>
+              <div class="acct" style="opacity:.62">
+                <div class="flag"><span>GBP · Courant</span><span class="pill neutral" style="padding:2px 8px"><span class="d"></span>CLOSED</span></div>
+                <div class="bal">0<span class="c">£</span></div>
+                <div class="avail">clôturé le 02·2026</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="section-title">
+              <h3 class="serif">Activité récente</h3>
+              <span class="count">tous comptes</span>
+            </div>
+            <div class="stream">
+              <div class="ev credit">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg></div>
+                <div><div class="ev-name">FundsCredited</div><div class="ev-meta">EUR · Courant — virement entrant SEPA</div></div>
+                <div class="ev-amt up">+12 500,00<small>02 juin · 19:41</small></div>
+              </div>
+              <div class="ev reserve">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="13" rx="2"/><path d="M8 6V4h8v2"/></svg></div>
+                <div><div class="ev-name">FundsReserved</div><div class="ev-meta">EUR · Courant — pré-autorisation carte</div></div>
+                <div class="ev-amt" style="color:var(--amber)">3 200,00<small>02 juin · 18:22</small></div>
+              </div>
+              <div class="ev debit">
+                <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg></div>
+                <div><div class="ev-name">FundsDebited</div><div class="ev-meta">CHF · Mandat — frais de gestion</div></div>
+                <div class="ev-amt down">−1 240,00<small>01 juin · 09:00</small></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= -->
+    <!-- VIEW : ACCOUNT DETAIL                                    -->
+    <!-- ======================================================= -->
+    <section class="view" id="view-account">
+      <div class="ph">
+        <div>
+          <div class="eyebrow"><span style="cursor:pointer;color:var(--brass)" data-goto="customer360">Aurélie Mercier</span> &nbsp;/&nbsp; Compte courant EUR</div>
+          <h1 class="serif">Compte courant</h1>
+          <p class="mono" style="font-size:12.5px;color:var(--muted);margin-top:6px">acc_4f2a1c08-7d65-4b90-a1e2-09f3cc2a7b41</p>
+        </div>
+        <span class="pill ok" style="font-size:13px;padding:8px 14px"><span class="d"></span>OPENED · v.214</span>
+      </div>
+
+      <!-- balance hero -->
+      <div class="panel bal-hero" style="margin-bottom:18px">
+        <div>
+          <div class="lab">Solde</div>
+          <div class="big serif">1 284 540<span class="c">EUR</span></div>
+          <div class="sub">balanceAmount — projeté depuis 214 événements</div>
+        </div>
+        <div>
+          <div class="lab">Réservé</div>
+          <div class="med res serif">3 200<span style="font-family:'JetBrains Mono';font-size:14px;color:var(--muted)"> €</span></div>
+          <div class="sub">reservedAmount · 1 réservation active</div>
+        </div>
+        <div>
+          <div class="lab">Disponible</div>
+          <div class="med av serif">1 281 340<span style="font-family:'JetBrains Mono';font-size:14px;color:var(--muted)"> €</span></div>
+          <div class="sub">solde − réservé</div>
+        </div>
+      </div>
+
+      <div class="actions-row" style="margin-bottom:22px">
+        <button class="btn primary" onclick="openModal('Déposer','deposits')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg>Déposer</button>
+        <button class="btn" onclick="openModal('Retirer','withdrawals')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>Retirer</button>
+        <button class="btn" onclick="openModal('Réserver des fonds','reservations')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="13" rx="2"/><path d="M8 6V4h8v2"/></svg>Réserver</button>
+        <button class="btn ghost" style="margin-left:auto;color:var(--rose);border-color:rgba(208,132,112,.35)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg>Clôturer le compte</button>
+      </div>
+
+      <div class="grid col-2">
+        <!-- active reservations -->
+        <div class="panel">
+          <div class="section-title">
+            <h3 class="serif">Réservations</h3>
+            <span class="count">1 active</span>
+          </div>
+          <table>
+            <thead><tr><th>Réservation</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
+            <tbody>
+              <tr style="cursor:default">
+                <td><div class="nm mono" style="font-size:13px">res_2d8a…41</div><div class="sub">pré-autorisation carte</div></td>
+                <td class="num">3 200,00 €</td>
+                <td><span class="pill warn"><span class="d"></span>RESERVED</span></td>
+                <td style="text-align:right">
+                  <button class="btn ghost" style="padding:5px 10px;font-size:12px">Capturer</button>
+                  <button class="btn ghost" style="padding:5px 10px;font-size:12px;color:var(--rose)">Annuler</button>
+                </td>
+              </tr>
+              <tr style="cursor:default;opacity:.6">
+                <td><div class="nm mono" style="font-size:13px">res_19c0…0a</div><div class="sub">virement programmé</div></td>
+                <td class="num">1 050,00 €</td>
+                <td><span class="pill ok"><span class="d"></span>CAPTURED</span></td>
+                <td></td>
+              </tr>
+              <tr style="cursor:default;opacity:.6">
+                <td><div class="nm mono" style="font-size:13px">res_07b3…e2</div><div class="sub">caution expirée</div></td>
+                <td class="num">540,00 €</td>
+                <td><span class="pill neutral"><span class="d"></span>CANCELED</span></td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- event ledger (event sourcing!) -->
+        <div class="panel">
+          <div class="section-title">
+            <h3 class="serif">Journal d'événements</h3>
+            <span class="count">event-sourced</span>
+            <span class="link">Exporter JSON</span>
+          </div>
+          <div class="stream">
+            <div class="ev credit">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg></div>
+              <div><div class="ev-name">FundsCredited</div><div class="ev-meta">v.214 · txn_a1f… · idempotent</div></div>
+              <div class="ev-amt up">+12 500,00<small>19:41:02</small></div>
+            </div>
+            <div class="ev reserve">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="13" rx="2"/><path d="M8 6V4h8v2"/></svg></div>
+              <div><div class="ev-name">FundsReserved</div><div class="ev-meta">v.213 · res_2d8a…41</div></div>
+              <div class="ev-amt" style="color:var(--amber)">3 200,00<small>18:22:10</small></div>
+            </div>
+            <div class="ev debit">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg></div>
+              <div><div class="ev-name">FundsDebited</div><div class="ev-meta">v.212 · txn_88c…</div></div>
+              <div class="ev-amt down">−890,00<small>14:03:55</small></div>
+            </div>
+            <div class="ev system">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
+              <div><div class="ev-name">ReservationCaptured</div><div class="ev-meta">v.211 · res_19c0…0a</div></div>
+              <div class="ev-amt">1 050,00<small>09:31:20</small></div>
+            </div>
+            <div class="ev system" style="opacity:.55">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V5h6v2m-7 0 1 13h6l1-13"/></svg></div>
+              <div><div class="ev-name">ReservationCanceled</div><div class="ev-meta">v.210 · res_07b3…e2</div></div>
+              <div class="ev-amt">540,00<small>hier</small></div>
+            </div>
+            <div class="ev system" style="opacity:.55">
+              <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6m0 0 3-3m-3 3L9 5"/><circle cx="12" cy="15" r="6"/></svg></div>
+              <div><div class="ev-name">AccountOpened</div><div class="ev-meta">v.1 · snapshot @ v.200</div></div>
+              <div class="ev-amt">250 000,00<small>14 mars 2022</small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ MODAL (mock) ============ -->
+<div class="scrim" id="scrim">
+  <div class="panel modal">
+    <div class="mh">
+      <h3 class="serif" id="modal-title">Déposer des fonds</h3>
+      <div class="icon-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></div>
+    </div>
+    <div class="mb">
+      <div class="field">
+        <label>Montant</label>
+        <div class="inp"><span class="pre">€</span><input type="text" value="12 500,00" /></div>
+      </div>
+      <div class="field">
+        <label>Devise</label>
+        <div class="inp"><select><option>EUR — Euro</option><option>USD — Dollar</option><option>CHF — Franc suisse</option><option>GBP — Livre</option></select></div>
+      </div>
+      <p class="hint">Idempotence via en-tête <code>Transaction-Id</code> généré automatiquement — un double envoi renvoie <code>NO_EFFECT</code>.</p>
+    </div>
+    <div class="mf">
+      <button class="btn ghost" onclick="closeModal()">Annuler</button>
+      <button class="btn primary" id="modal-go" onclick="closeModal()">POST /accounts/{id}/deposits</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- view routing ---
+  const views = document.querySelectorAll('.view');
+  const navItems = document.querySelectorAll('.nav-item');
+  function show(id){
+    views.forEach(v=>v.classList.toggle('active', v.id==='view-'+id));
+    navItems.forEach(n=>n.classList.toggle('active', n.dataset.view===id));
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  navItems.forEach(n=>n.addEventListener('click',()=>show(n.dataset.view)));
+  document.querySelectorAll('[data-goto]').forEach(el=>{
+    el.addEventListener('click', e=>{ e.stopPropagation(); show(el.dataset.goto); });
+  });
+
+  // --- modal ---
+  const scrim = document.getElementById('scrim');
+  function openModal(title, ep){
+    if(title) document.getElementById('modal-title').textContent = title;
+    if(ep) document.getElementById('modal-go').textContent = 'POST /accounts/{id}/'+ep;
+    scrim.classList.add('show');
+  }
+  function closeModal(){ scrim.classList.remove('show'); }
+  scrim.addEventListener('click', e=>{ if(e.target===scrim) closeModal(); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+</script>
+</body>
+</html>
