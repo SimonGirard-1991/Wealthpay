@@ -368,7 +368,7 @@
                         <param>org.girardsimon.wealthpay.account.infrastructure.consumer.*</param>
                         <param>org.girardsimon.wealthpay.account.infrastructure.web.*</param>
                         <param>org.girardsimon.wealthpay.shared.infrastructure.web.*</param>
-                        <param>org.girardsimon.wealthpay.account.ArchitectureTests</param>
+                        <param>org.girardsimon.wealthpay.architecture.ArchitectureTests</param>
                         <param>org.girardsimon.wealthpay.architecture.*</param>
                     </excludedTestClasses>
                     <jvmArgs>

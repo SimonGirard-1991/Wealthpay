@@ -1,4 +1,4 @@
-package org.girardsimon.wealthpay.account;
+package org.girardsimon.wealthpay.architecture;
 
 import org.girardsimon.wealthpay.WealthpayApplication;
 import org.junit.jupiter.api.Test;

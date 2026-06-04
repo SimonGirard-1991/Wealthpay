@@ -63,6 +63,11 @@ class HexagonalArchitectureTest {
 
   private static final String BASE_PACKAGE = "org.girardsimon.wealthpay";
 
+  // BCs still under incremental construction may be domain-only: their outer layers stay optional
+  // until built. Remove a BC once it has application + infrastructure, so the layering rule resumes
+  // catching an accidentally-missing layer in a finished BC.
+  private static final Set<String> INCREMENTAL_DOMAIN_ONLY_BCS = Set.of("customer");
+
   @ArchTest
   static void all_bounded_contexts_have_hexagonal_layers(JavaClasses classes) {
     SortedSet<String> bcs = detectBoundedContexts(classes);
@@ -343,14 +348,35 @@ class HexagonalArchitectureTest {
    * #openapi_generated_only_used_in_web}.
    */
   private static ArchRule hexagonalLayersFor(String boundedContext) {
-    return Architectures.layeredArchitecture()
-        .consideringOnlyDependenciesInLayers()
-        .layer("Domain")
-        .definedBy("..%s.domain..".formatted(boundedContext))
-        .layer("Application")
-        .definedBy("..%s.application..".formatted(boundedContext))
-        .layer("Infrastructure")
-        .definedBy("..%s.infrastructure..".formatted(boundedContext))
+    String domainPackage = "..%s.domain..".formatted(boundedContext);
+    String applicationPackage = "..%s.application..".formatted(boundedContext);
+    String infrastructurePackage = "..%s.infrastructure..".formatted(boundedContext);
+
+    Architectures.LayeredArchitecture layers =
+        Architectures.layeredArchitecture()
+            .consideringOnlyDependenciesInLayers()
+            .layer("Domain")
+            .definedBy(domainPackage);
+
+    // Outer layers are optional only for incremental, domain-only BCs; required for every other BC
+    // so an accidentally-missing application/infrastructure layer is still caught.
+    if (INCREMENTAL_DOMAIN_ONLY_BCS.contains(boundedContext)) {
+      layers =
+          layers
+              .optionalLayer("Application")
+              .definedBy(applicationPackage)
+              .optionalLayer("Infrastructure")
+              .definedBy(infrastructurePackage);
+    } else {
+      layers =
+          layers
+              .layer("Application")
+              .definedBy(applicationPackage)
+              .layer("Infrastructure")
+              .definedBy(infrastructurePackage);
+    }
+
+    return layers
         .whereLayer("Infrastructure")
         .mayNotBeAccessedByAnyLayer()
         .whereLayer("Application")
