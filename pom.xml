@@ -353,6 +353,7 @@
                     <parseSurefireArgLine>false</parseSurefireArgLine>
                     <targetClasses>
                         <param>org.girardsimon.wealthpay.account.*</param>
+                        <param>org.girardsimon.wealthpay.customer.*</param>
                         <param>org.girardsimon.wealthpay.shared.*</param>
                     </targetClasses>
                     <excludedClasses>
