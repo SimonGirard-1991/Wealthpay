@@ -6,7 +6,7 @@ import org.girardsimon.wealthpay.customer.domain.exception.InvalidEmailAddressEx
 
 public record EmailAddress(String value) {
   // Pragmatic shape check, not RFC 5322: one '@', no whitespace, a dotted domain. Deliberately
-  // lenient (admits e.g. consecutive/leading dots) - it proves "looks like an address", not
+  // lenient (admits e.g., consecutive/leading dots) - it proves "looks like an address", not
   // deliverability. Real validation is a confirmation email. Stored lowercased.
   private static final Pattern SHAPE = Pattern.compile("[^\\s@]+@[^\\s@]+\\.[^\\s@]+");
   private static final int MAX_LENGTH = 254;
