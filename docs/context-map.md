@@ -282,3 +282,6 @@ backlog item — it must be a conscious risk acceptance.
 - ADR-001 — Event Sourcing for Account Aggregate (the Account context's model)
 - ADR-0003 — Transactional Outbox Pattern with CDC (the Seam B publish pipeline)
 - ADR-004 — Event Contract (the published-language schema discipline for Seam B)
+- ADR-009 — PII retention and erasure in the Customer context (why Seam B's
+  published language must stay primitive-only, and why no personal data crosses
+  the outbox)

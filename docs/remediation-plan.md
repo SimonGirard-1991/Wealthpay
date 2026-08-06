@@ -1016,7 +1016,15 @@ a clean database.
 **Where:** `debezium/register-connector.sh`; `docker-compose.local.yml`
 (Postgres configuration)
 
-**Defect (verify first).** The publication is narrowed to `account.outbox` only.
+**🔴 Premise corrected 2026-08-06 (ADR-009 D8): the publication is NOT narrowed.**
+`dbz_publication` is `FOR ALL TABLES` — created that way by the connector's
+`publication.autocreate.mode` default (`all_tables`) or by V15's `ELSE` branch,
+whichever runs first. Narrowing it is prescribed by WP-22 and required by
+ADR-009 D8, and **this item's analysis below assumes the narrowed state, so it
+describes the post-fix system, not the current one.** Re-derive the slot-lag
+mechanism once the publication is actually narrowed.
+
+**Defect (verify first).** Assuming the publication is narrowed to `account.outbox` only:
 Debezium advances `confirmed_flush_lsn` only when it emits records. During any
 period where the outbox is idle but the rest of the database is busy — event
 store writes, idempotency tables, autovacuum — the slot's LSN stagnates while
@@ -1752,7 +1760,27 @@ whatever decision is taken about bounding.
 **Where:** `customer/domain/model/EmailAddress`, `PersonalName`, `Nationalities`,
 `Gender`, `IndividualDetails`;
 `db/migration/account/V3__event_store_append_only.sql` (append-only triggers);
-`docs/adr/` (no ADR covers this)
+`docs/adr/009-pii-retention-and-erasure.md`
+
+**Progress.** The ADR now exists and records option (1), pseudonymisation, with
+the position for each substrate. Two of the three "done when" conditions are
+met. **This item stays TODO until the customer persistence layer implements
+it** — specifically the append-only triggers that are the actual enforcement
+(ADR-009 D5), the `ON DELETE RESTRICT` / `CASCADE` split, and the
+customer-to-decision link row (D6). Note `customer.retention.cdd-years` (D2)
+lands with the purge job that reads it; what this increment owes is the negative
+obligation — no retention literal in SQL, Java, or a migration comment.
+
+**Consequences that outlive the ADR, and where each is routed:**
+
+| Consequence | Home |
+|---|---|
+| No purge path; abandoned-onboarding records have no anchor (D3) | KYC status axis (customer backlog B-1) |
+| No role separation on the **write path** — app, Flyway and Debezium all run as the owning superuser, so every `GRANT`/`REVOKE` control is advisory (D5). Only the read-only `monitoring` role is separated. | **unrouted; raise as its own item** |
+| `account.event_store` triggers bypassable via `TRUNCATE` and `session_replication_role` (D5) | **unrouted; raise as its own item** |
+| Catch-all handler leaks `e.getMessage()`; 400 body leaks `rejectedValue` (D7) | **WP-26** — note ADR-009 deliberately jumps WP-57's sequencing for the 5xx handler only |
+| `dbz_publication` is `FOR ALL TABLES` (D8) | **WP-22** — its `publication.autocreate.mode` fix is necessary but not sufficient; a forward migration is needed |
+| Erasure does not reach backups (D8) | **WP-117** |
 
 **Defect.** The in-flight `customer` bounded context models personal data —
 email address, personal name, date of birth, gender, country of residence, and a
