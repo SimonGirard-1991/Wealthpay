@@ -30,6 +30,10 @@ Confidence markers are:
 2. Update the **same status** in the index table. Both must agree.
 3. Add a `**Resolved:**` line to the detail entry with the commit SHA and a
    one-line note. For `WONTFIX`, add `**Rationale:**` instead.
+4. If work landed that advances an item without closing it, leave the status
+   `TODO` and add a `**Partial progress (<sha>).**` line saying what now exists
+   and what the item is still waiting on. Do not silently narrow the `Defect`
+   description — the gap between the original finding and today is the record.
 
 ### When you confirm or refute a REPORTED item
 
@@ -43,7 +47,7 @@ deliberately not duplicated in the index.
   dropped, mark it `WONTFIX` — do not delete it.
 - **Never delete a resolved entry.** The record of what was fixed and why is the
   point.
-- **New items take the next unused ID globally** (currently `WP-119`),
+- **New items take the next unused ID globally** (currently `WP-122`),
   regardless of tier. The ID blocks below are historical and carry no meaning.
 - **Re-tiering an item keeps its ID.** Move the entry and its index row to the
   new section; the number does not change.
@@ -110,7 +114,7 @@ numbers drift as soon as remediation starts.
 | WP-34 | No dependency vulnerability scanning | TODO |
 | WP-35 | Spring Boot 4.0.2 is behind and the line EOLs 2026-12-31 | TODO |
 | WP-36 | Sonar runs but does not gate the build | TODO |
-| WP-37 | PITest excludes the entire `customer` bounded context | TODO |
+| WP-37 | PITest excludes the entire `customer` bounded context | DONE |
 | WP-38 | No enforced coverage threshold | TODO |
 | WP-39 | DLQ path has no tests | TODO |
 | WP-40 | outbox to Kafka is never tested end to end | TODO |
@@ -131,7 +135,7 @@ numbers drift as soon as remediation starts.
 | WP-53 | Event-store load methods are unbounded | TODO |
 | WP-54 | `DataIntegrityViolationException` conflates distinct constraints | TODO |
 | WP-55 | `reserveFunds` duplicates `processTransaction` | TODO |
-| WP-56 | `Customer.status` is unreachable dead state | TODO |
+| WP-56 | `Customer.status` is unreachable dead state | DONE |
 | WP-57 | Error responses are not RFC 7807 | TODO |
 | WP-58 | OpenAPI documents no error responses | TODO |
 | WP-59 | Duplicate index on `event_store` | TODO |
@@ -155,6 +159,7 @@ numbers drift as soon as remediation starts.
 | WP-77 | Documented "snapshot never blocks" behaviour is untested | TODO |
 | WP-78 | Builds are not reproducible | TODO |
 | WP-79 | Kafka listener latency has no percentiles | TODO |
+| WP-119 | `Money`'s arithmetic and comparisons have no direct tests | TODO |
 
 ### P3 — Hygiene & polish
 
@@ -185,6 +190,8 @@ numbers drift as soon as remediation starts.
 | WP-112 | No failsafe/surefire split | TODO |
 | WP-113 | Sonar organization declared in two places | TODO |
 | WP-114 | CI uses bare `mvn`, not the pinned wrapper | TODO |
+| WP-120 | PITest cannot see record compact constructors (measured: low impact) | WONTFIX |
+| WP-121 | `INCREMENTAL_DOMAIN_ONLY_BCS` is an ArchUnit exemption with no expiry | TODO |
 
 ---
 
@@ -233,6 +240,7 @@ database level, and asserts the event row **is** present after commit and the
 command reports success. See WP-77.
 
 ---
+---
 
 ## WP-02 — DLQ is non-functional: DLT topic never declared
 
@@ -279,6 +287,7 @@ observed on the DLT with its original payload and the
 `kafka_dlt-exception-fqcn` header intact.
 
 ---
+---
 
 ## WP-03 — DLQ producer cannot serialize the Avro payload
 
@@ -309,6 +318,7 @@ a dedicated DLT template.
 record and observes it on the DLT.
 
 ---
+---
 
 ## WP-04 — Consumer test masks WP-02 and WP-03
 
@@ -333,6 +343,7 @@ serialization path is covered.
 **Done when.** At least one consumer test runs with the production
 deserializer configuration.
 
+---
 ---
 
 ## WP-05 — No authentication or authorization on any endpoint
@@ -390,6 +401,7 @@ over identity, which is where account ownership belongs.
 a token scoped to account A returns 403 on account B, and the ArchUnit rule is
 green.
 
+---
 ---
 
 ## WP-06 — Live webhook secrets in `.env` require rotation
@@ -475,6 +487,7 @@ when the fix lands.
 version 2, and asserts both replay correctly.
 
 ---
+---
 
 ## WP-11 — `SupportedCurrency.CNH` is not a valid ISO 4217 code
 
@@ -508,6 +521,7 @@ void every_supported_currency_resolves_to_an_iso_4217_currency() {
 }
 ```
 
+---
 ---
 
 ## WP-12 — Client-supplied amounts are silently rounded
@@ -551,6 +565,7 @@ no rounding occurs. If transport validation is also added and returns 400
 first, update this criterion to match rather than leaving both claimed.
 
 ---
+---
 
 ## WP-13 — No upper bound on monetary amounts
 
@@ -580,6 +595,7 @@ in the `Money` compact constructor so the bound holds regardless of transport.
 domain layers, with a test for each, and all four schemas agree on bounds.
 
 ---
+---
 
 ## WP-14 — No idempotency key on `POST /accounts`
 
@@ -604,6 +620,7 @@ This needs a `transaction_id → account_id` lookup, mirroring `lookupReservatio
 **Done when.** Two identical open requests with the same key produce one account
 and the same response body.
 
+---
 ---
 
 ## WP-15 — No connection-pool sizing or I/O timeouts
@@ -644,6 +661,7 @@ Size the pool from a measured profile, not the number above.
 **Done when.** Pool and timeouts are explicit, and a load test shows bounded
 latency degradation rather than a cliff.
 
+---
 ---
 
 ## WP-16 — No DEFAULT outbox partition
@@ -748,6 +766,7 @@ a day with rows in it (verified by test or rehearsal), the drain procedure is
 documented, and an alert fires on non-zero `outbox_default` occupancy.
 
 ---
+---
 
 ## WP-17 — A projection gap freezes an account's read model permanently
 
@@ -784,6 +803,7 @@ currently exist, so this fix cannot work until the backoff is bounded.
 DLT record with the gap-specific exception type, and the counter increments.
 
 ---
+---
 
 ## WP-18 — Optimistic-lock conflicts are never retried
 
@@ -816,6 +836,7 @@ tell the client it is safe to retry with the same idempotency key.
 **Done when.** A concurrent-write test shows the second writer succeeding after
 retry, and the conflict metric drops.
 
+---
 ---
 
 ## WP-19 — Concurrent duplicate can be told "already processed" wrongly
@@ -857,12 +878,21 @@ same `transactionId` where the first rolls back, and asserts the second does not
 report `NO_EFFECT`.
 
 ---
+---
 
 ## WP-20 — Idempotency fingerprint derives from `Record::toString`
 
 **Status:** TODO · **Confidence:** VERIFIED
+**Related:** WP-119
 
 **Where:** `account/domain/command/AccountTransaction` → `fingerprint`
+
+**Additional evidence.** `fingerprint()` carries a surviving mutant —
+`replaced return value with ""` — meaning the digest can be a constant empty
+string with the suite green. Nothing pins the digest input today, which is the
+same gap this item's "Done when" closes. (`AccountTransaction` is an *interface*;
+`fingerprint` is a `default` method, so this survivor is unrelated to the record
+filtering discussed in WP-120.)
 
 **Defect.** The SHA-256 digest is computed over `toString()`. `Record.toString()`
 is explicitly documented as implementation-dependent and free to vary between
@@ -895,6 +925,7 @@ algorithm version alongside the hash and accept both during a transition.
 **Done when.** The digest input is explicitly enumerated and a test pins the
 hash for a known command.
 
+---
 ---
 
 ## WP-21 — Aggregate forgets reservation outcomes
@@ -943,6 +974,7 @@ policy rather than accidental forgetting.
 test with no application-layer or database involvement.
 
 ---
+---
 
 ## WP-22 — Flyway migrations require superuser privileges
 
@@ -973,6 +1005,7 @@ replacement and document the provisioning prerequisite.
 **Done when.** A migration run as a non-superuser schema owner succeeds against
 a clean database.
 
+---
 ---
 
 ## WP-23 — No Debezium heartbeat: replication slot can pin WAL
@@ -1011,6 +1044,7 @@ the pipeline instead of the database.
 other tables.
 
 ---
+---
 
 ## WP-24 — Kafka Connect is not scraped
 
@@ -1036,6 +1070,7 @@ is non-zero.
 **Done when.** Stopping the connector fires an alert within one evaluation
 window.
 
+---
 ---
 
 ## WP-25 — `/actuator/prometheus` is anonymous on the application port
@@ -1084,6 +1119,7 @@ on the host, so no compose port mapping changes.)
 Prometheus still shows the `wealthpay` target as `up`.
 
 ---
+---
 
 ## WP-26 — Exception handlers leak internal detail on 5xx
 
@@ -1114,6 +1150,7 @@ rework.
 **Done when.** A forced database error returns no schema detail in the response
 body, and the incident ID appears in the logs.
 
+---
 ---
 
 ## WP-27 — No distributed tracing despite observation wiring
@@ -1149,6 +1186,7 @@ is missing.
 **Done when.** A single request produces a connected trace across controller,
 application service, and repository.
 
+---
 ---
 
 ## WP-28 — Debezium CDC severs trace context
@@ -1193,6 +1231,7 @@ tooling is broken.
 **Done when.** A trace spans the HTTP request and the projection update.
 
 ---
+---
 
 ## WP-29 — No structured logging, MDC, or correlation ID
 
@@ -1227,6 +1266,7 @@ tooling is broken.
 **Done when.** Logs are JSON, every line inside a request carries a correlation
 ID, and that ID is returned to the caller on error.
 
+---
 ---
 
 ## WP-30 — No business audit log and no actor attribution on events
@@ -1268,6 +1308,7 @@ dedicated columns.
 **Done when.** Every state-changing command produces an audit record naming its
 principal, and the event stream carries the same attribution.
 
+---
 ---
 
 ## WP-31 — Outbox gauge fails into the healthy band and queries on scrape
@@ -1332,6 +1373,7 @@ promptly **and** a staleness alert fires within its evaluation window. Verify
 by scraping the endpoint, not by reading the code.
 
 ---
+---
 
 ## WP-32 — Liveness and readiness are not distinct; Kafka not health-checked
 
@@ -1362,6 +1404,7 @@ the **readiness** group; keep **liveness** to process-liveness only.
 stopping the database does not trigger a restart loop.
 
 ---
+---
 
 ## WP-33 — No rate limiting, request size limits, or CORS policy
 
@@ -1388,6 +1431,7 @@ deliberate before a browser client arrives.
 **Done when.** A burst of unauthenticated requests is throttled rather than
 absorbed.
 
+---
 ---
 
 ## WP-34 — No dependency vulnerability scanning
@@ -1418,6 +1462,7 @@ indefinitely. This is also the root cause of WP-35.
 **Done when.** Dependabot opens PRs and a nightly CVE scan runs.
 
 ---
+---
 
 ## WP-35 — Spring Boot 4.0.2 is behind and the line EOLs 2026-12-31
 
@@ -1441,6 +1486,7 @@ numbers above. Land WP-34 first so this does not recur.
 **Done when.** On a supported patch release, with Dependabot keeping it current.
 
 ---
+---
 
 ## WP-36 — Sonar runs but does not gate the build
 
@@ -1459,11 +1505,12 @@ regardless of whether the quality gate passes.
 **Done when.** A deliberate quality-gate violation fails the pipeline.
 
 ---
+---
 
 ## WP-37 — PITest excludes the entire `customer` bounded context
 
-**Status:** TODO · **Confidence:** VERIFIED
-**Related:** WP-106
+**Status:** DONE · **Confidence:** VERIFIED
+**Related:** WP-38, WP-106, WP-119, WP-120, WP-121
 
 **Where:** `pom.xml` → `pitest-maven` → `targetClasses`
 
@@ -1480,11 +1527,34 @@ exist, so it passes no matter how weak those tests are.
 **Done when.** The mutation report includes `customer` classes and still meets
 the threshold.
 
+**Resolved:** `309734c` — `customer.*` added to `targetClasses`. Verified by
+running `mvn pitest:mutationCoverage` and parsing `target/pit-reports/mutations.xml`
+**at branch tip, after `fccaa7e` added the admission types** (`309734c` itself
+reported 35/38 for the BC and 195/216 overall): the `customer` bounded context now
+contributes 100 mutants, 98 killed (98%), against a run total of 278 mutants and
+258 killed (93%). Both surviving `customer`
+mutants are in `CustomerNumber.passesLuhn` and are provably equivalent — `digit`
+is always `2 × original` and therefore never exactly 9, and negating the Luhn
+accumulator preserves `≡ 0 (mod 10)`. Do not re-litigate them.
+
+**Follow-ups this fix revealed.** Two, filed separately:
+
+- **WP-119** (P2) — `Money`'s arithmetic and comparison methods have no direct
+  tests; six mutants survive, three of which allow the currency-mismatch guard to
+  be deleted with a green suite. This is the substantive one.
+- **WP-120** (P3, `WONTFIX`) — PITest's `FRECORD` filter hides record compact
+  constructors from the gate. Investigated and **measured**: 53 hidden mutants,
+  52 killed, so the hidden region is already well covered and the effect on
+  `account.domain`'s score is +1.2 points, not −. Its one real finding is
+  WP-99's. Recorded so the "our score is overstated" theory is not re-derived.
+
+---
 ---
 
 ## WP-38 — No enforced coverage threshold
 
 **Status:** TODO · **Confidence:** VERIFIED
+**Related:** WP-37, WP-119, WP-120
 
 **Where:** `pom.xml` → `jacoco-maven-plugin`
 
@@ -1500,6 +1570,7 @@ tests this codebase has so far avoided.
 
 **Done when.** Deleting a domain test fails the build.
 
+---
 ---
 
 ## WP-39 — DLQ path has no tests
@@ -1525,6 +1596,7 @@ this directly; roughly 30 lines.
 
 **Done when.** The test exists, passes, and fails if the DLT bean is removed.
 
+---
 ---
 
 ## WP-40 — outbox to Kafka is never tested end to end
@@ -1553,6 +1625,7 @@ This is the highest-value test missing from the repository.
 **Done when.** The test runs in CI and fails if the SMT configuration changes.
 
 ---
+---
 
 ## WP-41 — event_store and outbox atomicity is untested
 
@@ -1579,6 +1652,7 @@ matching `event_id`.
 **Done when.** Removing `@Transactional` from a command method fails the test.
 
 ---
+---
 
 ## WP-42 — No read-model rebuild path, Kafka retention is 24h
 
@@ -1604,6 +1678,7 @@ Small piece of code; converts a data-loss incident into a 20-minute operation.
 **Done when.** Truncating `account_balance_view` and running the rebuilder
 reproduces it exactly, covered by a test.
 
+---
 ---
 
 ## WP-115 — Kafka retry backoff is unbounded
@@ -1667,21 +1742,31 @@ programming-error exceptions are classified non-retryable, and ADR-005 reflects
 whatever decision is taken about bounding.
 
 ---
+---
 
 ## WP-116 — No erasure strategy for PII in an immutable event store
 
 **Status:** TODO · **Confidence:** VERIFIED
 **Related:** WP-30, WP-65, WP-117
 
-**Where:** `customer/domain/model/EmailAddress`, `PersonalName`;
+**Where:** `customer/domain/model/EmailAddress`, `PersonalName`, `Nationalities`,
+`Gender`, `IndividualDetails`;
 `db/migration/account/V3__event_store_append_only.sql` (append-only triggers);
 `docs/adr/` (no ADR covers this)
 
 **Defect.** The in-flight `customer` bounded context models personal data —
-email address, personal name, date of birth, country. The `account` context
+email address, personal name, date of birth, gender, country of residence, and a
+**set** of nationalities. The `account` context
 stores events in an append-only table protected by `BEFORE UPDATE`/`BEFORE
 DELETE` triggers, and fans them out to Kafka. There is no ADR, no design note,
 and no code addressing how personal data is erased from an immutable log.
+
+**Scope grew on the customer branch.** `86a4d3a` added `Gender` and `fccaa7e`
+added `Nationalities` and `countryOfResidence`. Nationality is the field closest
+to GDPR Art. 9 special-category territory (it can proxy for ethnic origin), and
+it is set-valued, so an erasure design that assumes one scalar country per
+customer is already wrong. Any ADR written against the original four-field list
+will under-scope.
 
 **Impact.** The immutability that makes the event store an excellent audit
 substrate is directly in tension with data-subject erasure rights. Once customer
@@ -1724,6 +1809,7 @@ customer persistence layer implements it. **Do not merge the customer
 infrastructure layer before this decision is recorded.**
 
 ---
+---
 
 ## WP-117 — No event-store backup, PITR, or restore rehearsal
 
@@ -1761,6 +1847,7 @@ restore yields unreadable ciphertext. Decide both together.
 **Done when.** A documented restore drill has been executed against a copy and
 the resulting event store replays to an identical aggregate state.
 
+---
 ---
 
 ## WP-118 — Flyway core and Postgres plugin are on mismatched major versions
@@ -1812,8 +1899,15 @@ believes it is doing something.
 ## WP-50 — Currency mismatch bypasses the domain error model
 
 **Status:** TODO · **Confidence:** REPORTED
+**Related:** WP-119
 
 **Where:** `account/domain/model/Money` → `ensureSameCurrency`
+
+**Sequence before WP-119**, whose cross-currency tests assert the exception type
+this item changes. Note also that WP-119's mutation evidence confirms the
+*reachability* half of this item — `ensureSameCurrency` is live and removable from
+all three call sites with a green suite — so REPORTED now applies only to the
+exception-type and metric-classification claims.
 
 **Defect.** Every other currency violation raises
 `AccountCurrencyMismatchException` → 422, classified `invariant_violation`. A
@@ -1827,6 +1921,7 @@ someone.**
 **Done when.** A cross-currency operation returns 422 and records
 `invariant_violation`.
 
+---
 ---
 
 ## WP-51 — Replay does not validate stream continuity
@@ -1855,6 +1950,7 @@ if (event.version() != this.version + 1) {
 balance.
 
 ---
+---
 
 ## WP-52 — `updatePhase` ignores the affected row count
 
@@ -1877,6 +1973,7 @@ lookup index and this check moves or disappears — coordinate the two.
 **Done when.** A missing-row update raises instead of silently succeeding.
 
 ---
+---
 
 ## WP-53 — Event-store load methods are unbounded
 
@@ -1897,6 +1994,7 @@ variant (or a hard cap that throws) for the no-snapshot path.
 
 **Done when.** The port has one load method and the no-snapshot path is bounded.
 
+---
 ---
 
 ## WP-54 — `DataIntegrityViolationException` conflates distinct constraints
@@ -1919,6 +2017,7 @@ constraint and let an event-ID collision surface as an error.
 **Done when.** An injected event-ID collision produces a 500, not a 409.
 
 ---
+---
 
 ## WP-55 — `reserveFunds` duplicates `processTransaction`
 
@@ -1937,10 +2036,11 @@ WP-19 must now be applied in both copies.
 **Done when.** One code path serves both.
 
 ---
+---
 
 ## WP-56 — `Customer.status` is unreachable dead state
 
-**Status:** TODO · **Confidence:** REPORTED
+**Status:** DONE · **Confidence:** VERIFIED
 
 **Where:** `customer/domain/model/Customer`
 
@@ -1955,6 +2055,34 @@ terminal state.
 
 **Done when.** A domain test drives the transition.
 
+**Resolved:** `493acf4` — `Customer.activate(Instant)` implements
+`ONBOARDING → ACTIVE`, idempotent (`case ACTIVE -> false`), as an exhaustive
+switch *expression* so that adding a state breaks the build here rather than
+silently reactivating a blocked customer. `status` is also no longer the only
+non-final field: `activatedAt` joined it, nullable until activation, exposed as
+`Optional<Instant>`. `CustomerActivationTest` drove the transition across **5**
+tests at that commit.
+
+**Extended by `fccaa7e`**, which is where the rest of today's behaviour lives —
+do not attribute it to `493acf4`. It added `registeredAt` (there is no such field
+at `493acf4`, and `register` takes no instant there), the invariant
+`activatedAt >= registeredAt`, and 3 further tests, taking
+`CustomerActivationTest` to 8.
+
+That ordering guard sits **inside** the ONBOARDING arm rather than before the
+switch: guarding before it would turn an idempotent retry under clock skew into a
+hard error.
+
+Confidence raised REPORTED → VERIFIED on the tests plus the mutation report, in
+which `Customer` contributes 24 mutants with no survivors — **measured at branch
+tip**, not at `493acf4`.
+
+Suspend / reinstate / close remain deliberately deferred — they need a reason
+axis on the transition record and the cross-context "does this customer still
+have open accounts?" invariant. `docs/context-map.md` records that this is a
+prerequisite for Seam B, not part of it.
+
+---
 ---
 
 ## WP-57 — Error responses are not RFC 7807
@@ -1977,6 +2105,7 @@ error response body; doing either first is rework.
 **Done when.** Errors are served as `application/problem+json` with a trace ID.
 
 ---
+---
 
 ## WP-58 — OpenAPI documents no error responses
 
@@ -1995,6 +2124,7 @@ every operation. Coordinate with WP-57 so the referenced schema is the final one
 
 **Done when.** The spec matches what the handlers actually return.
 
+---
 ---
 
 ## WP-59 — Duplicate index on `event_store`
@@ -2025,6 +2155,7 @@ executeInTransaction=false
 
 **Done when.** One index remains and query plans are unchanged.
 
+---
 ---
 
 ## WP-60 — Unused indexes on `outbox` and `processed_reservations`
@@ -2062,6 +2193,7 @@ not be dropped.
 **Done when.** Verified unused, then dropped.
 
 ---
+---
 
 ## WP-61 — Idempotency tables grow without bound
 
@@ -2081,6 +2213,7 @@ outbox, or add a batched `DELETE` to the existing pg_cron job.
 
 **Done when.** A retention job runs and table size is bounded.
 
+---
 ---
 
 ## WP-62 — Partition drop has no `lock_timeout`
@@ -2107,6 +2240,7 @@ night skips creation as well and rely on the DEFAULT partition to absorb it.
 
 **Done when.** The timeout is set and a contended run degrades gracefully.
 
+---
 ---
 
 ## WP-63 — No CHECK constraints on the read model
@@ -2144,6 +2278,7 @@ storage one.
 **Done when.** Constraints exist, are validated, and the projector tests pass.
 
 ---
+---
 
 ## WP-64 — Debezium credentials hardcoded in a tracked script
 
@@ -2167,6 +2302,7 @@ environments.
 **Done when.** No credentials are literal in the script.
 
 ---
+---
 
 ## WP-65 — Financial payloads written unmasked to technical logs
 
@@ -2188,6 +2324,7 @@ coordinates to find it, not the content.
 **Done when.** No monetary values appear in technical logs.
 
 ---
+---
 
 ## WP-66 — Three outbox alerts have no dashboard panel
 
@@ -2208,6 +2345,7 @@ the freshness gauge introduced by WP-31.
 
 **Done when.** Every alerting metric has a panel.
 
+---
 ---
 
 ## WP-67 — Command dashboard surfaces 1 of 6 outcomes
@@ -2233,6 +2371,7 @@ panels; fix the dangling cross-reference.
 
 **Done when.** All six outcomes are visible and the cross-reference resolves.
 
+---
 ---
 
 ## WP-68 — Alerts and dashboards are not linked
@@ -2262,6 +2401,7 @@ invites edits it then silently discards.
 **Done when.** A firing alert is visible on the relevant dashboard.
 
 ---
+---
 
 ## WP-69 — Domain records are mocked in controller tests
 
@@ -2284,6 +2424,7 @@ test then reads as a real scenario.
 **Done when.** No domain type is mocked anywhere.
 
 ---
+---
 
 ## WP-70 — No test data builders; fixtures duplicated
 
@@ -2300,6 +2441,7 @@ helper.
 
 **Done when.** Each reservation test states only its own variable.
 
+---
 ---
 
 ## WP-71 — Testcontainers restarts Postgres per test class
@@ -2326,6 +2468,7 @@ own imports. That part is right.
 
 **Done when.** One container start per build.
 
+---
 ---
 
 ## WP-72 — CI lacks permissions, timeout, and concurrency controls
@@ -2358,6 +2501,7 @@ narrowed `path:`, and removal of the redundant `actions/cache` steps.
 **Done when.** All four are in place and the pipeline is faster.
 
 ---
+---
 
 ## WP-73 — GitHub Actions pinned to mutable tags
 
@@ -2374,6 +2518,7 @@ compromised tag re-point is the standard Actions supply-chain attack.
 
 **Done when.** No mutable tag remains.
 
+---
 ---
 
 ## WP-74 — `maven-enforcer-plugin` absent
@@ -2405,6 +2550,7 @@ time — that is the point.
 **Done when.** The build enforces convergence and passes.
 
 ---
+---
 
 ## WP-75 — Unused declared dependencies
 
@@ -2424,6 +2570,7 @@ time — that is the point.
 
 **Done when.** Both are either used or removed.
 
+---
 ---
 
 ## WP-76 — Snapshot restore and projection replay untested end to end
@@ -2445,6 +2592,7 @@ test truncates the read model and replays to reconstruct it (see WP-42).
 **Done when.** Both chains are covered.
 
 ---
+---
 
 ## WP-77 — Documented "snapshot never blocks" behaviour is untested
 
@@ -2464,6 +2612,7 @@ fixed.
 **Done when.** Both cases are covered.
 
 ---
+---
 
 ## WP-78 — Builds are not reproducible
 
@@ -2479,6 +2628,7 @@ per build and no two builds are byte-identical.
 
 **Done when.** Two clean builds produce identical artifacts.
 
+---
 ---
 
 ## WP-79 — Kafka listener latency has no percentiles
@@ -2500,6 +2650,69 @@ timer.
 convert the panel to `histogram_quantile`, and add an error panel.
 
 **Done when.** p95/p99 listener latency is charted.
+
+---
+
+## WP-119 — `Money`'s arithmetic and comparisons have no direct tests
+
+**Status:** TODO · **Confidence:** VERIFIED
+**Related:** WP-20, WP-37, WP-38, WP-50, WP-106, WP-120
+
+**Where:** `account.domain.model.Money`; `MoneyTest`.
+
+**🔴 Sequence after WP-50.** WP-50 changes `ensureSameCurrency` to throw
+`AccountCurrencyMismatchException` instead of `IllegalArgumentException`. The
+cross-currency tests prescribed below assert that exception type, so writing them
+first means WP-50 breaks three fresh tests. Either do WP-50 first, or assert the
+domain exception from the outset and land them together.
+
+**Defect.** `MoneyTest` contains three methods, all covering construction, null
+rejection and scale normalization. **Nothing calls `add`, `subtract`,
+`isGreaterThan`, `isZero`, `isNegativeOrZero` or `isStrictlyNegative` directly.**
+They are exercised only transitively through the `Account` command tests, which
+assert on aggregate outcomes and never pin the value object's own boundaries.
+
+Six mutants survive as a result (from `mvn pitest:mutationCoverage`):
+
+```
+Money.add               removed call to ensureSameCurrency   SURVIVED
+Money.subtract          removed call to ensureSameCurrency   SURVIVED
+Money.isGreaterThan     removed call to ensureSameCurrency   SURVIVED
+Money.isGreaterThan     changed conditional boundary         SURVIVED   (> 0 → >= 0)
+Money.isNegativeOrZero  changed conditional boundary         SURVIVED   (<= 0 → < 0)
+Money.isZero            replaced boolean return with true    SURVIVED
+```
+
+**Impact.** Read as behaviour: **the currency-mismatch guard can be deleted from
+`add`, `subtract` and `isGreaterThan` and the suite stays green.** Each survivor
+sits under a live guard:
+
+- `isNegativeOrZero` → `Account`'s non-positive transaction-amount guard.
+- `isGreaterThan` → `Account`'s available-balance checks on debit and reserve.
+- `isZero` → `Account`'s "account is empty" precondition on close.
+- `isStrictlyNegative` → `Account`'s negative-initial-balance guard on open. Its
+  mutants are killed transitively, so it shows no survivor — but it is as
+  untested directly as the other five and belongs in the same fix.
+
+This is a **test gap, not a production defect**: the guards are correct today and
+the aggregate-level tests do exercise the happy paths. The risk is that a future
+edit to `Money` silently removes a guard with nothing failing.
+
+**Fix.** Write direct `MoneyTest` cases for the six methods above: cross-currency
+rejection on `add`/`subtract`/`isGreaterThan`, and the zero/equality boundaries on
+`isGreaterThan`, `isZero`, `isNegativeOrZero` and `isStrictlyNegative`.
+
+**Not in scope.** Refactoring `Money`'s compact constructor to expose it to the
+mutation gate — see WP-120 for why that buys almost nothing. The rounding mode is
+already pinned by `should_normalize_amount_according_to_currency_fraction_digits`
+(`10.505 EUR → 10.50`, which `HALF_UP` would round to `10.51`), and the null guard
+by `check_money_consistency`. Both are covered by tests even though the gate
+cannot see them.
+
+**Done when.** All six survivors above are killed and each of the six methods has
+a test that names it.
+
+---
 
 ---
 
@@ -2528,6 +2741,7 @@ acknowledge the exposure and accept it explicitly.
 **Done when.** Code and documented threat model agree.
 
 ---
+---
 
 ## WP-91 — ADR-008 "SLOs" are cause-based thresholds
 
@@ -2549,6 +2763,7 @@ pages.
 **Done when.** At least one user-facing SLO has a burn-rate alert.
 
 ---
+---
 
 ## WP-92 — `last_updated_at` never refreshed on projection update
 
@@ -2564,6 +2779,7 @@ staleness cannot be measured from the data.
 
 **Done when.** The column advances on every projection update.
 
+---
 ---
 
 ## WP-93 — Read-side query lacks `@Transactional(readOnly = true)`
@@ -2581,6 +2797,7 @@ not.
 **Done when.** The convention holds repository-wide.
 
 ---
+---
 
 ## WP-94 — `assert` used where assertions are disabled
 
@@ -2595,6 +2812,7 @@ here (a scalar subquery always returns a row) but misleading as documentation.
 
 **Done when.** No `assert` remains in main sources.
 
+---
 ---
 
 ## WP-95 — One migration creates an unqualified table
@@ -2613,6 +2831,7 @@ comment or a guard, and note the dependency on `default-schema`.
 **Done when.** The implicit dependency is documented.
 
 ---
+---
 
 ## WP-96 — Append-only trigger asymmetry is undocumented
 
@@ -2630,6 +2849,7 @@ oversight.
 **Done when.** The asymmetry is explained where a reader will find it.
 
 ---
+---
 
 ## WP-97 — Consumer `isolation.level` left implicit
 
@@ -2645,6 +2865,7 @@ silently change semantics.
 
 **Done when.** The property is set with a brief comment.
 
+---
 ---
 
 ## WP-98 — Redundant `SELECT max(version)` on every append
@@ -2665,10 +2886,12 @@ changes how the constraint violation is interpreted.
 **Done when.** The round-trip is removed or its cost is documented as accepted.
 
 ---
+---
 
 ## WP-99 — `AccountEventMeta` admits `version == 0`
 
 **Status:** TODO · **Confidence:** VERIFIED
+**Related:** WP-120
 
 **Where:** `account/domain/event/AccountEventMeta`
 
@@ -2679,6 +2902,13 @@ changes how the constraint violation is interpreted.
 
 **Done when.** A version-0 event is rejected by a unit test.
 
+**Note.** This boundary is also the sole surviving mutant found by the WP-120
+investigation (`version < 0L` → `<= 0L`, unkilled). Fixing it here kills that
+mutant; WP-120 is `WONTFIX` precisely because this item already owns the work.
+Beware the inverted reading — the mutation report shows only that the boundary is
+unexercised, not which direction is correct.
+
+---
 ---
 
 ## WP-100 — `Account.toSnapshot` is a static taking an `Account`
@@ -2695,6 +2925,7 @@ mapper reaching into private state.
 **Done when.** Call sites use the instance form.
 
 ---
+---
 
 ## WP-101 — `AccountSnapshot` NPEs on null reservations
 
@@ -2710,6 +2941,7 @@ which throws a described `IllegalArgumentException`.
 **Done when.** A null reservations map produces a described exception.
 
 ---
+---
 
 ## WP-102 — `Account` has no identity-based `equals`/`hashCode`
 
@@ -2724,6 +2956,7 @@ collections), a trap later.
 
 **Done when.** Two `Account` instances with the same ID compare equal.
 
+---
 ---
 
 ## WP-103 — `AccountEventPublisher` is misnamed
@@ -2741,6 +2974,7 @@ breaking atomicity.
 **Done when.** The port name matches its behaviour.
 
 ---
+---
 
 ## WP-104 — `ReservationOutcome` does not defensively copy
 
@@ -2755,6 +2989,7 @@ discipline already applied in `AccountSnapshot`.
 
 **Done when.** The record is immutable against caller mutation.
 
+---
 ---
 
 ## WP-105 — Customer BC lacks an ID-generator port
@@ -2774,12 +3009,19 @@ invalid issuance.
 **Done when.** A `CustomerIdGenerator` port exists in the domain with a Spring
 implementation in infrastructure.
 
+**Partial progress (`fccaa7e`).** `CustomerNumberGenerator` now exists as a
+domain-defined port — interface only, no infrastructure implementation, since
+minting needs a database sequence. `CustomerIdGenerator` is still absent, so this
+item stays `TODO`; the all-zero-number caveat above now attaches to the existing
+port rather than a hypothetical one.
+
+---
 ---
 
 ## WP-106 — Documentation drift in README and CLAUDE.md
 
 **Status:** TODO · **Confidence:** VERIFIED
-**Related:** WP-05, WP-37
+**Related:** WP-05, WP-37, WP-119, WP-120, WP-121
 
 **Where:** `README.md`; `CLAUDE.md`
 
@@ -2791,8 +3033,10 @@ implementation in infrastructure.
 - No mention of the `customer` bounded context or `docs/context-map.md`.
 - Credits only Spring Modulith for architecture, never the ArchUnit rules — the
   more substantial half. Gatling is absent from the testing section.
-- States the PITest threshold without noting it covers roughly half the
-  hand-written code (see WP-37).
+- States the PITest threshold without noting what it does and does not measure.
+  Every bounded context is now a target (WP-37, done); record compact
+  constructors remain invisible to the gate, though measurement shows that
+  region is already well covered (WP-120).
 - No CI section, so a reader cannot tell what gates a merge.
 - Describes a "banking-grade account domain" with no caveat that authn/authz is
   absent (WP-05). **If auth is deliberately out of scope, say so explicitly** —
@@ -2804,11 +3048,21 @@ implementation in infrastructure.
 - States "16 rules" for `HexagonalArchitectureTest`; the class declares **17**
   `@ArchTest` methods. This file is what agents read first, so its drift costs
   more than the README's.
+- Names the Modulith test `account.ArchitectureTests`. `86a4d3a` moved it to
+  `org.girardsimon.wealthpay.architecture.ArchitectureTests` — it is no longer
+  inside a bounded context, which is the point of the move.
+- Claims "A new BC arrives with full intra-BC layer enforcement on day one — no
+  manual rule registration required". **No longer true.** `86a4d3a` added
+  `INCREMENTAL_DOMAIN_ONLY_BCS = Set.of("customer")` to
+  `HexagonalArchitectureTest`, downgrading Application and Infrastructure to
+  `optionalLayer` for that BC. That is a manual per-BC registration, and
+  `customer` is the only BC the sentence would currently describe. See WP-121.
 
 **Fix.** Correct both, and add this plan to the documentation index.
 
 **Done when.** Every stated count and version matches the code.
 
+---
 ---
 
 ## WP-107 — UUIDv7 generator tests assert version, not monotonicity
@@ -2828,6 +3082,7 @@ third test (asserting v4 for `AccountId`, per WP-90).
 for.
 
 ---
+---
 
 ## WP-108 — No `.env.example` template
 
@@ -2844,6 +3099,7 @@ from the README bring-up section.
 
 **Done when.** A fresh clone can be brought up from the template alone.
 
+---
 ---
 
 ## WP-109 — Spotless ratchet leaves the existing tree unchecked
@@ -2863,6 +3119,7 @@ profile, so full-tree drift is detected without slowing PRs.
 **Done when.** A scheduled full-tree format check exists.
 
 ---
+---
 
 ## WP-110 — Gatling assertions never run in CI
 
@@ -2878,6 +3135,7 @@ against a compose stack to turn the assertions from documentation into a gate.
 
 **Done when.** A scheduled run executes the simulation and fails on regression.
 
+---
 ---
 
 ## WP-111 — No SBOM generation
@@ -2897,6 +3155,7 @@ upload `target/bom.json` as a CI artifact.
 **Done when.** Every build produces an SBOM.
 
 ---
+---
 
 ## WP-112 — No failsafe/surefire split
 
@@ -2915,6 +3174,7 @@ giving a fast `mvn test` and a complete `mvn verify`.
 **Done when.** `mvn test` runs only unit tests and completes in seconds.
 
 ---
+---
 
 ## WP-113 — Sonar organization declared in two places
 
@@ -2929,6 +3189,7 @@ giving a fast `mvn test` and a complete `mvn verify`.
 
 **Done when.** The organization is declared once.
 
+---
 ---
 
 ## WP-114 — CI uses bare `mvn`, not the pinned wrapper
@@ -2947,6 +3208,139 @@ consider `verify` instead of `install` in CI — nothing consumes the installed
 SNAPSHOT.
 
 **Done when.** CI and documentation both use the pinned wrapper.
+
+---
+---
+
+## WP-120 — PITest cannot see record compact constructors (measured: low impact)
+
+**Status:** WONTFIX · **Confidence:** VERIFIED
+**Related:** WP-37, WP-38, WP-99, WP-106, WP-119
+
+**Rationale.** Kept as evidence, not as work. The investigation's one actionable
+finding is already owned by **WP-99**, and WP-99's fix is the opposite of what a
+naive reading of the mutation report suggests — see *Do not "fix" this by pinning
+version 0* below. This entry exists so the "our mutation score is overstated"
+theory is not re-derived from scratch; the measurement below refutes it.
+
+**This closes the score-inflation question only — it does not license inlining
+validation back into compact constructors.** The aggregate barely moves, but
+*per class* the filter hides a great deal: `AccountEventMeta` exposes 1 mutant
+and hides 5. The extraction convention in `Nationalities.validated`,
+`CustomerId.requirePresent` and `AdmissionPolicySnapshot.validRestrictions`
+stays — it is what keeps the KYC bounds (at least one nationality, max 10) inside
+the gate.
+
+**Where:** `pom.xml` → `pitest-maven`; every record with an inline compact
+constructor.
+
+**Defect.** PITest's default `FRECORD` filter suppresses **every mutant inside a
+record's canonical constructor**, including a hand-written compact-constructor
+body. A record that validates inline is therefore invisible to the mutation gate;
+one that delegates to a `private static` helper is not. The A/B is exact:
+`account.AccountId` validates inline and yields **1** mutant (its `of` factory);
+`customer.CustomerId` is the same class with validation extracted into
+`requirePresent` and yields **2**.
+
+**Impact — measured, and smaller than it looks.** Re-running with
+`-Dfeatures=-FRECORD` and diffing the mutant sets against the baseline:
+
+| | mutants | killed | |
+|---|---|---|---|
+| Hidden by `FRECORD` (record constructors only) | **53** | **52** | 98.1% |
+| `account.domain` baseline | 103 | 93 | 90.3% |
+| `account.domain` including constructors | 129 | 118 | **91.5%** |
+| `customer.domain` including constructors | 127 | 125 | 98.4% |
+
+Rows 3–4 are **baseline + constructor mutants only**, not what a
+`-Dfeatures=-FRECORD` run prints: that flag also un-filters generated
+`equals`/`hashCode`/`toString` and accessors, which drags `account.domain` to
+276/181 = 65.6%. See the paragraph below on why not to run it that way.
+
+**Counting note.** The FRECORD-off run contains 55 `<init>` mutants, but 2 belong
+to `AccountApplicationService` — a plain class, never filtered, already in the
+278-mutant baseline. Subtract the baseline before attributing anything to the
+filter, or you overstate what it hides.
+
+The hidden region is **not** a reservoir of untested code — it is almost entirely
+covered, and including it moves `account.domain`'s score **up**, not down. The
+entire yield of the investigation is one survivor:
+
+```
+SURVIVED  AccountEventMeta.<init>  changed conditional boundary   (version < 0L → <= 0L)
+```
+
+**Do not "fix" this by pinning version 0 as accepted.** The mutation report says
+only that nothing distinguishes `< 0` from `<= 0` there. **WP-99** establishes the
+correct resolution in the other direction: streams start at 1, so the guard should
+*tighten* to `version < 1L` and a version-0 event should be **rejected**. WP-99's
+"Done when" kills this survivor as a side effect. A test written from this entry
+alone would assert version 0 is valid and would have to be deleted by WP-99.
+
+**Two things this filter does *not* explain**, both of which look like it and are
+not:
+
+- `Money`'s `setScale(digits, RoundingMode.HALF_EVEN)` generates **zero mutants
+  even with `FRECORD` off** — no default PITest mutator substitutes an enum
+  constant argument. No refactor makes the rounding mode gate-visible. It is
+  pinned by test instead (WP-119).
+- `AccountTransaction` is an **interface**, not a record. Its lone survivor is in
+  the `fingerprint()` default method (`replaced return value with ""`), which
+  `FRECORD` never touched — that is WP-20's territory, and WP-20's "Done when"
+  (a test pinning the digest input) kills it.
+
+**Do not disable the filter** with `-Dfeatures=-FRECORD`. Measured: it also
+un-filters generated `equals`/`hashCode`/`toString` and accessors, taking the run
+to 596 mutants / 420 killed = **70%**, below the 80% gate. The gain — one
+`AccountEventMeta` survivor, already owned by WP-99 — is not proportionate.
+
+**Reproducing this.** Two gotchas cost real time:
+
+- `mutatedMethod` is HTML-escaped in `mutations.xml`: match `&lt;init&gt;`, not
+  `<init>`, or the constructor mutants appear to be zero.
+- Diff the two runs as **multisets** against the baseline. PITest emits duplicate
+  `(class, method, line, mutator)` tuples, so set-based diffing undercounts.
+
+---
+---
+
+## WP-121 — `INCREMENTAL_DOMAIN_ONLY_BCS` is an ArchUnit exemption with no expiry
+
+**Status:** TODO · **Confidence:** VERIFIED
+**Related:** WP-37, WP-106
+
+**Where:** `architecture/HexagonalArchitectureTest` →
+`INCREMENTAL_DOMAIN_ONLY_BCS`
+
+**Defect.** `86a4d3a` introduced a hardcoded exemption set, currently
+`Set.of("customer")`, which downgrades Application and Infrastructure to
+`optionalLayer` for the listed BCs. It exists because the `customer` BC is being
+built incrementally and has a domain layer only, which is legitimate. Its own
+comment states the intent — *"Remove a BC once it has application +
+infrastructure, so the layering rule resumes catching an accidentally-missing
+layer in a finished BC"* — but **nothing enforces removal**.
+
+**Impact.** Low today: `optionalLayer` only permits a layer to be *empty*, and
+the direction rules still apply, so no violation can slip through while the BC is
+genuinely domain-only. The risk is on the other side of the transition — once
+`customer.application` and `customer.infrastructure` exist and the entry is still
+present, a finished BC permanently keeps optional outer layers and the rule stops
+catching the case it was written for. This is the same silent-gap shape as WP-37:
+the suite stays green while measuring less than it appears to.
+
+**Fix.** Make the exemption self-expiring rather than trusting a comment. In the
+test, assert **both** of the following for every BC named in
+`INCREMENTAL_DOMAIN_ONLY_BCS`:
+
+1. it has **zero** classes under `..<bc>.application..` and
+   `..<bc>.infrastructure..` — so the build fails the moment a listed BC outgrows
+   its exemption, naming the BC to remove;
+2. it still appears in `detectBoundedContexts(classes)` — otherwise a renamed,
+   deleted or misspelled entry passes condition 1 vacuously and the exemption
+   never expires.
+
+**Done when.** Adding a class under `customer.application` fails the architecture
+suite until `customer` is removed from the set.
 
 ---
 
@@ -2985,11 +3379,17 @@ before starting.
   detected and interpreted.
 - **WP-71 → WP-112** — the container lifecycle fix makes the failsafe split
   worthwhile.
+- **WP-50 → WP-119** — WP-50 changes the exception `Money.ensureSameCurrency`
+  throws; WP-119's cross-currency tests assert it. Reversed, WP-50 breaks three
+  freshly written tests.
 
 **Deadlines relative to other work**
 
 - **WP-10** before the next event-shape change, not after.
-- **WP-37** before the customer branch merges.
+- **WP-37** and **WP-56** — both done on the customer branch (`309734c`,
+  `493acf4`). **WP-119** and **WP-120**, the follow-ups WP-37 revealed, are not
+  branch-bound — but WP-119 is not free-floating either: see `WP-50 → WP-119`
+  above.
 - **WP-116** before the customer infrastructure layer merges.
 - **WP-05** alongside the customer bounded context, which owns identity.
 

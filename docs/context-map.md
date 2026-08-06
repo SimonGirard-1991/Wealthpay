@@ -7,11 +7,14 @@ acyclic. It is a *reference*, not a decision log — the rationale for
 individual decisions lives in `docs/adr/`.
 
 **Implementation status.** As of this writing the only fully realised
-context is `account`. The `customer` context is a skeleton aggregate
-(`Customer` + `CustomerId`, no behaviour yet) and **none of the
-Account↔Customer integration described below is wired**. This document is the
-agreed *target* design plus the rules that constrain how it gets built. Each
-seam is tagged with the increment that delivers it (`[v1]`, `[v2]`).
+context is `account`. The `customer` context has a **domain layer only** — a
+`Customer` aggregate with `register` / `activate` / `reconstitute`, its value
+objects, and the admission-policy types — with **no application or
+infrastructure layer**: nothing persists a customer, and no HTTP or messaging
+path reaches one. Consequently **none of the Account↔Customer integration
+described below is wired**. This document is the agreed *target* design plus
+the rules that constrain how it gets built. Each seam is tagged with the
+increment that delivers it (`[v1]`, `[v2]`).
 
 ---
 
@@ -20,7 +23,7 @@ seam is tagged with the increment that delivers it (`[v1]`, `[v2]`).
 | BC | Module | Status | Owns (ubiquitous language) |
 |----|--------|--------|----------------------------|
 | **Account** | `org.girardsimon.wealthpay.account` | implemented | monetary balance, reservations, account lifecycle (open / active / closed), money movement |
-| **Customer** | `org.girardsimon.wealthpay.customer` | skeleton | customer identity, KYC / verification, customer-status lifecycle |
+| **Customer** | `org.girardsimon.wealthpay.customer` | domain layer only | customer identity, admission policy, KYC / verification, customer-status lifecycle |
 | **shared** | `org.girardsimon.wealthpay.shared` | implemented | cross-cutting *technical* concerns only (Clock, JSON, exception base, mappers) — never domain concepts |
 
 Account is event-sourced (see ADR-001). Each context is a `CLOSED` Spring
@@ -242,12 +245,25 @@ backlog item — it must be a conscious risk acceptance.
 
 ## Assumptions — when this map no longer holds
 
-- **Customer must grow real invariants.** The whole upstream/downstream
-  relationship presupposes that `Customer` becomes a genuine aggregate with a
-  verification/suspension state machine and offboarding rules. If `Customer`
-  stays a profile/CRUD table with no invariants, it does not warrant a
-  hexagon and this map collapses to "Account stores a `CustomerId`" — revisit
-  before investing in the seams.
+- **Customer must grow real invariants** — *discharged for the hexagon,
+  outstanding for Seam B.* This map presupposed that `Customer` becomes a
+  genuine aggregate rather than a profile/CRUD table, since a table with no
+  invariants would not warrant a hexagon and would collapse this map to
+  "Account stores a `CustomerId`". That half is settled: the aggregate now
+  carries a Luhn-checked customer number, a nationality set, an admission
+  policy whose deny/allow polarity is structural, a row-corruption tier
+  distinct from client error, and — most directly on point — a real state
+  transition in `activate()` (`ONBOARDING → ACTIVE`, idempotent), which is the
+  first behaviour that makes `Customer` an aggregate rather than a data holder.
+
+  **What is not yet settled is the half Seam B depends on.** `CustomerStatus`
+  is `{ONBOARDING, ACTIVE}` today — there is no `SUSPENDED` or `CLOSED`, and
+  no offboarding rule. Seam B's published language (`CustomerVerified |
+  Suspended | Closed`) therefore names two transitions that do not exist yet.
+  Those transitions were deliberately deferred: they need a *reason* axis on
+  the transition record, and the "does this customer still have open
+  accounts?" invariant, which Seam A does not expose. **Modelling
+  suspend/close is a prerequisite for Seam B, not part of it.**
 - **Ownership cardinality.** This map assumes a single owner per account. If
   joint accounts (multiple owners) are introduced, the ownership reference in
   the aggregate changes shape and Seam A must be reconsidered.
