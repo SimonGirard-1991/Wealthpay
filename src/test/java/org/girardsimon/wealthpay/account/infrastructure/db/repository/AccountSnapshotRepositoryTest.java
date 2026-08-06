@@ -34,7 +34,7 @@ import tools.jackson.databind.ObjectMapper;
   AccountSnapshotSerializer.class,
   ObjectMapper.class
 })
-class AccountSnapshotRepositoryTest extends AbstractContainerTest {
+class AccountSnapshotRepositoryTest extends AbstractAccountContainerTest {
 
   private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
 

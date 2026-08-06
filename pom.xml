@@ -39,7 +39,6 @@
         <springdoc-openapi-starter-webmvc-ui.version>3.0.1</springdoc-openapi-starter-webmvc-ui.version>
         <openapi-generator-maven-plugin.version>7.20.0</openapi-generator-maven-plugin.version>
         <jackson-databind-nullable.version>0.2.9</jackson-databind-nullable.version>
-        <flyway-core.version>12.0.1</flyway-core.version>
         <maven-dependency-plugin.version>3.10.0</maven-dependency-plugin.version>
         <jooq-codegen-maven.version>3.19.29</jooq-codegen-maven.version>
         <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
@@ -118,8 +117,10 @@
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
+            <!-- Version managed by the Spring Boot BOM (flyway.version). Flyway requires core and
+                 the database modules in lockstep; an explicit version here only overrode the
+                 database module, leaving it a major version ahead of flyway-core. -->
             <artifactId>flyway-database-postgresql</artifactId>
-            <version>${flyway-core.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>

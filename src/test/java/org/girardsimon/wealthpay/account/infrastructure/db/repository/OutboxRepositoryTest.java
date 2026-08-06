@@ -35,7 +35,7 @@ import tools.jackson.databind.ObjectMapper;
   TimeConfig.class,
   ObjectMapper.class
 })
-class OutboxRepositoryTest extends AbstractContainerTest {
+class OutboxRepositoryTest extends AbstractAccountContainerTest {
 
   private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
   private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();

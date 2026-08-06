@@ -9,12 +9,15 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import org.flywaydb.core.Flyway;
+import org.girardsimon.wealthpay.shared.config.ModuleFlyway;
 import org.jooq.DSLContext;
 import org.jooq.Record3;
 import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
-class OutboxCleanupMigrationTest extends AbstractContainerTest {
+class OutboxCleanupMigrationTest extends AbstractAccountContainerTest {
+
+  private static final String SCHEMA = "account";
 
   @Test
   void v16_should_backfill_started_and_completed_at_from_run_at_on_upgrade() throws SQLException {
@@ -59,13 +62,18 @@ class OutboxCleanupMigrationTest extends AbstractContainerTest {
     }
   }
 
+  /**
+   * Deliberately not {@code ModuleFlyway.forSchema} — this test needs {@code cleanDisabled(false)}
+   * and a {@code target} version, neither of which production should be able to ask for. Keep in
+   * sync if {@code forSchema} grows settings that change migration behaviour.
+   */
   private Flyway flyway(String targetVersion) {
     return Flyway.configure()
         .cleanDisabled(false)
         .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-        .locations("classpath:db/migration/account")
-        .defaultSchema("account")
-        .schemas("account")
+        .locations(ModuleFlyway.locationOf(SCHEMA))
+        .defaultSchema(SCHEMA)
+        .schemas(SCHEMA)
         .target(targetVersion)
         .load();
   }

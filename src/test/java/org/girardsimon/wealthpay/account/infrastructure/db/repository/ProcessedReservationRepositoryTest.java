@@ -38,7 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @JooqTest
 @Import({ProcessedReservationRepository.class, TimeConfig.class})
-class ProcessedReservationRepositoryTest extends AbstractContainerTest {
+class ProcessedReservationRepositoryTest extends AbstractAccountContainerTest {
 
   private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
   private final ReservationIdGenerator reservationIdGenerator = new TestReservationIdGenerator();

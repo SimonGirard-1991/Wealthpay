@@ -52,7 +52,7 @@ import tools.jackson.databind.ObjectMapper;
   AccountEventSerializer.class,
   ObjectMapper.class
 })
-class AccountEventRepositoryTest extends AbstractContainerTest {
+class AccountEventRepositoryTest extends AbstractAccountContainerTest {
 
   private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
   private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();

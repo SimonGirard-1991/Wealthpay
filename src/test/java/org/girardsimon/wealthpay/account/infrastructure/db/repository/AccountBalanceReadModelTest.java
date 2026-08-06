@@ -48,7 +48,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @JooqTest
 @Import({AccountBalanceReadModel.class, AccountBalanceViewEntryToDomainMapper.class})
-class AccountBalanceReadModelTest extends AbstractContainerTest {
+class AccountBalanceReadModelTest extends AbstractAccountContainerTest {
 
   private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
   private final EventIdGenerator eventIdGenerator = new TestEventIdGenerator();

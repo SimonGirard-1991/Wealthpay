@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Import;
 
 @JooqTest
 @Import({OutboxMetrics.class, SimpleMeterRegistry.class})
-class OutboxMetricsTest extends AbstractContainerTest {
+class OutboxMetricsTest extends AbstractAccountContainerTest {
 
   @Autowired private MeterRegistry meterRegistry;
 

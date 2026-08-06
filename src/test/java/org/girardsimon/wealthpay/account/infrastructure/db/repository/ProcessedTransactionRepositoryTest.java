@@ -35,7 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @JooqTest
 @Import({ProcessedTransactionRepository.class, ObjectMapper.class, TimeConfig.class})
-class ProcessedTransactionRepositoryTest extends AbstractContainerTest {
+class ProcessedTransactionRepositoryTest extends AbstractAccountContainerTest {
 
   private final AccountIdGenerator accountIdGenerator = new TestAccountIdGenerator();
 

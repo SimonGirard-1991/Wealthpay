@@ -15,7 +15,7 @@ import org.springframework.test.context.TestPropertySource;
 @JooqTest
 @Import(OutboxCleanupFallbackScheduler.class)
 @TestPropertySource(properties = "outbox.cleanup.spring-execution.enabled=true")
-class OutboxCleanupFallbackSchedulerTest extends AbstractContainerTest {
+class OutboxCleanupFallbackSchedulerTest extends AbstractAccountContainerTest {
 
   @Autowired private DSLContext dsl;
   @Autowired private OutboxCleanupFallbackScheduler scheduler;

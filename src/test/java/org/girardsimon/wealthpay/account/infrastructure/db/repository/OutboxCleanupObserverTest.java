@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Import;
 
 @JooqTest
 @Import({OutboxCleanupObserver.class, SimpleMeterRegistry.class})
-class OutboxCleanupObserverTest extends AbstractContainerTest {
+class OutboxCleanupObserverTest extends AbstractAccountContainerTest {
 
   private static final String SUCCESS = "success";
   @Autowired private DSLContext dsl;
