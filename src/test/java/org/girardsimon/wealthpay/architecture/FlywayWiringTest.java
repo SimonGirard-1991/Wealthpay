@@ -22,7 +22,9 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.boot.LazyInitializationBeanFactoryPostProcessor;
 import org.springframework.boot.flyway.autoconfigure.FlywayMigrationInitializer;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.context.annotation.Configuration;
@@ -33,12 +35,16 @@ import org.springframework.util.ClassUtils;
 
 /**
  * Guards the failure modes the per-BC Flyway design cannot make structurally impossible: a bounded
- * context whose migrations exist but whose beans never run them, and an initializer that migrates
- * the wrong BC's schema. All of them are silent in production — a missing configuration class
- * leaves the directory inert, a missing {@code FlywayMigrationInitializer} leaves a {@code Flyway}
- * bean that no one asks to migrate (and which has already backed off the auto-configuration that
- * would have), and a mis-qualified initializer migrates a schema twice while leaving another
- * uncreated.
+ * context whose migrations exist but whose beans never run them, an initializer that migrates the
+ * wrong BC's schema, and a configuration that ignores {@code spring.flyway.enabled}. All of them
+ * are silent in production — a missing configuration class leaves the directory inert, a missing
+ * {@code FlywayMigrationInitializer} leaves a {@code Flyway} bean that no one asks to migrate (and
+ * which has already backed off the auto-configuration that would have), a mis-qualified initializer
+ * migrates a schema twice while leaving another uncreated, and a missing condition turns the kill
+ * switch into a no-op.
+ *
+ * <p>Every assertion is driven from a classpath scan rather than a list of bounded contexts, so
+ * adding one is covered on the day it lands.
  */
 class FlywayWiringTest {
 
@@ -68,6 +74,63 @@ class FlywayWiringTest {
     // Act / Assert
     assertThat(configurations).isNotEmpty();
     assertThat(configurations).allSatisfy(FlywayWiringTest::assertInitializerMigratesItsOwnBean);
+  }
+
+  /**
+   * {@code spring.flyway.enabled} is the reason each configuration carries a condition at all:
+   * Spring Boot's own copy of the key gates only the autoconfiguration, which our beans have
+   * already backed off, so without the condition they would migrate regardless and the switch would
+   * be a lie — worse than absent, because it also drops the {@code
+   * DatabaseInitializationDependencyConfigurer} import that orders DataSource consumers after
+   * migration.
+   *
+   * <p>Asserted per discovered configuration rather than once per bounded context, so a new BC is
+   * covered the day it is added instead of when someone remembers to write its test.
+   */
+  @Test
+  void every_flyway_configuration_is_removed_by_the_kill_switch() {
+    // Arrange
+    List<Class<?>> configurations = flywayConfigurationClasses();
+
+    // Act / Assert
+    assertThat(configurations).isNotEmpty();
+    assertThat(configurations).allSatisfy(FlywayWiringTest::assertKillSwitchRemovesBothBeans);
+  }
+
+  private static void assertKillSwitchRemovesBothBeans(Class<?> configuration) {
+    runnerFor(configuration)
+        .run(
+            context ->
+                assertThat(context)
+                    .as("%s must contribute both beans by default", configuration.getSimpleName())
+                    .hasSingleBean(Flyway.class)
+                    .hasSingleBean(FlywayMigrationInitializer.class));
+
+    runnerFor(configuration)
+        .withPropertyValues("spring.flyway.enabled=false")
+        .run(
+            context ->
+                assertThat(context)
+                    .as(
+                        "spring.flyway.enabled=false must remove %s's beans, not only the"
+                            + " autoconfiguration they replaced",
+                        configuration.getSimpleName())
+                    .doesNotHaveBean(Flyway.class)
+                    .doesNotHaveBean(FlywayMigrationInitializer.class));
+  }
+
+  /**
+   * Lazy initialization keeps the assertions at the bean-definition level: instantiating {@code
+   * FlywayMigrationInitializer} would run {@code migrate()} against the mock DataSource.
+   */
+  private static ApplicationContextRunner runnerFor(Class<?> configuration) {
+    return new ApplicationContextRunner()
+        .withInitializer(
+            context ->
+                context.addBeanFactoryPostProcessor(
+                    new LazyInitializationBeanFactoryPostProcessor()))
+        .withBean(DataSource.class, () -> mock(DataSource.class))
+        .withUserConfiguration(configuration);
   }
 
   /**
