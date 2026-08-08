@@ -362,11 +362,20 @@
                         <param>org.girardsimon.wealthpay.account.api.generated.*</param>
                         <param>org.girardsimon.wealthpay.shared.api.generated.*</param>
                         <param>org.girardsimon.wealthpay.account.infrastructure.*</param>
+                        <!-- Named per class, NOT as customer.infrastructure.* like the account entry
+                             above. The blanket form is safe only while every adapter is dumb, and PITest
+                             cannot un-exclude a class once a package is excluded — so the one adapter in
+                             this BC with real algorithmic content (the customer-number generator: a
+                             format-preserving-encryption cycle walk plus a Luhn check digit) would land
+                             inside the exclusion and leave the mutation gate without anyone editing this
+                             file. Adding an adapter here is meant to be a deliberate act. -->
+                        <param>org.girardsimon.wealthpay.customer.infrastructure.db.CustomerFlywayConfig</param>
                         <param>org.girardsimon.wealthpay.shared.infrastructure.*</param>
                         <param>org.girardsimon.wealthpay.shared.config.*</param>
                     </excludedClasses>
                     <excludedTestClasses>
                         <param>org.girardsimon.wealthpay.account.infrastructure.db.repository.*</param>
+                        <param>org.girardsimon.wealthpay.customer.infrastructure.db.repository.*</param>
                         <param>org.girardsimon.wealthpay.account.infrastructure.consumer.*</param>
                         <param>org.girardsimon.wealthpay.account.infrastructure.web.*</param>
                         <param>org.girardsimon.wealthpay.shared.infrastructure.web.*</param>
