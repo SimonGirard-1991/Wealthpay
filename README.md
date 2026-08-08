@@ -55,7 +55,8 @@ cancel reservation, close account) using techniques common in real financial sys
 
 ### ✔ Modular Monolith with Spring Modulith
 
-- `account` is a standalone, closed module
+- `account` and `customer` are standalone, closed modules — `customer` currently covers its domain
+  model and its schema; the application and web layers are still being built
 - `shared` contains cross-cutting concerns (clock, global error handling, serialization)
 - Module boundaries are enforced via architecture tests
 
@@ -145,17 +146,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\infra.ps1
 The Unix script adds `docker-compose.local.linux.yml` automatically on native Linux and uses only
 `docker-compose.local.yml` on macOS.
 
-### 2. Register the Debezium Connector
-
-Once Kafka Connect is healthy:
-
-```bash
-./debezium/register-connector.sh
-```
-
-This registers the outbox CDC connector that captures events from the account.outbox table.
-
-### 3. Apply Flyway migrations
+### 2. Apply Flyway migrations
 
 Flyway is executed automatically when Spring Boot starts.
 
@@ -169,9 +160,32 @@ This will:
 
 - connect to the local PostgreSQL instance
 - apply all Flyway migrations
-- create/update the account schema
+- create/update the `account` and `customer` schemas
 
 You can stop the application once the startup completes.
+
+> **Each module migrates its own schema.** There is one Flyway instance per bounded context, so you
+> get two schemas and two `flyway_schema_history` tables — one in `account`, one in `customer`.
+> Version numbers restart per context, so `V1` exists twice. That is expected, not a mistake.
+
+### 3. Register the Debezium Connector
+
+Once Kafka Connect is healthy **and step 2 has run at least once**:
+
+```bash
+./debezium/register-connector.sh
+```
+
+This registers the outbox CDC connector that captures events from the `account.outbox` table.
+
+> **This step comes after step 2, and the connector fails if you swap them.** It runs with
+> `publication.autocreate.mode=disabled`, so it consumes the PostgreSQL publication that a Flyway
+> migration creates rather than creating one itself. Run it before step 2 and the connector task
+> errors out saying the publication is missing.
+>
+> Register it before sending any traffic, too. The connector starts streaming from the current
+> position in the write-ahead log, so anything written to the outbox before it is registered never
+> reaches Kafka.
 
 ### 4. Generate jOOQ classes
 
