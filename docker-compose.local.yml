@@ -19,6 +19,30 @@ services:
       - "max_replication_slots=10"
       - "-c"
       - "max_wal_senders=12"
+      # Bounds what a lagging replication slot can pin, so a stalled consumer
+      # degrades the CDC pipeline instead of the database. Without it (PostgreSQL's
+      # default of -1, unlimited) a slot whose confirmed_flush_lsn stops advancing
+      # retains WAL until pg_wal fills the volume, at which point the primary stops
+      # accepting writes — an outage of the money path caused by a stuck consumer.
+      #
+      # This became load-bearing when V18 narrowed dbz_publication to account.outbox:
+      # before that, the FOR ALL TABLES publication meant every table's changes
+      # reached the connector, so it always had an LSN to confirm. Now only outbox
+      # traffic does, and an idle outbox on a busy database is the documented shape
+      # that stalls a slot. heartbeat.interval.ms on the connector is the other half.
+      #
+      # 4GB sits well above the ReplicationSlotWalRetentionHigh alert (1 GiB, 5m), so
+      # someone is paged with room to act before the ceiling is reached. Hitting it
+      # invalidates the slot, which costs a re-snapshot — recoverable, unlike a
+      # wedged primary.
+      #
+      # This is the LOCAL stack, and the repository carries no production Postgres
+      # configuration, so this setting is not the production control — it is the
+      # local half of one that has no owner yet. Whoever provisions the production
+      # instance has to set an equivalent ceiling there; the reasoning above is
+      # written in production terms because that is where the consequence lands.
+      - "-c"
+      - "max_slot_wal_keep_size=4GB"
       - "-c"
       - "shared_preload_libraries=pg_cron,pg_stat_statements"
       - "-c"

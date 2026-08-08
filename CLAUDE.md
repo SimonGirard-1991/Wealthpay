@@ -8,11 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Start local infrastructure (Postgres, Kafka 3-node KRaft cluster, Schema Registry, Kafka Connect, Prometheus, Grafana, Alertmanager)
 ./scripts/infra.sh
 
-# Register Debezium CDC connector (after Kafka Connect is healthy)
-./debezium/register-connector.sh
-
 # Run the application (also applies Flyway migrations)
 mvn spring-boot:run
+
+# Register Debezium CDC connector — AFTER migrations have run, and after Kafka Connect is healthy.
+# The connector runs with publication.autocreate.mode=disabled, so it consumes the dbz_publication
+# that V18 creates and will not start before that publication exists.
+./debezium/register-connector.sh
 
 # Build (no running database required — jOOQ sources are committed)
 mvn clean install
