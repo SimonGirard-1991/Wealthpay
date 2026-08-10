@@ -130,6 +130,16 @@ A new BC arrives with full intra-BC layer enforcement on day one — no manual r
 - Flyway migrations (`src/main/resources/db/migration/`) are immutable and excluded from formatting.
 - Generated jOOQ classes (`src/main/generated-jooq/`) are excluded from formatting.
 
+### Comments
+
+A comment earns its place only by clarifying something the code cannot say. If it restates the signature, delete it. Never comment getters, setters or trivial CRUD.
+
+- **Never explain build tooling inside `domain/` or `application/` code.** PITest/FRECORD, JaCoCo, Spotless, Sonar and codegen trivia describe a *tool's* behaviour, not the code or the domain, so they cannot clarify the code by construction. Domain code in particular should read clearly enough to need few comments.
+  - Adopting a code *shape* for a tool is fine — e.g. record validation extracted into a `private static` helper so PITest generates mutants for it. Only the explanation moves out: it belongs next to the plugin config in `pom.xml`, or in the relevant design doc / ADR, both of which are read by someone who can act on it.
+  - The one exception is justifying a suppression that is itself visible in the code (`@SuppressWarnings("java:S5128")`) — an unexplained suppression is worse than an explained one.
+- **Commit conclusions, not the reasoning that produced them.** Rejected alternatives, review history and regulatory background belong in the ADR. In code they age badly and bury the one line that matters.
+- **Keep**: a non-obvious mechanical fact (`Set.copyOf` throws on a null element), an invariant not visible locally, a contract a caller must honour that the signature cannot express (e.g. "this must stay one statement or the read reintroduces a lost update"), and a choice that looks wrong until explained.
+
 ## Testing Conventions
 
 - **Domain tests** — Pure unit tests per command (`AccountCreditTest`, `AccountDebitTest`, etc.) using `TestEventIdGenerator` for deterministic IDs.
