@@ -7,8 +7,12 @@ import org.girardsimon.wealthpay.customer.domain.exception.AdmissionPolicyCorrup
 
 /**
  * The admission policy as it stood at one instant: both rule sets plus the version they were read
- * at, captured in a single read, so a recorded decision can never document a policy that was not
- * the one applied.
+ * at, captured in a single read, so the rules and the version cannot come from different snapshots.
+ *
+ * <p>That is narrower than "a decision documents the policy applied to it". Nothing forces an edit
+ * to the policy tables to advance the version - the migration that creates them states the
+ * convention and enforces only that the counter never moves backwards - so two decisions citing one
+ * version may have been evaluated against different rules.
  *
  * <p>The two sides have opposite polarity, structurally rather than by a flag. {@code restrictions}
  * is a deny-list; {@code licences} is an allowlist. Licensing must fail closed - forgetting a

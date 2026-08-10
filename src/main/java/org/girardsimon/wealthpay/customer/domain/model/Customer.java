@@ -78,7 +78,7 @@ public class Customer {
   /**
    * Whether to attempt the write, as seen in this transaction's snapshot - not the authority on
    * what happened. Under concurrency two callers both read ONBOARDING, and both get true; only the
-   * conditional write's rowcount may gate side effects.
+   * conditional write's outcome may gate side effects.
    *
    * <p>A switch expression, not a statement: only the expression form is exhaustiveness-checked, so
    * adding SUSPENDED breaks the build here rather than silently reactivating a blocked customer.

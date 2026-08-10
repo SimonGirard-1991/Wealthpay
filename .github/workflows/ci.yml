@@ -7,6 +7,33 @@ on:
     branches: [ main ]
 
 jobs:
+  # Branch-scoped epic trackers are raw material, not documentation: they argue with earlier drafts
+  # of themselves and inventory unmitigated gaps. Their durable content is extracted into ADRs
+  # before merge. Checked against the tree rather than the diff, so this fails while such a file
+  # exists and passes the moment it is deleted.
+  #
+  # Its own job on purpose: as a step of `build` it would kill every PR before compiling, so an epic
+  # branch would get no build or test signal at all until the file was removed. Add it to branch
+  # protection's required checks, or it blocks nothing.
+  #
+  # Deliberately NOT gated on `draft == false`: `ready_for_review` is not among the default
+  # pull_request activity types, so a draft-to-ready flip would not re-run this workflow and the
+  # guard would never execute on the PR that actually merges.
+  wip-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: No WIP trackers reach main
+        run: |
+          if git ls-tree -r --name-only HEAD | grep -q '^docs/WIP-'; then
+            echo "::error::docs/WIP-* must be extracted into ADRs and deleted before merging to main"
+            exit 1
+          fi
+
   build:
     runs-on: ubuntu-latest
 

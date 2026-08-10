@@ -66,7 +66,13 @@ class HexagonalArchitectureTest {
   // BCs still under incremental construction may be domain-only: their outer layers stay optional
   // until built. Remove a BC once it has application + infrastructure, so the layering rule resumes
   // catching an accidentally-missing layer in a finished BC.
-  private static final Set<String> INCREMENTAL_DOMAIN_ONLY_BCS = Set.of("customer");
+  //
+  // Empty on purpose - customer was removed once it grew both outer layers. Keep the mechanism: the
+  // next BC starts domain-only too, and an exemption that has to be re-invented is one that gets
+  // replaced by weakening the rule for everyone. Note the cost of keeping it: while this set is
+  // empty the optionalLayer branch below is unexercised, so the next BC to use it is also the first
+  // to test it.
+  private static final Set<String> INCREMENTAL_DOMAIN_ONLY_BCS = Set.of();
 
   @ArchTest
   static void all_bounded_contexts_have_hexagonal_layers(JavaClasses classes) {
