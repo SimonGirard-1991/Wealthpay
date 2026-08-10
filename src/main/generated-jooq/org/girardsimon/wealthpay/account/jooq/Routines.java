@@ -4,8 +4,10 @@
 package org.girardsimon.wealthpay.account.jooq;
 
 
+import org.girardsimon.wealthpay.account.jooq.routines.DbzPublicationIsCanonical;
 import org.girardsimon.wealthpay.account.jooq.routines.ManageOutboxPartitions;
 import org.jooq.Configuration;
+import org.jooq.Field;
 
 
 /**
@@ -13,6 +15,27 @@ import org.jooq.Configuration;
  */
 @SuppressWarnings({ "all", "unchecked", "rawtypes", "this-escape" })
 public class Routines {
+
+    /**
+     * Call <code>account.dbz_publication_is_canonical</code>
+     */
+    public static Boolean dbzPublicationIsCanonical(
+          Configuration configuration
+    ) {
+        DbzPublicationIsCanonical f = new DbzPublicationIsCanonical();
+
+        f.execute(configuration);
+        return f.getReturnValue();
+    }
+
+    /**
+     * Get <code>account.dbz_publication_is_canonical</code> as a field.
+     */
+    public static Field<Boolean> dbzPublicationIsCanonical() {
+        DbzPublicationIsCanonical f = new DbzPublicationIsCanonical();
+
+        return f.asField();
+    }
 
     /**
      * Call <code>account.manage_outbox_partitions</code>
