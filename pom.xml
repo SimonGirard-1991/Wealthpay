@@ -352,6 +352,14 @@
                 </dependencies>
                 <configuration>
                     <parseSurefireArgLine>false</parseSurefireArgLine>
+                    <!-- Do NOT add <features>-FRECORD</features> here. The default FRECORD filter
+                         suppresses every mutant inside a record's canonical constructor, which is why
+                         record validation in this codebase lives in a private static helper called
+                         from the compact constructor - inline validation would be invisible to this
+                         gate and the score would stay green while measuring nothing. Disabling the
+                         filter is NOT the fix: it also un-filters generated equals/hashCode/toString,
+                         which drops the score below the threshold below. Measured evidence is in
+                         docs/remediation-plan.md (WP-120); the source-side rule is in CLAUDE.md. -->
                     <targetClasses>
                         <param>org.girardsimon.wealthpay.account.*</param>
                         <param>org.girardsimon.wealthpay.customer.*</param>

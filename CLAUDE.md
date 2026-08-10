@@ -148,6 +148,7 @@ A comment earns its place only by clarifying something the code cannot say. If i
 - **Repository tests** — Extend `AbstractContainerTest` which provides a Testcontainers PostgreSQL instance with Flyway migrations.
 - **Kafka consumer tests** — `@EmbeddedKafka`.
 - **Mapper tests** — Unit tests for every DTO-to-domain and domain-to-DTO mapper.
+- **Record validation goes in a `private static` helper** called from the compact constructor, never inline in it. PITest's default `FRECORD` filter suppresses every mutant inside a record's canonical constructor, so inline validation is invisible to the mutation gate — the score stays green while measuring nothing. Do not disable the filter: it also un-filters generated `equals`/`hashCode`/`toString`, which drops the score below the threshold. This is recorded here and next to the PITest config in `pom.xml`, with the measured evidence in `docs/remediation-plan.md` (WP-120); it does not belong in a comment on the record.
 
 ## Environment Variables
 
