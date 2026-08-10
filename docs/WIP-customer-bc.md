@@ -1,7 +1,10 @@
 # WIP — Customer BC (handoff)
 
-_Last updated 2026-08-10. Branch `feat/introduce-cutsomer-bc`. **Increments 1-3 committed. Increment
-4 items 0, 1, 2, 3, 4, 5, 9 and 12 done; next step is item 6 (adapters), then item 8, then item 7.**_
+_Last updated 2026-08-11. Branch `feat/introduce-cutsomer-bc`. **Increments 1-3 committed. Increment
+4 items 0, 1, 2, 3, 4, 5, 9 and 12 done. Order from here: item 6 (adapters) → item 15
+(`ActivateCustomer`, moved up from increment 5, so something finally exercises the ports) → item 8
+(observability) → item 7 (FPE) → items 10, 11, 13. Item 14 (`evaluate`) has no dependencies and can
+be taken at any point, but must precede increment 5 item 1.**_
 
 > # 🔴 THIS FILE MUST NOT REACH `main`. DELETING IT IS PART OF THE MERGE.
 >
@@ -1333,7 +1336,8 @@ Why this over the alternatives:
   `trg_customer_nationality_cardinality` is attached to `customer.customer` for
   `AFTER INSERT OR UPDATE`, deferred — so activation's
   `UPDATE customer.customer SET status='ACTIVE', activated_at=?` **queues it**, and at `COMMIT` it
-  locks the customer row and counts nationalities. Two consequences for increment 5 item 2:
+  locks the customer row and counts nationalities. Two consequences for **increment 4 item 15**
+  (`ActivateCustomer`, moved there from increment 5):
   (a) a failure can arrive at `COMMIT`, where a `try/catch` around `recordTransitionAndApply` cannot
   see it (the message is safe — UUID + count, no `DETAIL`); (b) activation now **contends for the
   parent row lock** with any concurrent nationality write, pinned by
@@ -2296,7 +2300,7 @@ someone, and in several regimes the refusal itself is reportable.
     pure function): `load()` returns both tables plus `policy_version` from one statement; a
     multi-match refusal **round-trips every match, `ORDER BY ordinal`, primary at 0**. That is all.
     - **The admission *rules* are tested where they now live** — pure `evaluate(subject, snapshot)`
-      unit tests in increment 5 item 6, no container, mutation-covered: the `RESIDENCE`-but-not-
+      unit tests, shipped **with item 14**, no container, mutation-covered: the `RESIDENCE`-but-not-
       `INCORPORATION` partitioned-outage case, the **US-incorporated corporate refused** on
       `RESTRICTED_PERSON`/`INCORPORATION` (the entity limb), evaluation order, deny-ANY vs
       allow-membership. An earlier draft put these here, against a container, because the adapter was
@@ -2345,15 +2349,50 @@ someone, and in several regimes the refusal itself is reportable.
       it. Reframed as `Rejected: X — why not`, every argument survives and the self-referential
       scaffolding drops. **Do this during extraction, not now** — the history is still load-bearing
       while this file is the only carrier.
+14. **🔴 The admission evaluation function — scheduled 2026-08-11 because it was scheduled NOWHERE.**
+    `AdmissionDecision evaluate(AdmissionSubject, AdmissionPolicySnapshot)` (ALT-5) does not exist in
+    `src/`. Until now the plan named only *where its tests go* (item 10 and increment 5 item 6), never
+    where the function lands — it was implied by increment 5 item 1. **It is the most
+    compliance-critical branch logic in this BC** — deny-ANY over restrictions, allow-membership over
+    licences, the ordering, the `RefusedDecision` assembly — and it was the piece ALT-5's whole
+    argument exists to keep out of an adapter. Implied work is the work that slips.
+    - **Runs early: it has ZERO dependencies.** No port, no adapter, no schema, no Spring. Every
+      input and output type shipped in increment 3 (`fccaa7e`). It could have been built then, and
+      it must exist before increment 5 item 1, which cannot register anyone without it.
+    - **Placement — settle it when building, and only these two are on the table:** a stateless
+      domain service (`..domain.model..`, pure, ArchUnit purity rule guards it) or a method on
+      `AdmissionPolicySnapshot` (`snapshot.evaluate(subject)` — the policy evaluating a subject
+      against itself, and `AdmissionSubject` already carries behaviour by deliberate decision). Do
+      **not** put it in `..application..` merely because the use case calls it, and never in an
+      adapter — ALT-5 settled that and gave both reasons.
+    - Its tests are already specified in increment 5 item 6: pure, no mocks, no container, and
+      mutation-covered. Bring them with the function rather than leaving them an increment behind.
+15. **⬆️ `ActivateCustomer` — MOVED HERE from increment 5 item 2, and it should run right after
+    item 6.** Scheduled 2026-08-11.
+    - **Why it moves: the ports currently have zero callers, and that is what produced item 5's
+      🔴.** `LoadedCustomer` prescribed a call order in javadoc that nothing executed, so an
+      aggregate mutation between load and write went unnoticed until a reviewer wrote a five-line
+      probe. Contract-first pays off only when something exercises the contract. This use case *is*
+      the exercise, and it is the exact composition the bug lived in.
+    - **It is not blocked.** It needs `CustomerRepository.load` / `recordTransitionAndApply` /
+      `findStateAfterSupersededTransition` and a `Clock`. Application-service tests mock the ports
+      by convention here, so it needs **no adapter** — only item 5, which is done.
+    - Composed exactly as in ALT-8: the boolean guards the attempt, `expectedSequenceNo` comes from
+      `LoadedCustomer`, the outcome selects the branch, the re-read decides the answer. Also lands
+      **`ActivationResult`** and **`CustomerRowMissingException`** — neither exists yet.
+    - **`RegisterCustomer` does NOT move.** It genuinely needs item 7's number generator and item
+      14's `evaluate`, so it stays at increment 5 item 1.
 
 ## Increment 5 — application + web
 
 1. `RegisterCustomer` + `CustomerApplicationService`, following **ALT-9b's three transaction
    boundaries exactly** — the rollback trap is invisible in a linear step list, so do not
    "simplify" it into one `@Transactional` method.
-2. `ActivateCustomer`, composed exactly as in ALT-8 (boolean guards the attempt, `expectedSequenceNo`
-   from **`LoadedCustomer`**, the CTE rowcount selects the branch, the re-read decides the outcome).
-   Also lands **`ActivationResult`** and **`CustomerRowMissingException`** — neither exists yet.
+2. ⬆️ **MOVED to increment 4 item 15 (2026-08-11) — do not build it twice.** `ActivateCustomer` is
+   not blocked by anything in increment 4: it needs only the ports item 5 landed, and mocked-port
+   tests. It runs right after item 6, because until some caller exercises the port composition, the
+   contract is asserted rather than demonstrated — which is precisely how item 5's 🔴 survived
+   review. Rationale and scope live at item 15.
 3. Temporal DoB validation (not-future / min age) — needs `Clock`. **Closes B-7.**
    *Why here and not in `IndividualDetails`:* both predicates are **time-varying**, so by the same
    argument that keeps admission out of `CountryCode`, putting them in the VO makes a row
@@ -2454,8 +2493,10 @@ someone, and in several regimes the refusal itself is reportable.
    4 excluded one named class, not the package (see item 4 there), which is why item 7 below must
    exclude `customer.infrastructure.web.*` explicitly. Per `CLAUDE.md`, and split by what each kind
    of test can actually prove:
-   - **`evaluate(subject, snapshot)` — pure unit tests, no mocks, no container** (ALT-5). Construct
-     the snapshot as a literal value. Evaluation order (a subject hitting both `SANCTIONED` and
+   - **`evaluate(subject, snapshot)` — pure unit tests, no mocks, no container** (ALT-5). ⬆️ **These
+     ship with increment 4 item 14, not here** — the function is scheduled there and its tests come
+     with it; this list stays as the specification of what they must cover.
+     Construct the snapshot as a literal value. Evaluation order (a subject hitting both `SANCTIONED` and
      `UNLICENSED` records the **sanctions** refusal); deny-ANY vs allow-membership; a US-national
      FR-resident refused on `RESTRICTED_PERSON`/`NATIONALITY`; an FR-resident holding an
      unlicensed-market nationality **admitted**; a US-incorporated corporate refused on
