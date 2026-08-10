@@ -359,6 +359,7 @@
                     </targetClasses>
                     <excludedClasses>
                         <param>org.girardsimon.wealthpay.account.jooq.*</param>
+                        <param>org.girardsimon.wealthpay.customer.jooq.*</param>
                         <param>org.girardsimon.wealthpay.account.api.generated.*</param>
                         <param>org.girardsimon.wealthpay.shared.api.generated.*</param>
                         <param>org.girardsimon.wealthpay.account.infrastructure.*</param>
@@ -483,7 +484,7 @@
                                 <configuration>
                                     <jdbc>
                                         <driver>org.postgresql.Driver</driver>
-                                        <url>jdbc:postgresql://localhost:5432/wealthpay</url>
+                                        <url>${env.DB_URL}</url>
                                         <user>${env.DB_USER}</user>
                                         <password>${env.DB_PASSWORD}</password>
                                     </jdbc>
@@ -504,6 +505,59 @@
                                         </generate>
                                         <target>
                                             <packageName>org.girardsimon.wealthpay.account.jooq</packageName>
+                                            <directory>src/main/generated-jooq</directory>
+                                        </target>
+                                    </generator>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>customer</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                                <configuration>
+                                    <jdbc>
+                                        <driver>org.postgresql.Driver</driver>
+                                        <url>${env.DB_URL}</url>
+                                        <user>${env.DB_USER}</user>
+                                        <password>${env.DB_PASSWORD}</password>
+                                    </jdbc>
+                                    <generator>
+                                        <name>org.jooq.codegen.JavaGenerator</name>
+                                        <database>
+                                            <name>org.jooq.meta.postgres.PostgresDatabase</name>
+                                            <inputSchema>customer</inputSchema>
+                                            <!-- No <excludes>: nothing in the customer schema is
+                                                 partitioned, so there are no ephemeral child tables
+                                                 to keep out of the generated code. -->
+                                        </database>
+                                        <generate>
+                                            <daos>false</daos>
+                                            <pojos>true</pojos>
+                                            <!-- Diverges from the account execution deliberately:
+                                                 this schema holds personal data. The generated
+                                                 toString() concatenates every column, so one
+                                                 log.debug("{}", pojo) emits the whole row.
+                                                 Generator-wide, not just customer.customer — it
+                                                 also covers CustomerNationality and
+                                                 AdmissionDecisionMatch.triggeringCountry, so do not
+                                                 "narrow it to the table that needs it".
+                                                 This closes ONE surface. ADR-009 D7 owns the full
+                                                 inventory and is the list to work from; not
+                                                 duplicated here, because a copy drifts.
+                                                 Two traps this flag does not cover: *Record classes
+                                                 inherit AbstractRecord.toString(), which renders
+                                                 the row and is not controllable from codegen — 11
+                                                 of them ship here, CustomerRecord included, so this
+                                                 is a present-tense gap and not a hypothetical; and
+                                                 flipping pojosAsJavaRecordClasses would give the
+                                                 POJOs an implicit record toString() that this flag
+                                                 cannot suppress, silently and with no build error. -->
+                                            <pojosToString>false</pojosToString>
+                                        </generate>
+                                        <target>
+                                            <packageName>org.girardsimon.wealthpay.customer.jooq</packageName>
                                             <directory>src/main/generated-jooq</directory>
                                         </target>
                                     </generator>

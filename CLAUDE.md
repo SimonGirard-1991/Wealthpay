@@ -19,8 +19,14 @@ mvn spring-boot:run
 # Build (no running database required — jOOQ sources are committed)
 mvn clean install
 
-# Regenerate jOOQ classes after schema changes (requires running Postgres)
-mvn -Pjooq-codegen-local clean generate-sources
+# Regenerate jOOQ classes after schema changes. Requires a running Postgres with the migrations
+# ALREADY APPLIED — codegen introspects the live catalog, not the migration files, so anything
+# unmigrated is silently absent from the generated code rather than an error.
+# Needs DB_URL/DB_USER/DB_PASSWORD (the profile reads all three from ${env.*}, so .env must exist —
+# see Environment Variables below). From a clean shell it fails with a message that names neither:
+#   Error generating code for catalog: ... Cannot execute query. No JDBC Connection configured
+# Subshell so DB_PASSWORD is not exported into the rest of the session.
+(set -a; . ./.env; set +a; mvn -Pjooq-codegen-local clean generate-sources)
 
 # Format code (Google Java Format via Spotless)
 mvn spotless:apply
