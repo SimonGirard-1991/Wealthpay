@@ -27,8 +27,6 @@ public record IndividualDetails(
     requireComplete(name, dateOfBirth, gender, nationalities, countryOfResidence);
   }
 
-  // Extracted from the compact constructor so the mutation gate can see it: PITest's default
-  // FRECORD filter suppresses every mutant inside a record's canonical constructor.
   private static void requireComplete(
       PersonalName name,
       LocalDate dateOfBirth,

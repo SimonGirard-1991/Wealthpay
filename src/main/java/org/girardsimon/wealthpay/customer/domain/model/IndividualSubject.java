@@ -10,8 +10,6 @@ public record IndividualSubject(Nationalities nationalities, CountryCode residen
     requireComplete(nationalities, residence);
   }
 
-  // Extracted from the compact constructor so the mutation gate can see it: PITest's default
-  // FRECORD filter suppresses every mutant inside a record's canonical constructor.
   private static void requireComplete(Nationalities nationalities, CountryCode residence) {
     if (nationalities == null || residence == null) {
       throw new IllegalArgumentException(

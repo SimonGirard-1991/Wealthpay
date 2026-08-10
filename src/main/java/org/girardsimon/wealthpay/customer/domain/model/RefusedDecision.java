@@ -21,8 +21,6 @@ public record RefusedDecision(List<AdmissionMatch> matches, long policyVersion)
     AdmissionDecision.requireValidPolicyVersion(policyVersion);
   }
 
-  // Extracted from the compact constructor so the mutation gate can see it: PITest's default
-  // FRECORD filter suppresses every mutant inside a record's canonical constructor.
   private static List<AdmissionMatch> ordered(List<AdmissionMatch> matches) {
     if (matches == null || matches.isEmpty()) {
       // IllegalStateException, not IllegalArgumentException, because the global handler maps the

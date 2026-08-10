@@ -25,8 +25,6 @@ public record CustomerState(
     requireCompleteRow(id, number, email, details, status, registeredAt);
   }
 
-  // Extracted from the compact constructor so the mutation gate can see it: PITest's default
-  // FRECORD filter suppresses every mutant inside a record's canonical constructor.
   private static void requireCompleteRow(
       CustomerId id,
       CustomerNumber number,
