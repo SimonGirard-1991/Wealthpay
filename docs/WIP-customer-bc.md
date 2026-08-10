@@ -15,15 +15,35 @@ _Last updated 2026-08-10. Branch `feat/introduce-cutsomer-bc`. **Increments 1-3 
 > wrong before it was right, and is addressed to whoever picks the epic up next. None of that
 > belongs in `main`.
 >
-> **Before this branch merges:**
-> 1. Extract the durable reasoning into **ADRs** (increment 4 item 13 owns the admission ADR and the
->    ADR-009 amendment) and into general documentation where it is not a decision record.
+> **Before this branch merges, IN THIS ORDER:**
+> 1. **Item 13 first.** Extract the durable reasoning into **ADRs** (item 13 owns the admission ADR
+>    and the ADR-009 amendment) and into general documentation where it is not a decision record.
+>    **Deletion is itself a control that removes load-bearing constraints** — several rules exist
+>    only here, so deleting before extracting silently drops them.
 > 2. Fold anything still outstanding into the backlog or the issue tracker — **not** into this file.
-> 3. **Delete this file in the merge commit or before it.** A reviewer who sees it in a PR against
->    `main` should block on that alone.
+> 3. **Then delete this file.** CI *reports* it: the `wip-guard` job fails any PR to `main` whose
+>    tree still contains a `WIP-*` file. **It does not yet block anything** — `main` has no branch
+>    protection and no rulesets, so the red check is advisory until `wip-guard` is added to the
+>    required checks.
 >
-> If it survives a merge, it stops being a tracker and becomes a second, unowned source of truth
-> that contradicts the ADRs — which is worse than never having written it down.
+> **🔴🔴 THE DECISIVE EVENT IS THE NEXT `git push`, NOT THE MERGE.** This repository is **public**.
+> As of now the tracker is **local only** — the commit that adds it is not an ancestor of the pushed
+> tip — so nothing has been published yet. That ends the moment this branch is pushed:
+> - GitHub retains the `refs/pull/` namespace independently of the branch, so once pushed, the
+>   content stays publicly fetchable **even after squash-merge and branch deletion**.
+> - So **squash-merge solves the wrong half.** It keeps the file out of `main`'s history — real, and
+>   worth doing — but it does not make a published blob unreachable.
+> - What is actually being published is a dated, candid inventory of unmitigated compliance gaps at
+>   a regulated bank ("no purge path exists", "erasure does not reach backups", "nothing in the
+>   database enforces that premise").
+>
+> **Decide before pushing**, because the choice is irreversible afterwards: keep the tracker local
+> (and accept it is not backed up), push it to a private remote, or push it here and accept that a
+> gap inventory is public. If it is pushed, every gap named here needs a tracked owner, since the
+> list is then citable by anyone.
+>
+> If it survives into `main` as a live file, it stops being a tracker and becomes a second, unowned
+> source of truth that contradicts the ADRs — worse than never having written it down.
 
 > **✅ Item 3 + item 4 landed 2026-08-10 (`cf54df2`), preceded by `c641985`. The scheduled trap was
 > real and is now measured, not predicted.** The banner that used to sit here said splitting the
@@ -1249,15 +1269,16 @@ int recordTransitionAndApply(CustomerId id, int expectedSequenceNo,
                              CustomerStatus from, CustomerStatus to,
                              Instant occurredAt, String actor);   // inserts expectedSequenceNo + 1
 ```
-> **🔴 [superseded 2026-08-10 by what item 5 shipped] Both the return type and the status pair
-> moved.** The port is now
-> `TransitionOutcome recordTransitionAndApply(CustomerId, int, StatusTransition, Instant, String)`.
+> **🔴 [superseded 2026-08-10 by what item 5 shipped] The return type, the status pair and the
+> identity/sequence arguments all moved.** The port is now
+> `TransitionOutcome recordTransitionAndApply(LoadedCustomer, CustomerStatus, Instant, Actor)`.
 > Every argument this section makes about *snapshots* and the caller-supplied sequence survives
-> untouched; what changed is that the rowcount and the `from`/`to` pair are typed. Reasons in
-> increment 4 item 5 — in short, `== 1` vs `> 0`, nothing for `CommandMetricAspect.classify` to
-> read, and a `from`/`to` swap that the schema only catches while activation is the *first*
-> transition. **The snippets below still say `int` and `findState`; read them for the reasoning, not
-> for the signatures.**
+> untouched — it is now enforced by the signature rather than asked of the caller, since id,
+> sequence and source status are all taken from the one `LoadedCustomer`. Reasons in increment 4
+> item 5 — in short, `== 1` vs `> 0`, nothing for `CommandMetricAspect.classify` to read, a
+> `from`/`to` swap that the schema only catches while activation is the *first* transition, and
+> three parameters that could disagree while still writing a plausible audit row. **The snippets
+> below still say `int` and `findState`; read them for the reasoning, not for the signatures.**
 **🔴 "Same snapshot" means "same statement", not "same transaction".** Under READ COMMITTED every
 statement takes a fresh snapshot, so loading the aggregate and the sequence separately reintroduces
 the identical defect through the *reader*:
@@ -1995,8 +2016,8 @@ someone, and in several regimes the refusal itself is reportable.
    signatures require: `LoadedCustomer`, `AdmissionDecisionId`, and sealed `RegistrationOutcome` →
    `ClaimedRegistration` / `ReplayedRegistration` / `InFlightRegistration`; plus, after review,
    `TransitionOutcome`, `StatusTransition`, `IdempotencyKey`, `Fingerprint` and `Actor`. **Mutation
-   gate 303/283 (93%), from 278/258 — survivor count unchanged at 20, so every new mutant is
-   killed.** 66 tests green; ArchUnit 17/17 and Modulith green *with item 12's carve-out already
+   gate 308/288 (94%), from 278/258 — survivor count unchanged at 20, so every new mutant is
+   killed.** 50 `customer.application` tests; ArchUnit 17/17 and Modulith green *with item 12's carve-out already
    removed*.
    - **⚠️ `mvn pitest:mutationCoverage` as a bare goal does NOT run `test-compile`.** It measures
      whatever is already in `target/test-classes`, so a freshly added test is silently ignored and
@@ -2055,6 +2076,17 @@ someone, and in several regimes the refusal itself is reportable.
      otherwise and was wrong in exactly the way this document polices elsewhere. The factory takes
      the source from the loaded snapshot, which also guarantees `from` and `expectedSequenceNo` come
      from the same read.
+     - **🔴 `LoadedCustomer` is a `final class`, NOT a record, and reverting that reintroduces a
+       reproduced bug.** As a record it held a reference to the **mutable** `Customer`, so
+       `transitionTo` read the status *at call time*. The use case calls `activate()` first, so by
+       the time the adapter derived the transition the aggregate already said ACTIVE →
+       `StatusTransition(ACTIVE, ACTIVE)` → `IllegalStateException` → **500 on every successful
+       activation**. Verified by running it, not by reading it. The class captures `loadedStatus` in
+       its constructor, which a record cannot do without a redundant third component. Pinned by
+       `keeps_reporting_the_loaded_status_after_the_aggregate_is_activated`.
+     - **`recordTransitionAndApply` takes the `LoadedCustomer`, not `(id, expectedSequenceNo,
+       transition)`.** Passed separately those three can disagree, and the database accepts a
+       mismatched set as a perfectly plausible audit row.
      - **⚠️ Open for B-1: `StatusTransition(ACTIVE, ONBOARDING)` is constructible and insertable.**
        Not reachable today — the adapter hardcodes `SET status = 'ACTIVE'` — but it becomes
        reachable the moment B-1 parameterises `to`. The fix is a legality check, and the single
@@ -2074,6 +2106,23 @@ someone, and in several regimes the refusal itself is reportable.
         that file's whole thesis.
      3. **`CLAUDE.md` Build Commands documents the bare `pitest:mutationCoverage`** — see the false
         green above.
+     4. **🔴 `GlobalExceptionHandler` echoes `e.getMessage()` into the 500 body.** Pre-existing, and
+        **newly load-bearing**: four `customer.application` types were deliberately routed to that
+        handler this increment. Today's messages are benign constants, but the *pattern* is not —
+        any `DataAccessException` reaching it puts SQL text and constraint names in an HTTP response
+        at a regulated bank. `CustomerRowCorruptException`'s "never echo row contents" discipline now
+        applies to every `IllegalStateException` in this package, and a handler is the wrong place to
+        rely on discipline. Track it; do not leave it as "later".
+     5. **`CustomerRowCorruptException` is missing from `KafkaErrorConfig`'s non-retryable list.**
+        The four types moved to `IllegalStateException` are covered for free — `IllegalStateException`
+        and `IllegalArgumentException` are already registered as non-retryable, so HTTP and Kafka
+        agree without anyone coordinating it. The corruption type is not, so a future customer
+        consumer would retry it under `ExponentialBackOff` against a row that cannot heal. Add it
+        together with the dedicated 5xx mapping its javadoc already says it is owed.
+     6. **The mandatory fallback `SELECT` is protected only by prose** — in ALT-9, in the
+        `InFlightRegistration` javadoc, and in item 6's list. Prose is what gets optimised away. The
+        control that holds is a Testcontainers test racing two transactions on one key and asserting
+        the loser gets `ReplayedRegistration`. Land it **with** the adapter, not after.
    - **🔴 `IdempotencyKey` and `Fingerprint` are VOs, and deferring them was the wrong call.** The
      first draft of this item shipped `register(String idempotencyKey, String fingerprint, …)` and
      argued the VOs were an increment 5 web-boundary decision. Two things killed that argument in

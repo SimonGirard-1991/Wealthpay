@@ -15,7 +15,10 @@ import org.girardsimon.wealthpay.customer.domain.model.CustomerStatus;
  * <p>Not a record, because the status must be captured at construction. {@link Customer} is mutable
  * and the use case activates it before the write is issued, so a status read any later describes
  * the outcome being attempted rather than the row that was loaded. Everything here reports the
- * load.
+ * load, except {@link #customer()}, which hands back the live aggregate the use case activates.
+ *
+ * <p>Equality is by identity, so stub and verify against the instance {@code load} returned, or
+ * {@code any()} - a freshly built equal-looking one never matches.
  *
  * <p>Holding status and sequence from one read is what makes two rows the sanctioned write path
  * cannot produce detectable: an active customer with no transition, and an onboarding customer with
@@ -49,6 +52,9 @@ public final class LoadedCustomer {
   /**
    * Pairs the status this customer was loaded with against {@code target}, so a transition's source
    * can neither be supplied by the caller nor drift once the aggregate has been activated.
+   *
+   * @throws IllegalStateException if the customer was loaded already holding {@code target}, or if
+   *     {@code target} is null
    */
   public StatusTransition transitionTo(CustomerStatus target) {
     return new StatusTransition(loadedStatus, target);

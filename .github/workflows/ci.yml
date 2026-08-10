@@ -29,8 +29,28 @@ jobs:
 
       - name: No WIP trackers reach main
         run: |
-          if git ls-tree -r --name-only HEAD | grep -q '^docs/WIP-'; then
-            echo "::error::docs/WIP-* must be extracted into ADRs and deleted before merging to main"
+          # Captured, not piped, and both halves of that matter.
+          #
+          # `git ... | grep -q` fails open in two different ways. Without pipefail, a failing git
+          # reads as "no match". With pipefail, grep -q exits on the first match, git takes SIGPIPE
+          # and returns 141, and the pipeline reports failure exactly when a tracker WAS found --
+          # but only once git's output exceeds the pipe buffer, so it is size- and platform-
+          # dependent: measured 141 on macOS (~16KB buffer) and 0 on Linux (64KB) for the same 34KB
+          # listing. That makes the piped form a latent flip that starts inverting as the repo
+          # grows, not an outright bug -- which is worse, because it tests clean today. Note also
+          # that writing `shell: bash` anywhere turns pipefail on for that step.
+          #
+          # The capture form is immune to both shell modes: assigning from a command substitution
+          # puts git's own status under `set -e`, and grep without -q drains the stream.
+          #
+          # Do NOT "simplify" this to `git ls-tree ... -- 'docs/WIP-*'`. ls-tree honours exact paths
+          # and directory prefixes but not globs, and rejects :(glob,icase) magic outright, so that
+          # form returns nothing with exit 0 while the tracker is present -- a silent fail-open.
+          tracked="$(git ls-tree -r --name-only HEAD)"
+          found="$(printf '%s\n' "$tracked" | grep -iE '(^|/)WIP-' || true)"
+          if [ -n "$found" ]; then
+            echo "::error::WIP-* trackers must be extracted into ADRs and deleted before merging to main"
+            printf '%s\n' "$found"
             exit 1
           fi
 

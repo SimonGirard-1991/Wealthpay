@@ -62,7 +62,9 @@ public interface CustomerRepository {
    * all three provably come from one snapshot. Passed separately they can disagree, and a
    * mismatched set is accepted by the database as a plausible audit row. The implementation derives
    * them via {@link LoadedCustomer#transitionTo}, and must not re-read the sequence: deriving it
-   * takes a second snapshot, which is what this method exists to avoid.
+   * takes a second snapshot, which is what this method exists to avoid. Take the source status the
+   * same way - never from {@code loaded.customer()}, which the use case has already activated by
+   * the time this runs.
    */
   TransitionOutcome recordTransitionAndApply(
       LoadedCustomer loaded, CustomerStatus target, Instant occurredAt, Actor actor);
