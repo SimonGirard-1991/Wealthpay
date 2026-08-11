@@ -1,10 +1,11 @@
 # WIP — Customer BC (handoff)
 
 _Last updated 2026-08-11. Branch `feat/introduce-cutsomer-bc`. **Increments 1-3 committed. Increment
-4 items 0, 1, 2, 3, 4, 5, 9 and 12 done. Order from here: item 6 (adapters) → item 15
-(`ActivateCustomer`, moved up from increment 5, so something finally exercises the ports) → item 8
-(observability) → item 7 (FPE) → items 10, 11, 13. Item 14 (`evaluate`) has no dependencies and can
-be taken at any point, but must precede increment 5 item 1.**_
+4 items 0, 1, 2, 3, 4, 5, 9 and 12 done; item 6 part-done — the `CustomerStore` adapter landed,
+the other three ports are still unimplemented. Order from here: finish item 6 →
+item 15 (`ActivateCustomer`, moved up from increment 5, so something finally exercises the ports) →
+item 8 (observability) → item 7 (FPE) → items 10, 11, 13. Item 14 (`evaluate`) has no dependencies
+and can be taken at any point, but must precede increment 5 item 1.**_
 
 > # 🔴 THIS FILE MUST NOT REACH `main`. DELETING IT IS PART OF THE MERGE.
 >
@@ -2014,7 +2015,7 @@ someone, and in several regimes the refusal itself is reportable.
      "subsumed" by `customer.infrastructure.*` is **now false** — there is no such wildcard.
      Corrected in place there.
 5. ✅ **DONE 2026-08-10 — ports in `customer.application`, landed with item 12.** Four ports as
-   planned: `CustomerRepository`, `CountryAdmissionPolicy` (**`AdmissionPolicySnapshot load()`** —
+   planned: `CustomerStore`, `CountryAdmissionPolicy` (**`AdmissionPolicySnapshot load()`** —
    loads, does **not** decide; ALT-5), `ProcessedRegistrationStore`, `AdmissionDecisionRecorder`
    (its own port — it needs its own transaction boundary, ALT-9b). Plus the carrier types the
    signatures require: `LoadedCustomer`, `AdmissionDecisionId`, and sealed `RegistrationOutcome` →
@@ -2028,7 +2029,7 @@ someone, and in several regimes the refusal itself is reportable.
      the previous score is re-reported — a false green. Use **`mvn test-compile
      pitest:mutationCoverage`**. Found the hard way: a missing `Actor` length-boundary test looked
      fixed when it was not. `CLAUDE.md`'s Build Commands still documents the bare form.
-   - **🔴 `CustomerRepository` carries two methods item 6's list never named**, and their absence
+   - **🔴 `CustomerStore` carries two methods item 6's list never named**, and their absence
      was an omission rather than a decision: **ALT-9b step 5 has to insert the customer**, and
      **ADR-009 / item 0 has to write the `customer_admission` link**. Both are here as
      `insert(Customer, AdmissionDecisionId)` and `linkAdmission(...)`.
@@ -2176,9 +2177,133 @@ someone, and in several regimes the refusal itself is reportable.
      consistency, not version-identifies-ruleset. Rescoped, with a pointer to V3's residual. Worth
      generalising when extracting the ADR: an overstated control in a compliance path is exactly
      what gets leaned on during an audit.
-6. **Adapters** in `customer.infrastructure.db`. **⚠️ Item 5 landed the ports, so implement against
+6. ◐ **Adapters** in `customer.infrastructure.db`. **⚠️ Item 5 landed the ports, so implement against
    the signatures in `customer.application`, not against the sketches below — three of them moved,
    and the reasons are in item 5.**
+   **✅ `CustomerStore` landed 2026-08-11 as `CustomerRepository` + `CustomerToRowMapper` /
+   `CustomerRowToStateMapper`, reviewed 3x.** 525 tests green; mutation 338 killed of 358 (94%),
+   with **zero survivors in the two mappers** — quote it that way, not "across the new classes":
+   `CustomerRepository` is excluded and contributes no mutants, so a zero-survivor claim over it
+   is vacuous. Still owed: `ProcessedRegistrationStore`, `CountryAdmissionPolicy`,
+   `AdmissionDecisionRecorder`.
+   - **🔴 The port was renamed `CustomerRepository` → `CustomerStore`, and the adapter takes the
+     freed name.** Item 5 shipped the port as `CustomerRepository`, which inverts the account BC's
+     convention: the port is a `*Store` / `*Reader` in `application` (`AccountEventStore`,
+     `ProcessedTransactionStore`) and the adapter is the `*Repository` in `infrastructure.db`
+     (`AccountEventRepository`). The first draft of this adapter worked around the clash by calling
+     itself `JooqCustomerRepository` — a technology prefix invented to dodge a naming mistake, in a
+     package where the ArchUnit rule already confines jOOQ. Fixed at the source instead.
+     - **State the convention narrowly or it is false**: it is *not* "ports are `*Store`" — account
+       also has `AccountEventPublisher`, `AccountBalanceProjector`, `AccountLoader`, and
+       `AccountBalanceReader`'s adapter is `AccountBalanceReadModel`, not a `*Repository`. The rule
+       that holds without exception is **`*Repository` names an adapter in
+       `..infrastructure.db.repository..`, never a port**; ports are named for what they do. Under
+       that reading the BC's other three ports were already clean.
+   - **`CUSTOMER` is bound to a private constant** because codegen emits `CUSTOMER_`: the schema and
+     its central table are both named `customer`. Do not "fix" the underscore in the generated code.
+   - **🔴 STANDING RULE: a container test MINTS its fixtures. A customer number, an email or an id
+     written as a literal is a defect.** Every test must pass alone and in any order — a suite that
+     holds only in the order it happens to run in is not a control.
+     - **Why this BC in particular:** `AbstractContainerTest` starts one Postgres per JVM in a static
+       initialiser and never stops it, and `CustomerSchemaConstraintsTest` /
+       `CustomerAuditAppendOnlyTest` commit through `SchemaProbe` on their own connections *outside*
+       the `@JooqTest` transaction — and **cannot** clean up, because the audit tables are
+       append-only. Their rows are therefore visible to every later test in the run.
+     - **How it was found:** this adapter's tests first used `ada@example.com` / `0000000018` and
+       passed **only because they ran first**. Renaming the class reshuffled Surefire's `filesystem`
+       default order and turned 13 of 15 green tests red. Nothing was wrong with the rename.
+     - **The fix is minting from a UUID, not partitioning ranges.** A first attempt reserved a
+       numeric range clear of the siblings' literals; that is still coordination — it encodes one
+       test file's knowledge of another's constants, and it decays the moment someone adds a fixture.
+       Minted values need no agreement between files.
+     - **🔴 Owed, and NOT done here: the two sibling classes are still hand-coordinated.** Counted,
+       because a first pass undercounted it threefold by grepping only the SQL `'literals'` and
+       missing the ones passed as Java `"arguments"`: **`CustomerSchemaConstraintsTest` holds 23
+       distinct numbers and 23 distinct emails (~48 sites), `CustomerAuditAppendOnlyTest` one of
+       each**, plus `INDIVIDUAL_ID` / `CORPORATE_ID`, two hardcoded UUIDs across 12 usages — the
+       standing rule covers ids too. So this is a half-day on the file that guards the schema's
+       constraints, not an afternoon, which is why it was kept out of the adapter commit rather than
+       bundled into it. They pass today (verified: per-method runs, `reversealphabetical`, and three
+       `random` orders), so it is latent rather than broken. Take it **before the remaining three
+       adapters add a fourth committing class**, and hoist the minting into shared test support at
+       that point rather than copying it a third time.
+     - **Prove it, do not assume it:** `-Dsurefire.runOrder=reversealphabetical` is the run that puts
+       a new class *after* the committing ones, and `random` is the one that finds what neither
+       fixed order does. *(Detection is still missing in CI, which runs a bare `mvn clean install`.
+       `-Dsurefire.runOrder=random` with the seed logged is the lever; pinning `alphabetical` is the
+       wrong answer, because it hides these instead of surfacing them.)*
+   - **🔴 `insert` carries `@Transactional(propagation = MANDATORY)`.** Three statements, and a
+     customer that commits without its `customer_admission` link is the wrong retention anchor — the
+     exact state the decision id parameter exists to prevent. MANDATORY makes ALT-9b step 5's
+     boundary a runtime failure instead of a convention, and it pairs with the recorder's "the
+     calling method must not be `@Transactional`" to pin the orchestrator into its only correct
+     shape. The ArchUnit rule permits it (location-only); its `because(...)` and `CLAUDE.md` said
+     "read-side `readOnly=true`" and were widened to say so.
+   - **🔴 The two unique violations have opposite transaction semantics, and this is recorded on
+     `CustomerNumberCollisionException` because nothing at the call site shows it.** The email
+     conflict is absorbed by `ON CONFLICT (email) DO NOTHING` and reported from a rowcount, so the
+     *connection* stays usable. A `customer_number` collision is *not* absorbed: Postgres raises
+     23505 and aborts the transaction before Spring translates it, so a later statement dies with
+     "current transaction is aborted".
+     **🔴 Neither is recoverable in place, and the difference is diagnostic quality, not
+     recoverability.** Throwing across the `MANDATORY` boundary marks the caller's transaction
+     rollback-only (`globalRollbackOnParticipationFailure` defaults to true), so even after the
+     email conflict the caller can read but can never commit — it gets `UnexpectedRollbackException`
+     at the boundary. Read the healthy/aborted split as *what the next statement tells you*, never as
+     licence to catch and continue. ALT-9b step 5 already rolls back on an email conflict, which is
+     the correct shape; this note exists so the orchestrator is not written the other way.
+   - **🔴 The collision exception chains no cause, deliberately.** The driver renders a unique
+     violation as `Key (customer_number)=(...) already exists`, and `GlobalExceptionHandler` logs the
+     whole chain *and* puts `getMessage()` in the response body. **Accepted cost:** a PK collision on
+     `id`, and any unique constraint added later, land on the same constant message and the same
+     alert. `PSQLException.getServerErrorMessage().getConstraint()` returns the constraint name with
+     no values and would fix that; declined here to keep the driver out of the adapter, so take it
+     the day a second minted identifier exists.
+   - **🔴 The row→state mapper reports *every* value-object rejection as `CustomerRowCorruptException`,
+     not only nulls and unknown enums.** Column checks are not enough and the gap is specific: a Luhn
+     check digit, ISO membership and the email shape all pass `^[0-9]{10}$`, `^[A-Z]{2}$` and the
+     canonicalisation check, and are rejected by the VO. Left alone they surface as the
+     `Invalid*Exception` family — which is invisible today (everything falls to the catch-all) and
+     becomes a **422 blaming the applicant for a corrupt file, with no corruption alert**, the day
+     increment 5 item 5 lands `CustomerExceptionHandler`.
+     - `NullPointerException` and `ClassCastException` are rethrown unchanged: those are defects in
+       the mapper, and reporting one as corruption pages someone about clean data.
+     - **Follow-up, owed with `CustomerExceptionHandler`:** give the six `Invalid*Exception` a common
+       supertype. The catch is `RuntimeException` only because no such type exists; the handler needs
+       exactly the same taxonomy, so build it once, there.
+   - **🔴 The "messages name columns, never values" rule is now pinned by assertions, not by the
+     mutation score.** PITest's default mutators do not touch string literals and cannot remove a
+     `catch`, so *zero survivors says nothing about message content*. Re-adding a chained cause kept
+     every test green until `withMessage(...)` + `getCause() == null` were asserted explicitly.
+   - **`linkAdmission` targets `ON CONFLICT (customer_id, decision_id)`**, not a bare `DO NOTHING`,
+     so a decision already anchored to a *different* customer still hits `uq_customer_admission_decision`.
+     Rowcount 0 is then ambiguous between "already linked" and "customer absent", so it re-checks
+     existence and raises corruption — one PK lookup on a path that only a replay reaches.
+   - **`insertAdmissionLink` (create path) translates nothing, and the reason is the composite FK,
+     not the UUIDs.** `uq_customer_admission_decision` is indeed unreachable with two freshly minted
+     identifiers — but `fk_customer_admission_decision (decision_id, outcome, subject_type)` fires
+     whenever the decision's subject type disagrees with the customer's kind, which a use-case bug or
+     a crossed replay reaches regardless. Left untranslated because the key exposes UUIDs and a type
+     name, no personal data, and the driver message is the best diagnostic available.
+   - **🔴 A mutation gate does not measure a switch over enum constants.** `ofUpdatedRows` generates
+     exactly **one** mutant (`NULL_RETURNS`) no matter how many arms it grows: the arms compile to
+     `GETSTATIC` and no default mutator touches them, so swapping `APPLIED` and `SUPERSEDED` — or
+     folding `default` into `APPLIED` — leaves the gate at 100%. So do **not** justify moving the
+     lattice out of the adapter as "keeping it measured"; the true reason is that it becomes
+     unit-testable in milliseconds rather than behind a container, and `TransitionOutcomeTest` is the
+     only thing pinning the mapping. Same family as the `FRECORD` blindness above and as the
+     string-literal blindness in the next bullet: **check the mutant list, not the percentage.**
+   - **PITest, two changes — see the pom, which carries the reasoning:** `CustomerRepository` is
+     excluded per class (what is left in it is SQL; the rowcount lattice moved to
+     `TransitionOutcome.ofUpdatedRows`), and the `excludedTestClasses` glob
+     became a **raw regex** `~…\.repository\.[^.]*`. **The glob was silently wrong:** PITest turns
+     `*` into `.*`, so `…db.repository.*` crossed into `…repository.mapper` and removed 41 mapper
+     mutants from the gate. `[^.]*` is package-local *and* fail-closed — a container test added to
+     that package later is excluded without anyone editing the pom. Use `*` inside the class part,
+     never `+`, which PITest escapes to a literal even in regex mode.
+     - The `account.infrastructure.db.repository.*` entry above it has the same defect and is
+       harmless only because `account.infrastructure.*` already sits in `excludedClasses`. Said in
+       the pom so it does not read as an oversight.
    - `TransitionOutcome recordTransitionAndApply(id, expectedSequenceNo, StatusTransition,
      occurredAt, actor)` — the **single** data-modifying-CTE statement from ALT-8. One method, not
      two: two separable primitives would let a future path update status without writing the audit
@@ -2374,7 +2499,7 @@ someone, and in several regimes the refusal itself is reportable.
       aggregate mutation between load and write went unnoticed until a reviewer wrote a five-line
       probe. Contract-first pays off only when something exercises the contract. This use case *is*
       the exercise, and it is the exact composition the bug lived in.
-    - **It is not blocked.** It needs `CustomerRepository.load` / `recordTransitionAndApply` /
+    - **It is not blocked.** It needs `CustomerStore.load` / `recordTransitionAndApply` /
       `findStateAfterSupersededTransition` and a `Clock`. Application-service tests mock the ports
       by convention here, so it needs **no adapter** — only item 5, which is done.
     - Composed exactly as in ALT-8: the boolean guards the attempt, `expectedSequenceNo` comes from
@@ -2443,6 +2568,24 @@ someone, and in several regimes the refusal itself is reportable.
      detail in the log (it already logs the full stack). Optionally set `logServerErrorDetail=false`
      on the datasource as defence in depth. For a criminal-liability rule, leaving the fallback
      handler leaky while telling the *new* handler to behave is not proportionate.
+   - **🔴 [added 2026-08-11, found reviewing item 6] The leak is not confined to
+     `admission_decision_match`, and the bigger payload is `customer.customer`.** Verified against
+     the local PG18: a `CHECK` violation on an `UPDATE` emits `Failing row contains (…)` exactly as
+     an `INSERT` does, and the customer row carries **name, email, date of birth and residence in one
+     line** — a fuller disclosure than any match row. Two constraints are reachable **without any
+     admission involvement**, so the gate is the *registration and activation* flows, not the
+     admission flow:
+     - `ck_customer_date_of_birth_plausible` on the insert path. `V1` states outright that nothing
+       bounds the date today, because the use case that would does not exist — so a 19th-century date
+       of birth reaches Postgres, and `CustomerRepository` catches only `DuplicateKeyException`.
+     - `ck_customer_activation_not_before_registration` on the activation path, under clock skew or a
+       backdated activation. Nothing translates it.
+     Both are unreachable from HTTP **only while the BC has no controller**, which is what increment 5
+     adds. So this bullet is the gate on shipping increment 5, not a backlog entry — and it is the
+     reason `logServerErrorDetail=false` is worth more than "optionally": it kills the `DETAIL` at the
+     source for every table and every constraint, without waiting on handler coverage, and it does not
+     disturb `PSQLException.getServerErrorMessage().getConstraint()`, which is a parsed field rather
+     than rendered text.
    - **🔴 [added 2026-08-08] ADR-009 names TWO ship gates on this file, and this plan tracked only
      one.** The ADR's constraint reads: before the admission flow ships, the catch-all handler
      returns a constant body **"and the validation handler stops populating `rejectedValue`"**. That

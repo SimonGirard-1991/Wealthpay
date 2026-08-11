@@ -279,9 +279,11 @@ class HexagonalArchitectureTest {
           .resideInAnyPackage("..application..", "..infrastructure.db..")
           .as("@Transactional methods may only live in ..application.. or ..infrastructure.db..")
           .because(
-              "Transactional boundaries belong with use-case orchestration (application) and the"
-                  + " read-side repositories where @Transactional(readOnly=true) is appropriate."
-                  + " They must not appear on controllers, consumers, producers, or domain types.")
+              "Transactional boundaries belong with use-case orchestration (application) and with"
+                  + " the repositories that state their own requirement on one - readOnly=true on"
+                  + " the read side, MANDATORY where a multi-statement write must inherit the"
+                  + " caller's boundary rather than open one. They must not appear on controllers,"
+                  + " consumers, producers, or domain types.")
           .allowEmptyShould(true);
 
   @ArchTest

@@ -379,12 +379,34 @@
                              inside the exclusion and leave the mutation gate without anyone editing this
                              file. Adding an adapter here is meant to be a deliberate act. -->
                         <param>org.girardsimon.wealthpay.customer.infrastructure.db.CustomerFlywayConfig</param>
+                        <!-- What is left in it is SQL: its only decision that is not, the rowcount
+                             lattice, moved to TransitionOutcome.ofUpdatedRows, where it is unit
+                             testable in milliseconds instead of behind a container. Do not record
+                             that as "so it stays measured": a switch returning enum constants
+                             compiles to GETSTATIC, which no default mutator touches, so that method
+                             yields one NULL_RETURNS mutant however many arms it grows -
+                             TransitionOutcomeTest is what pins the mapping. The rest of this class
+                             is covered solely by a Testcontainers slice test, excluded below.
+                             Keeping it in would not fail the build (89.6% against a threshold of
+                             80, measured 2026-08-11); it would report mutants nothing can kill. The
+                             mappers beside it stay in: they are pure and their tests plain JUnit. -->
+                        <param>org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerRepository</param>
                         <param>org.girardsimon.wealthpay.shared.infrastructure.*</param>
                         <param>org.girardsimon.wealthpay.shared.config.*</param>
                     </excludedClasses>
                     <excludedTestClasses>
+                        <!-- This glob does cross into ...db.repository.mapper, unlike the customer
+                             entry below. Harmless here only because account.infrastructure.* sits
+                             in excludedClasses above, so nothing under it is measured anyway. -->
                         <param>org.girardsimon.wealthpay.account.infrastructure.db.repository.*</param>
-                        <param>org.girardsimon.wealthpay.customer.infrastructure.db.repository.*</param>
+                        <!-- Raw regex (the ~ prefix), not the ...db.repository.* glob: PITest turns
+                             a glob's * into .*, so it crosses package boundaries and would also
+                             swallow the pure mapper tests one package below, leaving their mutants
+                             with nobody to kill them. [^.]* is package-local and stays fail-closed,
+                             so a container test added here later is excluded without editing this
+                             file. Use * inside the class part, never +, which PITest escapes to a
+                             literal even in regex mode. -->
+                        <param>~org\.girardsimon\.wealthpay\.customer\.infrastructure\.db\.repository\.[^.]*</param>
                         <param>org.girardsimon.wealthpay.account.infrastructure.consumer.*</param>
                         <param>org.girardsimon.wealthpay.account.infrastructure.web.*</param>
                         <param>org.girardsimon.wealthpay.shared.infrastructure.web.*</param>

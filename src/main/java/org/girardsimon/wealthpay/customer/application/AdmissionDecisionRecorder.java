@@ -5,9 +5,9 @@ import org.girardsimon.wealthpay.customer.domain.model.AdmissionDecision;
 import org.girardsimon.wealthpay.customer.domain.model.AdmissionSubject;
 
 /**
- * Persists admission decisions. Separate from {@link CustomerRepository} because it commits on its
- * own: a refusal aborts the registration, and a decision written in that transaction would roll
- * back with it, destroying the only record of why someone was refused.
+ * Persists admission decisions. Separate from {@link CustomerStore} because it commits on its own:
+ * a refusal aborts the registration, and a decision written in that transaction would roll back
+ * with it, destroying the only record of why someone was refused.
  *
  * <p><strong>The calling method must not be {@code @Transactional}</strong>, and this must not be
  * reached by a {@code REQUIRES_NEW} method invoked on {@code this} - self-invocation is not
