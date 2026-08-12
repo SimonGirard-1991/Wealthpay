@@ -3,10 +3,9 @@ package org.girardsimon.wealthpay.customer.domain.model;
 /**
  * The outcome of evaluating a subject against the admission policy.
  *
- * <p>{@link RefusedDecision} must never reach the web layer. Under the AML tipping-off regime,
- * telling a subject they matched a check is a criminal offense in most jurisdictions; whether a
- * sanctions or unlicensed-market match may be disclosed is regime-specific and unconfirmed, so the
- * whole record is withheld by default.
+ * <p>{@link RefusedDecision} must never reach the web layer. Withholding is a criminal-law duty
+ * once suspicion has formed (AML tipping-off) and firm policy for an UNLICENSED refusal, where no
+ * suspicion arises; the whole record is withheld either way.
  */
 public sealed interface AdmissionDecision permits AdmittedDecision, RefusedDecision {
 

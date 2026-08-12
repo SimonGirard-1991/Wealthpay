@@ -9,10 +9,9 @@ import org.girardsimon.wealthpay.customer.domain.exception.AdmissionPolicyCorrup
  * The admission policy as it stood at one instant: both rule sets plus the version they were read
  * at, captured in a single read, so the rules and the version cannot come from different snapshots.
  *
- * <p>That is narrower than "a decision documents the policy applied to it". Nothing forces an edit
- * to the policy tables to advance the version - the migration that creates them states the
- * convention and enforces only that the counter never moves backwards - so two decisions citing one
- * version may have been evaluated against different rules.
+ * <p>Narrower than "a decision documents the policy applied to it": nothing forces an edit to the
+ * policy tables to advance the version ({@code V3__admission_policy} enforces monotonicity only),
+ * so two decisions citing one version may have been evaluated against different rules.
  *
  * <p>The two sides have opposite polarity, structurally rather than by a flag. {@code restrictions}
  * is a deny-list; {@code licences} is an allowlist. Licensing must fail closed - forgetting a
@@ -39,9 +38,8 @@ public record AdmissionPolicySnapshot(
       if (restriction == null) {
         throw new AdmissionPolicyCorruptException("Admission policy has a null restriction rule");
       }
-      // UNLICENSED has allowlist polarity, so it is only ever produced by the licence check.
-      // Finding
-      // one seeded on the deny side means the two tables have been crossed.
+      // UNLICENSED has allowlist polarity, so only the licence check produces it. One seeded on the
+      // deny side means the two tables have been crossed.
       if (restriction.restriction() == Restriction.UNLICENSED) {
         throw new AdmissionPolicyCorruptException(
             "Admission policy seeds UNLICENSED as a deny-side rule");

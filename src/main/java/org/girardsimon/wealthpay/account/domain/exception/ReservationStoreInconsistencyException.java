@@ -1,16 +1,12 @@
 package org.girardsimon.wealthpay.account.domain.exception;
 
 /**
- * Thrown when the processed-reservations store and the {@code Account} aggregate disagree about a
- * reservation's existence — a "should never happen" inconsistency between two stores that are meant
- * to be kept in lockstep by the same transaction.
+ * The processed-reservations store and the {@code Account} aggregate disagree about a reservation's
+ * existence, though one transaction is meant to keep them in lockstep.
  *
- * <p>This is not a domain-rule violation in the same sense as {@code InsufficientFundsException}
- * (which is a customer-facing 4xx outcome) — it is an internal invariant breach that warrants
- * investigation. The HTTP layer maps it to 500 with {@code log.error}; the metrics aspect
- * accordingly buckets it as {@code error} (alongside infrastructure failures and {@code
- * InvalidAccountEventStreamException}), so that an error-rate alert built on either surface stays
- * consistent with the HTTP 5xx paging signal.
+ * <p>Not a customer-facing rejection like {@code InsufficientFundsException}: it is an internal
+ * invariant breach, so it maps to 500 and buckets as {@code error} rather than {@code
+ * invariant_violation}.
  */
 public class ReservationStoreInconsistencyException extends RuntimeException {
 

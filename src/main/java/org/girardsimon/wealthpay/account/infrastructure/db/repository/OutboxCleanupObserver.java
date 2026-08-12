@@ -54,10 +54,6 @@ public class OutboxCleanupObserver {
     meterRegistry.gauge("outbox.cleanup.last_status", lastStatusValue, AtomicLong::doubleValue);
   }
 
-  /**
-   * Polls the latest row from {@code outbox_cleanup_log} and updates gauges. Runs on a fixed delay
-   * (default 5 minutes), so the observer quickly reflects pg_cron execution results.
-   */
   @Scheduled(fixedDelayString = "${outbox.cleanup.poll-interval-ms:300000}")
   public void pollCleanupStatus() {
     try {
@@ -84,10 +80,6 @@ public class OutboxCleanupObserver {
     }
   }
 
-  /**
-   * Single query with two scalar subqueries: the latest row's status and the latest successful
-   * row's completed_at. Replaces two separate round-trips per poll cycle.
-   */
   private CleanupSnapshot fetchCleanupSnapshot() {
     Field<String> latestStatus =
         DSL.select(OUTBOX_CLEANUP_LOG.STATUS)

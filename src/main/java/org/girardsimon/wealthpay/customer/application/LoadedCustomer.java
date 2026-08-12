@@ -8,25 +8,12 @@ import org.girardsimon.wealthpay.customer.domain.model.CustomerStatus;
  * A customer together with the sequence number its status transitions have reached, both read in a
  * single statement.
  *
- * <p>The sequence number is an optimistic-concurrency token rather than aggregate state, so it
- * rides here and nowhere else: {@link Customer} has no such field and {@code CustomerState} would
- * have to accept and ignore one.
+ * <p>The sequence number is an optimistic-concurrency token rather than aggregate state, which is
+ * why it rides here and not on {@link Customer}.
  *
- * <p>Not a record, because the status must be captured at construction. {@link Customer} is mutable
- * and the use case activates it before the write is issued, so a status read any later describes
- * the outcome being attempted rather than the row that was loaded. Everything here reports the
- * load, except {@link #customer()}, which hands back the live aggregate the use case activates.
- *
- * <p>Equality is by identity, so stub and verify against the instance {@code load} returned, or
- * {@code any()} - a freshly built equal-looking one never matches.
- *
- * <p>Holding status and sequence from one read is what makes two rows the sanctioned write path
- * cannot produce detectable: an active customer with no transition, and an onboarding customer with
- * one. ONBOARDING is the initial state only - a customer that leaves it never returns, so a later
- * review or restriction is a state of its own rather than a trip back.
- *
- * <p>A backfill importing active customers must synthesize their transition rows, which the audit
- * obligation requires of it regardless.
+ * <p>Not a record: {@link Customer} is mutable and the use case activates it before the write is
+ * issued, so the loaded status has to be captured at construction. Everything here reports the
+ * load, except {@link #customer()}, which hands back the live aggregate.
  */
 public final class LoadedCustomer {
 
@@ -68,6 +55,10 @@ public final class LoadedCustomer {
       throw new CustomerRowCorruptException(
           "Loaded customer carries a negative transition sequence");
     }
+    // ONBOARDING is the initial state only and nothing transitions back into it, which is what
+    // makes a transition sequence on an onboarding row corruption rather than a re-review. A review
+    // or restriction status added later needs its own arm, not a return trip.
+    //
     // A switch expression, not an if chain: only the expression form is exhaustiveness-checked, so
     // a new status breaks the build here instead of quietly escaping both guards.
     String defect =

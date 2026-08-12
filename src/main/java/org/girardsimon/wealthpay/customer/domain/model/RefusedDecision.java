@@ -23,9 +23,8 @@ public record RefusedDecision(List<AdmissionMatch> matches, long policyVersion)
 
   private static List<AdmissionMatch> ordered(List<AdmissionMatch> matches) {
     if (matches == null || matches.isEmpty()) {
-      // IllegalStateException, not IllegalArgumentException, because the global handler maps the
-      // latter to 400: an evaluator bug must not be reported to the client as a bad request, least
-      // of all on the code path whose whole point is that refusals are not disclosed.
+      // IllegalStateException, not IllegalArgumentException: the global handler maps the latter to
+      // 400, and an evaluator bug is not the client's bad request.
       throw new IllegalStateException("A refusal must carry at least one match");
     }
     // A one-element list never invokes the comparator, so sorting alone would let a lone null reach

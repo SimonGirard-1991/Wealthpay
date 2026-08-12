@@ -8,11 +8,9 @@ import org.girardsimon.wealthpay.account.domain.model.TransactionId;
 import org.springframework.stereotype.Component;
 
 /**
- * Note: the {@code @SuppressWarnings("java:S5128")} on the parameter is intentional. The request
- * DTO is already validated at the HTTP boundary by the OpenAPI-generated controller interface
- * (which declares {@code @Valid @RequestBody}); this mapper is a pure translation step, not a
- * validation boundary. Adding {@code @Valid} here would be a runtime no-op (the class is not
- * {@code @Validated}) and would mislead readers into thinking validation runs.
+ * The {@code @SuppressWarnings("java:S5128")} is deliberate: the DTO is already validated at the
+ * HTTP boundary, and {@code @Valid} here would be a no-op on a class that is not
+ * {@code @Validated}.
  */
 @Component
 public class ReserveFundsDtoToDomainMapper {

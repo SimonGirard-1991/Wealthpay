@@ -28,39 +28,12 @@ import org.springframework.stereotype.Component;
  * intentional: the timer must include the transaction commit phase, which can dominate latency
  * under {@code synchronous_commit=on}.
  *
- * <p>Outcome lattice:
- *
- * <ul>
- *   <li>{@code committed} — non-exceptional return (including {@code null}).
- *   <li>{@code idempotent} — {@link TransactionStatus#NO_EFFECT}, or a {@link ReservationResponse}
- *       / {@link ReserveFundsResponse} carrying {@link ReservationResult#NO_EFFECT}.
- *   <li>{@code concurrency_conflict} — {@link OptimisticLockingFailureException} (event-store
- *       version mismatch on append) <em>and</em> {@link TransactionIdConflictException} (same
- *       transaction id reused with a different fingerprint — a client-side correctness/replay
- *       failure that is operationally a conflict, not a domain-rule violation).
- *   <li>{@code not_found} — any domain exception whose simple name ends in {@code
- *       NotFoundException}.
- *   <li>{@code invariant_violation} — any other exception in the {@code account.domain.exception}
- *       package <em>except</em> the data-integrity exceptions listed below. Customer-driven domain
- *       rule rejections (insufficient funds, currency mismatch, account inactive, reservation
- *       already canceled, …). HTTP 4xx-class. Not page-worthy.
- *   <li>{@code error} — internal/infrastructure failure or "should never happen" data-integrity
- *       breach. Includes anything outside the domain package (DB down, broken pool, unexpected
- *       runtime error) <em>plus</em> the explicit page-worthy domain exceptions {@link
- *       ReservationStoreInconsistencyException} and {@link InvalidAccountEventStreamException},
- *       which the HTTP layer also returns as 500. Reserved for genuinely page-worthy failures so
- *       any error-rate alert built on this bucket stays trustworthy and consistent with HTTP 5xx
- *       paging.
- * </ul>
- *
  * <p>The annotation is read explicitly from the {@link MethodSignature} rather than via Spring's
- * {@code @annotation(...)} parameter binding. Both work in a Spring-managed context, but explicit
- * lookup also works under {@code AspectJProxyFactory} (the unit-test scaffold), which has known
- * limitations binding {@code JoinPointMatch} for advice with bound annotation parameters.
+ * {@code @annotation(...)} parameter binding, which {@code AspectJProxyFactory} - the unit-test
+ * scaffold - cannot reliably bind for advice with bound annotation parameters.
  *
- * <p>Failures inside the metric-recording path itself are logged but never thrown — an
- * observability layer must not break the system it observes. If the meter registry misbehaves the
- * original method's return value or thrown exception still propagates correctly to the caller.
+ * <p>Failures inside the metric-recording path itself are logged but never thrown: an observability
+ * layer must not break the system it observes.
  */
 @Aspect
 @Component
@@ -105,18 +78,6 @@ public class CommandMetricAspect {
     }
   }
 
-  /**
-   * Records the timer via {@link MeterRegistry#timer(String, String...)}, swallowing any
-   * meter-registry failure. Observability must never break the system it observes — if the registry
-   * throws, the original method's return value or thrown exception must still propagate correctly
-   * out of {@link #measure}.
-   *
-   * <p>Uses the registry's public {@code timer(String, String...)} factory rather than {@code
-   * Timer.builder(...).register(registry)} on purpose: the builder path goes through a
-   * package-private code path inside Micrometer, which makes it harder to inject a failing registry
-   * under unit tests. The public factory is functionally equivalent here (no builder options are
-   * used — histogram percentiles are configured at the registry level).
-   */
   private void recordSafely(Timer.Sample sample, String command, String outcome) {
     try {
       sample.stop(meterRegistry.timer(METRIC_NAME, "command", command, "outcome", outcome));
@@ -147,6 +108,8 @@ public class CommandMetricAspect {
   }
 
   private static String classifyException(Throwable t) {
+    // A reused transaction id is a client-side replay fault, but it is operationally a conflict
+    // rather than a domain-rule rejection, so it shares the bucket.
     if (t instanceof OptimisticLockingFailureException
         || t instanceof TransactionIdConflictException) {
       return OUTCOME_CONCURRENCY_CONFLICT;

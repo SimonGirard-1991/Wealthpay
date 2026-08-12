@@ -45,11 +45,9 @@ public class Customer {
   }
 
   /**
-   * Loads a customer that already exists, accepting whatever status the row carries. Not a plain
-   * all-args constructor: it re-asserts the one invariant a row could violate.
-   *
-   * <p>Intended for the persistence adapter only. Nothing enforces that yet - an architecture rule
-   * restricting callers lands with the adapter itself.
+   * Loads a customer that already exists, accepting whatever status the row carries and
+   * re-asserting the invariants a row could violate. Intended for the persistence adapter; nothing
+   * enforces that.
    */
   public static Customer reconstitute(CustomerState state) {
     if (state == null) {
@@ -90,9 +88,8 @@ public class Customer {
     return switch (this.status) {
       case ONBOARDING -> {
         // Inside the arm that assigns, so an idempotent retry on an already-ACTIVE customer still
-        // returns false rather than throwing on a skewed clock reading. Not a client error either:
-        // occurredAt comes from the use case's Clock, never from a request field, so a backward
-        // interval is a system fault - and it would corrupt the AML retention clock.
+        // returns false rather than throwing on a skewed clock reading. occurredAt comes from the
+        // use case's Clock, never from a request, so a backward interval is a system fault.
         if (occurredAt.isBefore(registeredAt)) {
           throw new CustomerRowCorruptException("Customer activation cannot precede registration");
         }

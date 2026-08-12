@@ -3,12 +3,10 @@ package org.girardsimon.wealthpay.customer.application;
 import org.girardsimon.wealthpay.customer.domain.model.CustomerStatus;
 
 /**
- * The two ends of a status change, travelling as one argument and carrying the invariant that they
- * differ.
+ * The two ends of a status change, carrying the invariant that they differ.
  *
- * <p>It does not by itself make a reversed pair unrepresentable - {@code new StatusTransition(to,
- * from)} still compiles. Build it with {@link LoadedCustomer#transitionTo}, which takes the source
- * from the loaded snapshot instead of from the caller.
+ * <p>A reversed pair still compiles. Build it with {@link LoadedCustomer#transitionTo}, which takes
+ * the source from the loaded snapshot instead of from the caller.
  */
 public record StatusTransition(CustomerStatus from, CustomerStatus to) {
 

@@ -4,40 +4,18 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * Immutable value object representing a posted monetary amount in a specific currency.
+ * A posted monetary amount: legally payable, and carrying exactly the ISO 4217 fraction digits of
+ * its currency.
  *
- * <p>A Money value is legally payable and must respect ISO 4217 fraction digits. It is suitable for
- * balances, transactions, statements, and settlements.
+ * <p>Not for intermediate calculation - interest accrual, FX conversion, pricing. Those need more
+ * precision than a posted amount carries, and rounding through Money at each step accumulates the
+ * error. Convert once, at posting time.
  *
- * <p>This type must NOT be used for intermediate financial calculations (e.g., interest accruals,
- * FX conversions, price computations). Such calculations require higher precision and must be
- * converted to Money only at posting time.
- *
- * <p>This class guarantees the following invariants:
- *
- * <ul>
- *   <li>Amount is never null
- *   <li>Currency is never null
- *   <li>Amount scale matches the currency's default fraction digits (e.g., 2 for USD, 0 for JPY)
- * </ul>
- *
- * <p>Amounts are normalized using {@link RoundingMode#HALF_EVEN} (banker's rounding) to minimize
- * cumulative rounding errors in financial calculations.
- *
- * <p><b>Usage:</b> Prefer the factory method {@link #of(BigDecimal, SupportedCurrency)} over direct
- * constructor invocation.
- *
- * <pre>{@code
- * Money price = Money.of(new BigDecimal("19.99"), SupportedCurrency.USD);
- * Money total = price.add(Money.of(new BigDecimal("5.00"), SupportedCurrency.USD));
- * }</pre>
- *
- * @param amount the monetary amount, normalized to currency's fraction digits
- * @param currency the currency of this money instance
+ * <p>Construction rescales under {@link RoundingMode#HALF_EVEN} rather than rejecting: an amount
+ * arriving with more precision than the currency allows is rounded silently.
  */
 public record Money(BigDecimal amount, SupportedCurrency currency) {
 
-  /** Normalizes amount scale to currency's fraction digits using banker's rounding. */
   public Money {
     if (amount == null || currency == null) {
       throw new IllegalArgumentException("amount and currency must not be null");

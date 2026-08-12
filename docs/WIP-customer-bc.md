@@ -2165,7 +2165,8 @@ someone, and in several regimes the refusal itself is reportable.
      `LoadedCustomer` is the **only** object holding status and transition sequence from one
      snapshot, so it is the unique place that bypass is detectable. *Consequence for any future
      backfill:* importing `ACTIVE` customers without synthesising their transition rows now fails on
-     every load — which the audit obligation requires of such a backfill anyway. Said in the javadoc.
+     every load — which the audit obligation requires of such a backfill anyway. Carried by the
+     `Active customer carries no status transition` corruption message rather than by a javadoc.
    - **`findState` is named `findStateAfterSupersededTransition`.** A javadoc sentence was the only
      thing stopping a future caller using it where `load` is required, which reintroduces the
      two-snapshot lost update. Everywhere else in this port the constraint is structural; the name

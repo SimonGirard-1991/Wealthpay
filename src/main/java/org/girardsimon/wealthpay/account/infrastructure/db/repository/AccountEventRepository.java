@@ -104,9 +104,10 @@ public class AccountEventRepository implements AccountEventStore {
 
       for (AccountEvent event : events) {
         nextExpectedVersion++;
+        // A gap means the caller assembled the batch wrongly, not that it lost a race: a concurrent
+        // append fails the expected-version check instead, as an optimistic-locking failure.
         if (event.version() != nextExpectedVersion) {
-          throw new IllegalStateException( // This indicates a bug in the calling code, not a
-              // concurrency issue.
+          throw new IllegalStateException(
               "Event version gap: expected %d but got %d for account %s"
                   .formatted(nextExpectedVersion, event.version(), accountUuid));
         }

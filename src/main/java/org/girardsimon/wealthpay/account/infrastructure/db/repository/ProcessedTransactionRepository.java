@@ -35,15 +35,10 @@ public class ProcessedTransactionRepository implements ProcessedTransactionStore
       AccountId accountId, TransactionId transactionId, String fingerprint, Instant occurredAt) {
     OffsetDateTime timestamp = OffsetDateTime.ofInstant(occurredAt, clock.getZone());
 
-    /*
-     * Single round-trip idempotency check using a CTE:
-     *  1. INSERT ... ON CONFLICT DO NOTHING RETURNING → returns the row only if inserted
-     *  2. UNION ALL SELECT from the table WHERE NOT EXISTS(ins)  →  returns the existing row on conflict
-     *
-     * Avoids ON CONFLICT DO UPDATE (no-op writes generate WAL, dead tuples, and fire triggers).
-     */
     String insertedColumnName = "inserted";
     String fingerprintColumnName = "fingerprint";
+    // Not ON CONFLICT DO UPDATE: a no-op write still generates WAL and a dead tuple, and fires
+    // triggers.
     CommonTableExpression<Record2<String, Boolean>> insertAttempt =
         name("insert_attempt")
             .fields(fingerprintColumnName, insertedColumnName)
@@ -93,10 +88,9 @@ public class ProcessedTransactionRepository implements ProcessedTransactionStore
   }
 
   /*
-   * Fallback for the rare case where two concurrent transactions race on the same
-   * transaction ID: the CTE returns nothing because the INSERT conflicts (DO NOTHING)
-   * and the UNION ALL SELECT cannot see the other transaction's uncommitted row
-   * (same snapshot). A separate SELECT gets a fresh snapshot and reads the now-committed row.
+   * A second statement, because both halves of the CTE run on one snapshot: under a concurrent
+   * attempt the insert half waits, then skips once the winner commits, and the union half - still
+   * on the pre-commit snapshot - finds nothing either. A fresh snapshot reads the committed row.
    */
   private String fallbackFingerprint(AccountId accountId, TransactionId transactionId) {
     return dslContext

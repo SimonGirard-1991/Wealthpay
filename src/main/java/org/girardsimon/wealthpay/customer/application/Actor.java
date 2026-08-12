@@ -13,11 +13,8 @@ public record Actor(String value) {
   }
 
   private static void requireIdentifiableActor(String value) {
-    // IllegalStateException throughout, not IllegalArgumentException: an actor comes from the
-    // authenticated subject or from SYSTEM, never from a request body, and the global handler
-    // renders the latter as a 400 blaming the caller. That holds once subjects arrive from a token
-    // too - a principal that authenticates and then fails these checks means the filter chain
-    // admitted it wrongly, which is a 401 upstream, not a 400 here.
+    // IllegalStateException, not IllegalArgumentException: an actor never comes from a request
+    // body, and the global handler renders the latter as a 400 blaming the caller.
     //
     // The column's CHECK only rejects the empty string, so a whitespace-only actor would otherwise
     // reach the audit trail and satisfy it.

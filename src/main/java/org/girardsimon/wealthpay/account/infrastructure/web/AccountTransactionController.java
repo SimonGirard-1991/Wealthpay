@@ -16,11 +16,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Note: the {@code @SuppressWarnings("java:S5128")} on @RequestBody parameters is intentional. The
- * OpenAPI-generated {@link AccountTransactionApi} already declares {@code @Valid} on those
- * parameters, and Hibernate Validator's HV000151 forbids the override from redeclaring it ("a
- * method overriding another method must not redefine the parameter constraint configuration").
- * Validation is fully active via the interface; the suppression silences a Sonar false positive.
+ * The {@code @SuppressWarnings("java:S5128")} on the {@code @RequestBody} parameters is required:
+ * {@link AccountTransactionApi} already declares {@code @Valid}, and Hibernate Validator's HV000151
+ * hard-fails an override that redeclares it.
  */
 @RestController
 public class AccountTransactionController implements AccountTransactionApi {
