@@ -2243,8 +2243,41 @@ someone, and in several regimes the refusal itself is reportable.
    `CustomerRowToStateMapper`, reviewed 3x.** 525 tests green; mutation 338 killed of 358 (94%),
    with **zero survivors in the two mappers** — quote it that way, not "across the new classes":
    `CustomerRepository` is excluded and contributes no mutants, so a zero-survivor claim over it
-   is vacuous. Still owed: `ProcessedRegistrationStore`, `CountryAdmissionPolicy`,
-   `AdmissionDecisionRecorder`.
+   is vacuous.
+   **✅ `CountryAdmissionPolicy` landed 2026-08-14 as `AdmissionPolicyRepository` +
+   `AdmissionPolicyRowToSnapshotMapper`.** 549 tests green; mutation **358 killed of 379 (94%)**.
+   Still owed: `ProcessedRegistrationStore`, `AdmissionDecisionRecorder`.
+   - **The one-statement requirement is met with jOOQ `MULTISET`, not three round trips.** Two
+     nested result sets plus the scalar version come back from a single `SELECT`, so the rules and
+     the version cannot be paired across snapshots — under READ COMMITTED separate reads would let a
+     decision document a policy that was never applied. The adapter **returns rows and decides
+     nothing**: no quantifier logic and no matching in the `WHERE`, per ALT-5.
+   - **The mapper carries every decision, deliberately, because the repository is outside the
+     mutation gate and the mapper is not.** That split is why the enum/ISO translations are testable
+     in milliseconds instead of behind a container.
+   - **🔴 It raises `AdmissionPolicyCorruptException`, never `CustomerRowCorruptException`** — the
+     reason increment 3 created the eighth exception. One unusable policy row refuses *every*
+     registration, so it must reach a different alert from one corrupt customer.
+   - **The gap the column `CHECK` cannot close, now covered:** `^[A-Z]{2}$` accepts `XX`, and only
+     `CountryCode` knows there is no such country. Left untranslated that surfaces as the `Invalid*`
+     family, i.e. a 422 blaming an applicant for our policy table.
+   - **Its container test writes inside the `@JooqTest` transaction and rolls back**, unlike its
+     `SchemaProbe` siblings. The policy tables are global singletons with no per-test id to scope an
+     assertion by, so the minting rule cannot help here and anything committed would be visible to
+     every later test. The version assertion reads the stored value rather than pinning `1`.
+   - **`AdmissionPolicyRepository` joins `CustomerRepository` in PITest `excludedClasses`, and the
+     reason is structural rather than a second judgement call** — a targeted class whose only tests
+     are the excluded container slice reports `NO_COVERAGE` however good those tests are, which says
+     nothing about the tests.
+   - **🔴 A write guard makes a row undeletable by the APPLICATION, never untestable.** A first draft
+     of this entry and of the pom comment justified leaving the empty-`admission_policy` branch
+     unasserted on the grounds that a trigger made it unreachable. Wrong three ways: the guard is in
+     `V6`, not `V3`; it is `trg_admission_policy_no_delete` backed by `deletion_is_privileged`, not
+     the append-only mechanism (`admission_policy` is deliberately *excluded* from that list, since
+     the version must stay updatable); and `ALTER TABLE … DISABLE TRIGGER` is transactional, so a
+     `@JooqTest` slice can empty the table and roll it back. The branch is now asserted. **This is
+     the third claim about tool or database behaviour in this BC that was stated rather than
+     measured** — see the standing rule under item 15.
    - **🔴 The port was renamed `CustomerRepository` → `CustomerStore`, and the adapter takes the
      freed name.** Item 5 shipped the port as `CustomerRepository`, which inverts the account BC's
      convention: the port is a `*Store` / `*Reader` in `application` (`AccountEventStore`,

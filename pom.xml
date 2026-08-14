@@ -409,6 +409,22 @@
                              the_superseded_re_read_reports_an_absent_row_as_corruption. A third such
                              decision landing here is the signal to revisit the exclusion. -->
                         <param>org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerRepository</param>
+                        <!-- Same structural reason, not a second judgement call: this class is a
+                             PITest target while its only tests are the container slice excluded
+                             below, so every mutant in it reports NO_COVERAGE however good those
+                             tests are. That status says nothing about test quality, which is
+                             exactly the noise "check the mutant list, not the percentage" is meant
+                             to cut through. Compensating control, named: AdmissionPolicyRepositoryTest,
+                             which asserts every branch INCLUDING the null guard for an empty
+                             admission_policy table. An earlier draft of this comment claimed that
+                             guard was unreachable from a test; it is not, and the correction is
+                             worth stating because the mistake is easy to repeat. V6's
+                             trg_admission_policy_no_delete stops the APPLICATION deleting the row,
+                             not a test: ALTER TABLE ... DISABLE TRIGGER is transactional and rolls
+                             back with the @JooqTest slice. The mapper beside it stays in the gate:
+                             it is pure, its tests are plain JUnit, and it holds every decision this
+                             class does not. -->
+                        <param>org.girardsimon.wealthpay.customer.infrastructure.db.repository.AdmissionPolicyRepository</param>
                         <param>org.girardsimon.wealthpay.shared.infrastructure.*</param>
                         <param>org.girardsimon.wealthpay.shared.config.*</param>
                     </excludedClasses>
