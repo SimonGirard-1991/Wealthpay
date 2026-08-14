@@ -58,13 +58,20 @@ may be pulled earlier, but must precede increment 5 item 1._
 > this file needs a tracked owner**, because the list is citable by anyone. That re-ranks item 13
 > from a merge chore to the mechanism that converts a public *gap list* into a public *owned* list.
 >
-> **🔴 One cheaper option is still open, and it closes the moment a PR is opened.** Verified
-> 2026-08-13: `gh pr list --state all` shows **no PR for this branch**. The `refs/pull/` retention
-> described above attaches when a PR exists — so *today*, deleting or rewriting the remote branch is
-> materially more effective than it will be an hour after the PR is opened. Ranked by what each
-> actually retracts: **(1)** delete/rewrite the remote branch now, before any PR — the only option
-> that removes the reachable ref; **(2)** take the repository private; **(3)** keep it public and own
-> the list. Opening the PR forecloses (1). Decide in that order, not in the order they occur to you.
+> **✅ DECIDED 2026-08-14 — no PR is opened until this file is finished and deleted.** Verified the
+> same day: `gh pr list --state all` shows no PR for this branch. Since item 13 extracts the
+> reasoning and deletes this file *before* the PR exists, the `refs/pull/` retention described above
+> never attaches, and `main` never carries the file. That is the right sequencing and it closes the
+> **future** exposure channel.
+>
+> **🔴 It does not close the current one, and the difference matters.** The tracker has been fetchable
+> on a public branch since `38f3996` was pushed, and deleting the file in a later commit removes it
+> from the tip, **not from the branch's history** — `git log -p` still yields it. Retracting what is
+> already public needs the branch rewritten or deleted, not merely a later deletion commit. So:
+> - **If the current exposure is acceptable**, nothing more to do; every gap named here still needs a
+>   tracked owner, because the list has been citable for as long as it has been pushed.
+> - **If it is not**, the branch must be force-pushed without the tracker's blobs (or deleted and
+>   re-pushed) **before** the PR — which remains cheap only while no PR exists.
 >
 > If it survives into `main` as a live file, it stops being a tracker and becomes a second, unowned
 > source of truth that contradicts the ADRs — worse than never having written it down.
