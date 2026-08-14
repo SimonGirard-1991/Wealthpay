@@ -1,11 +1,18 @@
 # WIP — Customer BC (handoff)
 
-_Last updated 2026-08-11. Branch `feat/introduce-cutsomer-bc`. **Increments 1-3 committed. Increment
-4 items 0, 1, 2, 3, 4, 5, 9 and 12 done; item 6 part-done — the `CustomerStore` adapter landed,
-the other three ports are still unimplemented. Order from here: finish item 6 →
-item 15 (`ActivateCustomer`, moved up from increment 5, so something finally exercises the ports) →
-item 8 (observability) → item 7 (FPE) → items 10, 11, 13. Item 14 (`evaluate`) has no dependencies
-and can be taken at any point, but must precede increment 5 item 1.**_
+_Last updated 2026-08-13. Branch `feat/introduce-cutsomer-bc`. **Increments 1-3 committed. Increment
+4 items 0, 1, 2, 3, 4, 5, 9, 12 and 15 done; item 6 part-done — the `CustomerStore` adapter landed,
+the other three ports are still unimplemented.**_
+
+_**Item 15 was taken BEFORE the rest of item 6, inverting the order this header previously gave.**
+`ActivateCustomer` depends on `CustomerStore` alone, which landed in `eea4d72`; the three remaining
+ports all serve the registration path, which is additionally blocked on item 7 and item 14. Building
+them first would have added three more ports with no caller — the exact condition that produced item
+5's 🔴 — and would first have required paying item 6's fixture-minting debt, which a mocked-port use
+case does not touch. **Order from here: the fixture-minting hoist (owed before a fourth
+container-committing test class) → finish item 6 → item 14 (`evaluate`) → item 8 (observability) →
+item 7 (FPE) → items 10, 11, 13.** Item 14 still has no dependencies and may be pulled earlier, but
+must precede increment 5 item 1._
 
 > # 🔴 THIS FILE MUST NOT REACH `main`. DELETING IT IS PART OF THE MERGE.
 >
@@ -30,21 +37,34 @@ and can be taken at any point, but must precede increment 5 item 1.**_
 >    protection and no rulesets, so the red check is advisory until `wip-guard` is added to the
 >    required checks.
 >
-> **🔴🔴 THE DECISIVE EVENT IS THE NEXT `git push`, NOT THE MERGE.** This repository is **public**.
-> As of now the tracker is **local only** — the commit that adds it is not an ancestor of the pushed
-> tip — so nothing has been published yet. That ends the moment this branch is pushed:
-> - GitHub retains the `refs/pull/` namespace independently of the branch, so once pushed, the
->   content stays publicly fetchable **even after squash-merge and branch deletion**.
-> - So **squash-merge solves the wrong half.** It keeps the file out of `main`'s history — real, and
->   worth doing — but it does not make a published blob unreachable.
-> - What is actually being published is a dated, candid inventory of unmitigated compliance gaps at
->   a regulated bank ("no purge path exists", "erasure does not reach backups", "nothing in the
->   database enforces that premise").
+> **🔴🔴 ALREADY PUSHED — THE DECISION THIS SECTION EXISTED TO DEFER WAS MADE BY DEFAULT.**
+> Verified 2026-08-13: `gh repo view` reports `SimonGirard-1991/Wealthpay` **PUBLIC**, and
+> `git branch -r --contains 38f3996` — the commit that adds this tracker — returns
+> `origin/feat/introduce-cutsomer-bc`. The text here previously read "the tracker is **local only**
+> … so nothing has been published yet" and instructed the reader to **decide before pushing**. That
+> window is closed. The old wording is not merely stale, it is *reassuring in the wrong direction*,
+> which is why it is corrected in place rather than left with a note appended.
 >
-> **Decide before pushing**, because the choice is irreversible afterwards: keep the tracker local
-> (and accept it is not backed up), push it to a private remote, or push it here and accept that a
-> gap inventory is public. If it is pushed, every gap named here needs a tracked owner, since the
-> list is then citable by anyone.
+> - **The blob is public now.** Deleting the branch does not reliably unpublish it, and the moment a
+>   PR exists GitHub retains the `refs/pull/` namespace independently of the branch — content stays
+>   fetchable **even after squash-merge and branch deletion**.
+> - **Squash-merge solves the wrong half.** It keeps the file out of `main`'s history — real, and
+>   still worth doing — but it does not make a published blob unreachable.
+> - **What is public** is a dated, candid inventory of unmitigated compliance gaps at a regulated
+>   bank ("no purge path exists", "erasure does not reach backups", "nothing in the database enforces
+>   that premise").
+>
+> **The contingency is therefore now the requirement, not one branch of a choice: every gap named in
+> this file needs a tracked owner**, because the list is citable by anyone. That re-ranks item 13
+> from a merge chore to the mechanism that converts a public *gap list* into a public *owned* list.
+>
+> **🔴 One cheaper option is still open, and it closes the moment a PR is opened.** Verified
+> 2026-08-13: `gh pr list --state all` shows **no PR for this branch**. The `refs/pull/` retention
+> described above attaches when a PR exists — so *today*, deleting or rewriting the remote branch is
+> materially more effective than it will be an hour after the PR is opened. Ranked by what each
+> actually retracts: **(1)** delete/rewrite the remote branch now, before any PR — the only option
+> that removes the reachable ref; **(2)** take the repository private; **(3)** keep it public and own
+> the list. Opening the PR forecloses (1). Decide in that order, not in the order they occur to you.
 >
 > If it survives into `main` as a live file, it stops being a tracker and becomes a second, unowned
 > source of truth that contradicts the ADRs — worse than never having written it down.
@@ -199,6 +219,16 @@ ArchUnit 17/17 + Modulith green.
 Two `CustomerNumber.passesLuhn` mutants are **equivalent** — proven:
 - `digit > 9` → `>=`: `digit` is always `2 × original`, hence always even, never exactly 9.
 - `sum += digit` → `-=`: negates the total, and `−x ≡ 0 (mod 10) ⟺ x ≡ 0 (mod 10)`.
+
+**[added 2026-08-13, from increment 4 item 15]** A third, in
+`CustomerApplicationService.activationInstantOf` — `NullReturnValsMutator` on the `orElseThrow`
+supplier. **Unreachable, not untested:** the lambda runs only for a customer that is ACTIVE with a
+null `activatedAt`, and no construction path produces one. `register` yields ONBOARDING with a null
+instant (`Customer:44`), `activate` assigns status and instant in the same arm (`Customer:96-97`),
+and `reconstitute` rejects the pair outright (`Customer:57`). Reaching it would need reflection or a
+mocked aggregate, both refused. **Do not delete the check to clear the survivor** — the only
+alternative to a typed exception there is a bare `orElseThrow()`, i.e. a `NoSuchElementException`
+rendered as a 500 with no corruption alert, which is precisely what ALT-8 forbids.
 
 ---
 
@@ -1326,9 +1356,22 @@ Why this over the alternatives:
   **`sequenceNo` lives on `LoadedCustomer`, not on `CustomerState`.** `CustomerState` is
   `reconstitute`'s input (and the rowcount-0 re-read's carrier); it has no use for a sequence it
   would have to accept and ignore, and `Customer` has no such field.
-- **READ COMMITTED is load-bearing and the project pins no isolation level.** At REPEATABLE READ and
-  above, `INSERT … ON CONFLICT DO NOTHING` raises a serialization failure (`40001`) rather than
-  skipping, and the rowcount-0 branch never runs. Revisit if an isolation level is ever configured.
+- **READ COMMITTED is load-bearing and the project pins no isolation level.** **[corrected
+  2026-08-13, measured on PG 17.10 with two concurrent sessions running the CTE the adapter emits —
+  the earlier claim was right about the outcome and wrong about the mechanism at SERIALIZABLE.]**
+
+  | Isolation | Loser's CTE | Re-read | Net |
+  |---|---|---|---|
+  | READ COMMITTED | blocks on the speculative-insertion lock until the winner commits, then rowcount 0 | sees the winner's `ACTIVE` row | **`SUPERSEDED`, as designed** |
+  | REPEATABLE READ | raises `40001` | never runs | fails loudly |
+  | SERIALIZABLE | **succeeds with rowcount 0** — so the branch *does* run, contra the old wording | raises `40001` | fails loudly, one statement later |
+
+  The reassuring half: a misconfigured isolation level fails **loudly** rather than fabricating a
+  `CustomerRowCorruptException`. Postgres documents none of this above READ COMMITTED, so re-measure
+  rather than re-reason if an isolation level is ever pinned. **The realistic vector is
+  configuration, not code** — Hikari's `transaction-isolation`, or a per-role
+  `default_transaction_isolation` — which is why no annotation or javadoc defends against it and
+  this table is the actual control.
   **[added 2026-08-08] There are now TWO independent dependencies on READ COMMITTED, and `V1` says
   to revisit them together.** The second is the nationality-cardinality trigger, which takes
   `SELECT … FOR UPDATE` on the parent row and counts — a lock that closes the race *at READ
@@ -1356,6 +1399,14 @@ Why this over the alternatives:
   is what makes the fresh-snapshot re-read below reliable rather than racy.
 
 **Composition — owned by the use case, not the adapter:**
+
+> **🔴 SUPERSEDED by increment 4 item 15 (shipped 2026-08-13) — read the snippet for the reasoning,
+> never for the code.** `CustomerRowMissingException` was renamed `CustomerNotFoundException`, both
+> reads dropped their `Optional` and now throw from the adapter, `findState` is
+> `findStateAfterSupersededTransition`, `recordTransitionAndApply` takes the `LoadedCustomer`, and
+> the two exception choices below are wrong — see the mapping table at item 15. **The bullet three
+> lines under the snippet is right where the snippet is wrong; that is not a contradiction to
+> resolve locally.** Do not copy this into the ADR as written.
 ```java
 LoadedCustomer loaded = repository.load(id).orElseThrow(CustomerRowMissingException::new);
 Customer customer = loaded.customer();             // aggregate AND sequenceNo from ONE statement
@@ -2381,6 +2432,21 @@ someone, and in several regimes the refusal itself is reportable.
      relationship-end + 5y, which is a *different* retention class arrived at by accident. It must
      be visible, not merely tolerated.
 
+   - **🔴 [added 2026-08-13] Item 15 created this BC's first emission points, and there is no
+     primitive to emit through.** `ActivateCustomer` ships with no metric and no log, which is not an
+     oversight to fix with an annotation: `@CommandMetric` / `CommandMetricAspect` live in
+     `account.application.metric`, `account` is a CLOSED Modulith module, and
+     `classifyException` is hardcoded to account exception types. **Item 8 has to build a second
+     instrumentation primitive**, and these are the three signals waiting for it:
+     1. **`TransitionOutcome.SUPERSEDED`** — the only place in the system that knows two actors raced
+        on one KYC activation and that just one of them reached the audit trail. ALT-8 fixed the
+        *instant*; the fact that the race happened is currently unrecordable.
+     2. **Both `CustomerRowCorruptException` throws in the activation path** — the exception's own
+        javadoc promises a corruption alert. Today they are an unlabelled 500, indistinguishable from
+        a `NullPointerException` in the logs.
+     3. **`CustomerNotFoundException`** — needs to bucket as a client 404, not as an error, or the
+        refusal-ratio alerting in this same item is polluted by ordinary not-founds.
+
    Without this, a mis-seeded table is a silent onboarding outage — the tipping-off rule guarantees
    no informative client signal. **[Q2] And the outage can be *partial*:** `licensed_country` seeded
    with only `RESIDENCE` rows refuses every corporate while individuals succeed, which a global
@@ -2493,19 +2559,103 @@ someone, and in several regimes the refusal itself is reportable.
       adapter — ALT-5 settled that and gave both reasons.
     - Its tests are already specified in increment 5 item 6: pure, no mocks, no container, and
       mutation-covered. Bring them with the function rather than leaving them an increment behind.
-15. **⬆️ `ActivateCustomer` — MOVED HERE from increment 5 item 2, and it should run right after
-    item 6.** Scheduled 2026-08-11.
-    - **Why it moves: the ports currently have zero callers, and that is what produced item 5's
-      🔴.** `LoadedCustomer` prescribed a call order in javadoc that nothing executed, so an
-      aggregate mutation between load and write went unnoticed until a reviewer wrote a five-line
-      probe. Contract-first pays off only when something exercises the contract. This use case *is*
-      the exercise, and it is the exact composition the bug lived in.
-    - **It is not blocked.** It needs `CustomerStore.load` / `recordTransitionAndApply` /
-      `findStateAfterSupersededTransition` and a `Clock`. Application-service tests mock the ports
-      by convention here, so it needs **no adapter** — only item 5, which is done.
-    - Composed exactly as in ALT-8: the boolean guards the attempt, `expectedSequenceNo` comes from
-      `LoadedCustomer`, the outcome selects the branch, the re-read decides the answer. Also lands
-      **`ActivationResult`** and **`CustomerRowMissingException`** — neither exists yet.
+15. ✅ **DONE 2026-08-13 — `ActivateCustomer`, moved here from increment 5 item 2 and taken ahead of
+    the rest of item 6.** `CustomerApplicationService.activate(CustomerId, Actor)` plus
+    `ActivationResult` and `CustomerNotFoundException`. **532 tests green; ArchUnit 17/17 and
+    Modulith green; mutation 368 mutants, 347 killed (94%), customer BC 129/126 (98%)** — measured
+    after the port change below, not before it. Against increment 3's committed baseline (525 tests,
+    338 of 358) that is +7 tests and +9 kills. *Mutant accounting, since it is easy to get backwards: the count is a function of
+    `targetClasses` alone — `excludedTestClasses` only flips a mutant's status to `NO_COVERAGE`. Two
+    `orElseThrow` sites moved from the measured `CustomerApplicationService` into the excluded
+    `CustomerRepository`, which is what moved the count.*
+    - **Why it moved: the ports had zero callers, and that is what produced item 5's 🔴.**
+      `LoadedCustomer` prescribed a call order in javadoc that nothing executed, so an aggregate
+      mutation between load and write went unnoticed until a reviewer wrote a five-line probe.
+      Contract-first pays off only when something exercises the contract. This use case *is* the
+      exercise, and it is the exact composition the bug lived in.
+    - Composed as in ALT-8: the boolean guards the attempt, the sequence and source status ride on
+      `LoadedCustomer`, the outcome selects the branch, the re-read decides the answer. It is
+      `@Transactional`, per ALT-8's deliberate asymmetry with ALT-9b.
+
+    ### 🔴 ALT-8's snippet contradicts ALT-8's own bullet — the prose wins
+    The snippet routes three conditions into two exception types chosen for *where the code sits*
+    rather than for *what an operator must do*. The bullet a few lines below it already says **"both
+    corruption paths use `CustomerRowCorruptException` — same corruption must not produce two
+    operational outcomes"**. The shipped code follows the bullet. **Do not copy the snippet into the
+    ADR as written.**
+
+    | Condition | ALT-8 snippet | Shipped | Why |
+    |---|---|---|---|
+    | `load` finds no row | `CustomerRowMissingException`, in the use case | **`CustomerNotFoundException`**, thrown by the **adapter** | The caller named a customer that was never registered — a client error, a 404. |
+    | Superseded re-read finds no row | `CustomerRowMissingException`, in the use case | **`CustomerRowCorruptException`**, thrown by the **adapter** | The conditional write it follows has already established that the row exists, and v1 has no delete path. Reporting it as "not found" hands the operator a 404 for a database that just lost a row. |
+    | Superseded re-read still `ONBOARDING` | `IllegalStateException("unreachable")` | **`CustomerRowCorruptException`**, in the use case | A transition consumed the sequence number without applying the status change, so the audit trail and the customer row disagree — the definition in the exception's own javadoc. And it is **reachable**: transition-implies-status-change is a convention, not a schema constraint (see the 🔴 in ALT-8). `IllegalStateException` falls to the catch-all — a 500 with **no corruption alert**. |
+
+    The exhaustive switch on the re-read is kept exactly as ALT-8 argues — it is the tripwire the
+    `ON CONFLICT` clause loses, so B-1's `SUSPENDED` fails compilation here.
+
+    ### 🔴 Both `CustomerStore` reads dropped their `Optional` — the port changed, not just the caller
+    `load` returns `LoadedCustomer` and `findStateAfterSupersededTransition` returns `CustomerState`;
+    absence is the adapter's exception in both. **Every caller that has ever existed — one use case
+    and six test sites, five unwrapping immediately and one asserting emptiness** — treated absence
+    as exceptional, so the `Optional` modelled a case no caller had.
+    - **The sibling BC settles the shape.** `AccountLoader.loadAccount` returns a non-optional
+      `Account` across four call sites with **zero** `orElseThrow`; absence surfaces *below* the
+      service, as `AccountHistoryNotFoundException` out of `Account.rehydrate`. And within this BC
+      `CustomerStore.linkAdmission` already threw on an absent customer, so `load` was the odd one
+      out twice over.
+    - **The exception types stay in `application`** — "it is only thrown in the repository, so move
+      it there" is the obvious next suggestion, and it is wrong. **🔴 [corrected 2026-08-13 — an
+      earlier revision of this bullet claimed the placement was mechanically enforced *two*
+      independent ways. One of the two does not exist, and the claim was checked with `javap` rather
+      than argued.]**
+      1. ~~`CustomerStore` declares both in `@throws`, so `..application..` would depend on
+         `..infrastructure..`.~~ **False.** Both exceptions are unchecked, so the `@throws` is a
+         *javadoc tag*, not a `throws` clause — the signatures carry none. Javadoc does not survive
+         compilation: `javap -v` on the compiled `CustomerStore` shows **no constant-pool entry** for
+         either type. ArchUnit reads bytecode, so no rule can see it. Moving the type into
+         `..infrastructure.db.repository..` today would compile and pass every architecture test.
+      2. **Real, but prospective.** Increment 5 item 5's `CustomerExceptionHandler` will live in
+         `..infrastructure.web..` and reference the type as an `@ExceptionHandler` class literal — a
+         genuine bytecode dependency — which `web_must_not_depend_on_other_io_siblings` forbids from
+         reaching `..infrastructure.db..`. Account already demonstrates it:
+         `TransactionIdConflictException` is thrown **only** in `ProcessedTransactionRepository` and
+         still lives outside `infrastructure`, because `AccountExceptionHandler` maps it.
+
+      **So today the placement is a convention with no build-time teeth, and it acquires them when
+      the handler lands.** The standing rule this repository already applies to `GRANT`/`REVOKE`
+      applies to architecture rules too: **a dependency that exists only in javadoc, an import or a
+      comment is documentation wearing a constraint's clothes.** Check the constant pool before
+      calling anything enforced.
+    - **Where this BC diverges from account, deliberately:** account puts all 16 exception types in
+      `domain/exception`. Customer splits them — domain invariants in `domain/exception`,
+      **port-contract failures in `application`**, alongside `EmailAlreadyRegisteredException` and
+      `CustomerNumberCollisionException`, which are also adapter-thrown and port-declared. "No row
+      for this id" is not an invariant the aggregate can state, so it is not a domain exception.
+      **This split, not the false enforcement claim above, is the actual justification.**
+    - **Named `CustomerNotFoundException`, NOT `CustomerRowMissingException` as this item originally
+      specified.** The rename is not cosmetic: the near-identical names invited exactly the handler
+      the table above exists to prevent — one that treats the pair alike — when the whole point is
+      that one is a client 404 and the other a 500 plus a corruption alert. `Row` also leaks a
+      storage noun into a type increment 5 puts in the public error contract, beside two siblings
+      that carry none. `CustomerRowCorruptException` keeps its `Row`: it genuinely is about a
+      persisted row contradicting itself.
+
+    ### Two follow-ups this item creates
+    - **`ActivationResult` is a record with a boolean, while `RegistrationOutcome` beside it is a
+      sealed interface. Decided, not drifted:** the two shapes stay, because B-1's `SUSPENDED` does
+      not give activation a third outcome. Activating a suspended customer is `reinstate`, a
+      different transition, so `Customer.activate`'s exhaustive switch is where `SUSPENDED` must be
+      answered — the build breaks there and the boolean stays correct. **If that call is ever
+      reversed, `ActivationResult` must become sealed in the same change**, or the web mapper is the
+      one place in this BC with no exhaustiveness tripwire.
+    - **The residual risk to READ COMMITTED is configuration, not code** — Hikari's
+      `transaction-isolation`, or a per-role `default_transaction_isolation` in Postgres. Neither an
+      annotation nor javadoc defends against those, which is why
+      `@Transactional(isolation = READ_COMMITTED)` was **declined**: under `PROPAGATION_REQUIRED` an
+      inner transaction's isolation attribute is silently dropped, so it would read as a guarantee on
+      the one property this design depends on while providing none. The real control is the measured
+      table in ALT-8: every other isolation level fails **loudly** rather than fabricating a
+      corruption verdict.
     - **`RegisterCustomer` does NOT move.** It genuinely needs item 7's number generator and item
       14's `evaluate`, so it stays at increment 5 item 1.
 

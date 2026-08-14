@@ -11,10 +11,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.time.OffsetDateTime;
-import java.util.Optional;
 import java.util.UUID;
 import org.girardsimon.wealthpay.customer.application.Actor;
 import org.girardsimon.wealthpay.customer.application.AdmissionDecisionId;
+import org.girardsimon.wealthpay.customer.application.CustomerNotFoundException;
 import org.girardsimon.wealthpay.customer.application.CustomerNumberCollisionException;
 import org.girardsimon.wealthpay.customer.application.CustomerStore;
 import org.girardsimon.wealthpay.customer.application.EmailAlreadyRegisteredException;
@@ -130,12 +130,23 @@ class CustomerRepositoryTest extends AbstractCustomerContainerTest {
   }
 
   @Test
-  void load_finds_nothing_for_an_unknown_customer() {
-    // Act
-    Optional<LoadedCustomer> loaded = customerStore.load(CustomerId.of(UUID.randomUUID()));
+  void load_rejects_an_unknown_customer() {
+    // Arrange
+    CustomerId unknown = CustomerId.of(UUID.randomUUID());
 
-    // Assert
-    assertThat(loaded).isEmpty();
+    // Act + Assert
+    assertThatExceptionOfType(CustomerNotFoundException.class)
+        .isThrownBy(() -> customerStore.load(unknown));
+  }
+
+  @Test
+  void the_superseded_re_read_reports_an_absent_row_as_corruption() {
+    // Arrange
+    CustomerId unknown = CustomerId.of(UUID.randomUUID());
+
+    // Act + Assert
+    assertThatExceptionOfType(CustomerRowCorruptException.class)
+        .isThrownBy(() -> customerStore.findStateAfterSupersededTransition(unknown));
   }
 
   @Test
@@ -184,7 +195,7 @@ class CustomerRepositoryTest extends AbstractCustomerContainerTest {
     activate(loaded.customer().getId());
 
     // Act
-    LoadedCustomer reloaded = customerStore.load(loaded.customer().getId()).orElseThrow();
+    LoadedCustomer reloaded = customerStore.load(loaded.customer().getId());
 
     // Assert
     assertAll(
@@ -220,7 +231,7 @@ class CustomerRepositoryTest extends AbstractCustomerContainerTest {
 
     // Act
     CustomerState state =
-        customerStore.findStateAfterSupersededTransition(loaded.customer().getId()).orElseThrow();
+        customerStore.findStateAfterSupersededTransition(loaded.customer().getId());
 
     // Assert
     assertAll(
@@ -233,7 +244,7 @@ class CustomerRepositoryTest extends AbstractCustomerContainerTest {
     // Arrange
     LoadedCustomer loaded = insertAndLoad(register(INDIVIDUAL));
     activate(loaded.customer().getId());
-    LoadedCustomer active = customerStore.load(loaded.customer().getId()).orElseThrow();
+    LoadedCustomer active = customerStore.load(loaded.customer().getId());
 
     // Act + Assert
     assertThatExceptionOfType(IllegalStateException.class)
@@ -294,12 +305,12 @@ class CustomerRepositoryTest extends AbstractCustomerContainerTest {
 
   private LoadedCustomer insertAndLoad(Customer customer) {
     customerStore.insert(customer, admittedDecision(customer.getType()));
-    return customerStore.load(customer.getId()).orElseThrow();
+    return customerStore.load(customer.getId());
   }
 
   /** Activates through a snapshot of its own, so the caller's stays stale. */
   private void activate(CustomerId customerId) {
-    LoadedCustomer winner = customerStore.load(customerId).orElseThrow();
+    LoadedCustomer winner = customerStore.load(customerId);
     winner.customer().activate(ACTIVATED_AT);
     customerStore.recordTransitionAndApply(
         winner, CustomerStatus.ACTIVE, ACTIVATED_AT, Actor.SYSTEM);

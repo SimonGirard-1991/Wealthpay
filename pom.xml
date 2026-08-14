@@ -379,17 +379,35 @@
                              inside the exclusion and leave the mutation gate without anyone editing this
                              file. Adding an adapter here is meant to be a deliberate act. -->
                         <param>org.girardsimon.wealthpay.customer.infrastructure.db.CustomerFlywayConfig</param>
-                        <!-- What is left in it is SQL: its only decision that is not, the rowcount
-                             lattice, moved to TransitionOutcome.ofUpdatedRows, where it is unit
-                             testable in milliseconds instead of behind a container. Do not record
-                             that as "so it stays measured": a switch returning enum constants
-                             compiles to GETSTATIC, which no default mutator touches, so that method
-                             yields one NULL_RETURNS mutant however many arms it grows -
-                             TransitionOutcomeTest is what pins the mapping. The rest of this class
-                             is covered solely by a Testcontainers slice test, excluded below.
-                             Keeping it in would not fail the build (89.6% against a threshold of
-                             80, measured 2026-08-11); it would report mutants nothing can kill. The
-                             mappers beside it stay in: they are pure and their tests plain JUnit. -->
+                        <!-- Mostly SQL. The rowcount lattice moved to
+                             TransitionOutcome.ofUpdatedRows, where it is unit testable in
+                             milliseconds instead of behind a container. Do not record that as "so
+                             it stays measured": a switch returning enum constants compiles to
+                             GETSTATIC, which no default mutator touches, so that method yields one
+                             NULL_RETURNS mutant however many arms it grows - TransitionOutcomeTest
+                             is what pins the mapping. The rest of this class is covered solely by a
+                             Testcontainers slice test, excluded below. Keeping it in would not fail
+                             the build (89.6% against a threshold of 80, measured 2026-08-11); it
+                             would report mutants nothing can kill. The mappers beside it stay in:
+                             they are pure and their tests plain JUnit.
+
+                             UNMEASURED AND DELIBERATE, since 2026-08-13: this class now also
+                             discriminates the two absent-row outcomes - load throws
+                             CustomerNotFoundException (client 404) and
+                             findStateAfterSupersededTransition throws CustomerRowCorruptException
+                             (500 plus a corruption alert). Measured, not assumed - javap -p shows
+                             two synthetic lambdas here, so un-excluding WOULD generate mutants on
+                             both reads: a NullReturnVals on lambda$findStateAfterSupersededTransition
+                             turns the corruption verdict into a bare NPE, and one on lambda$load
+                             reports an existing customer as not-found. They are excluded because the
+                             only tests that kill them are container tests, excluded below, so they
+                             would report NO_COVERAGE rather than being killed. What no mutator
+                             touches is the swap of one exception type for the other, which is the
+                             discrimination that actually matters and is unmeasurable either way -
+                             hence the named compensating control:
+                             CustomerRepositoryTest.load_rejects_an_unknown_customer and
+                             the_superseded_re_read_reports_an_absent_row_as_corruption. A third such
+                             decision landing here is the signal to revisit the exclusion. -->
                         <param>org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerRepository</param>
                         <param>org.girardsimon.wealthpay.shared.infrastructure.*</param>
                         <param>org.girardsimon.wealthpay.shared.config.*</param>

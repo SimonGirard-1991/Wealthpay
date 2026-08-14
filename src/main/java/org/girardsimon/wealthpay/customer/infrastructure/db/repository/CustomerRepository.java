@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.girardsimon.wealthpay.customer.application.Actor;
 import org.girardsimon.wealthpay.customer.application.AdmissionDecisionId;
+import org.girardsimon.wealthpay.customer.application.CustomerNotFoundException;
 import org.girardsimon.wealthpay.customer.application.CustomerNumberCollisionException;
 import org.girardsimon.wealthpay.customer.application.CustomerStore;
 import org.girardsimon.wealthpay.customer.application.EmailAlreadyRegisteredException;
@@ -125,17 +126,23 @@ public class CustomerRepository implements CustomerStore {
   }
 
   @Override
-  public Optional<LoadedCustomer> load(CustomerId customerId) {
+  public LoadedCustomer load(CustomerId customerId) {
     return fetchCustomerRow(customerId)
         .map(
             row ->
                 new LoadedCustomer(
-                    Customer.reconstitute(toCustomerState(row)), row.get(TRANSITION_SEQUENCE_NO)));
+                    Customer.reconstitute(toCustomerState(row)), row.get(TRANSITION_SEQUENCE_NO)))
+        .orElseThrow(CustomerNotFoundException::new);
   }
 
   @Override
-  public Optional<CustomerState> findStateAfterSupersededTransition(CustomerId customerId) {
-    return fetchCustomerRow(customerId).map(this::toCustomerState);
+  public CustomerState findStateAfterSupersededTransition(CustomerId customerId) {
+    return fetchCustomerRow(customerId)
+        .map(this::toCustomerState)
+        .orElseThrow(
+            () ->
+                new CustomerRowCorruptException(
+                    "Customer row disappeared between its load and the superseded re-read"));
   }
 
   @Override
