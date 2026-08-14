@@ -1,8 +1,11 @@
 package org.girardsimon.wealthpay.customer.infrastructure.db.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerFixtures.mintCustomerNumber;
+import static org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerFixtures.mintEmail;
 import static org.junit.jupiter.api.Assertions.assertAll;
 
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import javax.sql.DataSource;
@@ -25,40 +28,40 @@ import org.springframework.boot.jooq.test.autoconfigure.JooqTest;
 @JooqTest
 class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
 
-  private static final String INDIVIDUAL_ID = "11111111-1111-1111-1111-111111111111";
-  private static final String CORPORATE_ID = "33333333-3333-3333-3333-333333333333";
-
   @Autowired private DataSource dataSource;
 
   private SchemaProbe probe;
+  private String individualId;
+  private String corporateId;
+  private String individualNumber;
+  private String individualEmail;
 
   @BeforeEach
   void setUp() {
     probe = new SchemaProbe(dataSource);
-    // Idempotent, because rejected statements need no cleanup and the audit tables cannot be
-    // cleaned.
-    // The numbers are Luhn-valid and carry leading zeros, which is the shape the generator emits.
+    individualId = UUID.randomUUID().toString();
+    corporateId = UUID.randomUUID().toString();
+    individualNumber = mintCustomerNumber();
+    individualEmail = mintEmail();
     probe.executeAll(
         """
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
            given_name, family_name, date_of_birth, gender, country_of_residence)
-        VALUES ('%s', '0000000018', 'ada@example.com', 'ONBOARDING', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ONBOARDING', '2026-01-01T00:00:00Z',
                 'INDIVIDUAL', 'Ada', 'Lovelace', '1990-01-01', 'FEMALE', 'FR')
-        ON CONFLICT DO NOTHING
         """
-            .formatted(INDIVIDUAL_ID),
-        nationality(INDIVIDUAL_ID, "FR"));
+            .formatted(individualId, individualNumber, individualEmail),
+        nationality(individualId, "FR"));
     probe.execute(
         """
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
            registered_name, registration_number, country_of_incorporation)
-        VALUES ('%s', '0000000034', 'acme@example.com', 'ONBOARDING', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ONBOARDING', '2026-01-01T00:00:00Z',
                 'CORPORATE', 'Acme SA', 'RCS-123', 'FR')
-        ON CONFLICT DO NOTHING
         """
-            .formatted(CORPORATE_ID));
+            .formatted(corporateId, mintCustomerNumber(), mintEmail()));
   }
 
   /**
@@ -72,8 +75,7 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
     UUID id = UUID.randomUUID();
 
     // Act
-    probe.executeAll(
-        individual(id, "0000000026", "alan@example.com", null), nationality(id.toString(), "GB"));
+    probe.executeAll(individual(id, null), nationality(id.toString(), "GB"));
 
     // Assert
     assertThat(
@@ -86,15 +88,9 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
   @Test
   void the_active_and_activation_instant_biconditional_is_enforced_in_both_directions() {
     // Arrange
-    String activeWithoutInstant =
-        corporate(UUID.randomUUID(), "0000000042", "a1@example.com", "'ACTIVE'", "NULL");
+    String activeWithoutInstant = corporate(UUID.randomUUID(), "'ACTIVE'", "NULL");
     String onboardingWithInstant =
-        corporate(
-            UUID.randomUUID(),
-            "0000000059",
-            "a2@example.com",
-            "'ONBOARDING'",
-            "'2026-02-01T00:00:00Z'");
+        corporate(UUID.randomUUID(), "'ONBOARDING'", "'2026-02-01T00:00:00Z'");
 
     // Act / Assert
     assertAll(
@@ -106,13 +102,7 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
   @Test
   void activation_before_registration_is_rejected() {
     // Arrange
-    String sql =
-        corporate(
-            UUID.randomUUID(),
-            "0000000067",
-            "a3@example.com",
-            "'ACTIVE'",
-            "'2025-01-01T00:00:00Z'");
+    String sql = corporate(UUID.randomUUID(), "'ACTIVE'", "'2025-01-01T00:00:00Z'");
 
     // Act / Assert
     probe.expectViolation(sql, "ck_customer_activation_not_before_registration");
@@ -126,19 +116,19 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
            given_name, family_name, date_of_birth, gender, country_of_residence, registered_name)
-        VALUES ('%s', '0000000075', 'm1@example.com', 'ONBOARDING', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ONBOARDING', '2026-01-01T00:00:00Z',
                 'INDIVIDUAL', 'A', 'B', '1990-01-01', 'MALE', 'FR', 'Acme SA')
         """
-            .formatted(UUID.randomUUID());
+            .formatted(UUID.randomUUID(), mintCustomerNumber(), mintEmail());
     String corporateWithMiddleName =
         """
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
            middle_name, registered_name, registration_number, country_of_incorporation)
-        VALUES ('%s', '0000000083', 'm2@example.com', 'ONBOARDING', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ONBOARDING', '2026-01-01T00:00:00Z',
                 'CORPORATE', 'Mary', 'Acme SA', 'RCS-1', 'FR')
         """
-            .formatted(UUID.randomUUID());
+            .formatted(UUID.randomUUID(), mintCustomerNumber(), mintEmail());
 
     // Act / Assert
     assertAll(
@@ -153,10 +143,8 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
   @Test
   void enumerated_columns_reject_a_value_outside_their_enum() {
     // Arrange
-    String unknownKind =
-        corporateWithKind(UUID.randomUUID(), "0000000091", "e1@example.com", "TRUST");
-    String unknownStatus =
-        corporate(UUID.randomUUID(), "0000000109", "e2@example.com", "'SUSPENDED'", "NULL");
+    String unknownKind = corporateWithKind(UUID.randomUUID(), "TRUST");
+    String unknownStatus = corporate(UUID.randomUUID(), "'SUSPENDED'", "NULL");
 
     // Act / Assert
     assertAll(
@@ -176,10 +164,10 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
            registered_name, registration_number, country_of_incorporation)
-        VALUES ('%s', '0000000117', 'c1@example.com', 'ONBOARDING', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ONBOARDING', '2026-01-01T00:00:00Z',
                 'CORPORATE', 'Acme SA', 'RCS-1', 'us')
         """
-            .formatted(UUID.randomUUID());
+            .formatted(UUID.randomUUID(), mintCustomerNumber(), mintEmail());
 
     // Act / Assert
     probe.expectViolation(sql, "ck_customer_incorporation_shape");
@@ -192,7 +180,7 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
   @Test
   void an_email_that_is_not_canonically_lower_case_is_rejected() {
     // Arrange
-    String sql = corporate(UUID.randomUUID(), "0000000125", "Ada@Example.com");
+    String sql = corporateWithEmail(UUID.randomUUID(), mintEmail().toUpperCase(Locale.ROOT));
 
     // Act / Assert
     probe.expectViolation(sql, "ck_customer_email_canonical");
@@ -207,19 +195,19 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
            given_name, family_name, date_of_birth, gender, country_of_residence)
-        VALUES ('%s', '0000000133', 'b1@example.com', 'ONBOARDING', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ONBOARDING', '2026-01-01T00:00:00Z',
                 'INDIVIDUAL', '   ', 'Lovelace', '1990-01-01', 'FEMALE', 'FR')
         """
-            .formatted(UUID.randomUUID());
+            .formatted(UUID.randomUUID(), mintCustomerNumber(), mintEmail());
     String blankRegisteredName =
         """
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
            registered_name, registration_number, country_of_incorporation)
-        VALUES ('%s', '0000000141', 'b2@example.com', 'ONBOARDING', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ONBOARDING', '2026-01-01T00:00:00Z',
                 'CORPORATE', '', 'RCS-1', 'FR')
         """
-            .formatted(UUID.randomUUID());
+            .formatted(UUID.randomUUID(), mintCustomerNumber(), mintEmail());
 
     // Act / Assert
     assertAll(
@@ -241,10 +229,10 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
            given_name, family_name, date_of_birth, gender, country_of_residence)
-        VALUES ('%s', '0000000158', 'd1@example.com', 'ONBOARDING', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ONBOARDING', '2026-01-01T00:00:00Z',
                 'INDIVIDUAL', 'Ada', 'Lovelace', '2300-01-01', 'FEMALE', 'FR')
         """
-            .formatted(id);
+            .formatted(id, mintCustomerNumber(), mintEmail());
 
     // Act / Assert
     probe.expectViolation(sql, "ck_customer_date_of_birth_plausible");
@@ -258,8 +246,8 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
   @Test
   void an_email_conflict_and_a_number_conflict_are_reported_by_distinct_constraints() {
     // Arrange
-    String duplicateEmail = corporate(UUID.randomUUID(), "0000000166", "ada@example.com");
-    String duplicateNumber = corporate(UUID.randomUUID(), "0000000018", "n1@example.com");
+    String duplicateEmail = corporateWithEmail(UUID.randomUUID(), individualEmail);
+    String duplicateNumber = corporateWithNumber(UUID.randomUUID(), individualNumber);
 
     // Act / Assert
     assertAll(
@@ -279,10 +267,10 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
     // Arrange
     String onACorporate =
         "INSERT INTO customer.customer_nationality VALUES ('%s', 'CORPORATE', 'FR')"
-            .formatted(CORPORATE_ID);
+            .formatted(corporateId);
     String withoutAKind =
         "INSERT INTO customer.customer_nationality VALUES ('%s', NULL, 'FR')"
-            .formatted(CORPORATE_ID);
+            .formatted(corporateId);
     String orphan =
         "INSERT INTO customer.customer_nationality VALUES ('%s', 'INDIVIDUAL', 'DE')"
             .formatted(UUID.randomUUID());
@@ -316,12 +304,11 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
     assertAll(
         () ->
             probe.expectRaisedRejectionInTransaction(
-                "must hold between 1 and 10 nationalities",
-                individual(none, "0000000174", "z1@example.com", null)),
+                "must hold between 1 and 10 nationalities", individual(none, null)),
         () ->
             probe.expectRaisedRejectionInTransaction(
                 "must hold between 1 and 10 nationalities",
-                prepend(individual(eleven, "0000000182", "z2@example.com", null), tooMany)));
+                prepend(individual(eleven, null), tooMany)));
   }
 
   /**
@@ -336,12 +323,8 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
     // Arrange
     UUID donor = UUID.randomUUID();
     UUID recipient = UUID.randomUUID();
-    probe.executeAll(
-        individual(donor, "0000000224", "donor@example.com", null),
-        nationality(donor.toString(), "FR"));
-    probe.executeAll(
-        individual(recipient, "0000000232", "recipient@example.com", null),
-        nationality(recipient.toString(), "DE"));
+    probe.executeAll(individual(donor, null), nationality(donor.toString(), "FR"));
+    probe.executeAll(individual(recipient, null), nationality(recipient.toString(), "DE"));
 
     // Act / Assert
     // The donor id, not just the message shape: the trigger names which customer was left short,
@@ -388,9 +371,7 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
     // Arrange
     UUID id = UUID.randomUUID();
     probe.executeAll(
-        individual(id, "0000000216", "race@example.com", null),
-        nationality(id.toString(), "FR"),
-        nationality(id.toString(), "DE"));
+        individual(id, null), nationality(id.toString(), "FR"), nationality(id.toString(), "DE"));
 
     // Act / Assert
     probe.expectBlockedWhileCustomerLocked(id.toString(), deleteNationality(id, "FR"));
@@ -408,9 +389,7 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
   void deleting_a_customer_takes_its_nationalities_with_it() {
     // Arrange
     UUID id = UUID.randomUUID();
-    probe.executeAll(
-        individual(id, "0000000190", "cascade@example.com", null),
-        nationality(id.toString(), "FR"));
+    probe.executeAll(individual(id, null), nationality(id.toString(), "FR"));
 
     // Act
     probe.executeWithGuardSuspended(
@@ -611,14 +590,14 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
     // Arrange
     UUID decisionId = UUID.randomUUID();
     probe.execute(decision(decisionId, "k3", "ADMITTED"));
-    probe.execute(link(CORPORATE_ID, decisionId));
+    probe.execute(link(corporateId, decisionId));
 
     // Act / Assert
     // A second CORPORATE customer, because subject_type is now keyed against customer.kind —
     // linking to
     // an individual would fail on the wrong constraint and leave the cardinality rule untested.
     UUID otherCorporate = UUID.randomUUID();
-    probe.execute(corporate(otherCorporate, "0000000240", "other@example.com"));
+    probe.execute(corporate(otherCorporate));
     probe.expectViolation(
         link(otherCorporate.toString(), decisionId), "uq_customer_admission_decision");
   }
@@ -648,12 +627,12 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         // the decision it names.
         () ->
             probe.expectViolation(
-                link(CORPORATE_ID, refused, "ADMITTED", "CORPORATE"),
+                link(corporateId, refused, "ADMITTED", "CORPORATE"),
                 "fk_customer_admission_decision"),
         // Telling the truth about the outcome is caught by the CHECK.
         () ->
             probe.expectViolation(
-                link(CORPORATE_ID, refused, "REFUSED", "CORPORATE"),
+                link(corporateId, refused, "REFUSED", "CORPORATE"),
                 "ck_customer_admission_admitted_only"));
   }
 
@@ -673,12 +652,12 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         // Naming the customer's kind breaks the key to the decision...
         () ->
             probe.expectViolation(
-                link(INDIVIDUAL_ID, corporateDecision, "ADMITTED", "INDIVIDUAL"),
+                link(individualId, corporateDecision, "ADMITTED", "INDIVIDUAL"),
                 "fk_customer_admission_decision"),
         // ...and naming the decision's subject type breaks the key to the customer.
         () ->
             probe.expectViolation(
-                link(INDIVIDUAL_ID, corporateDecision, "ADMITTED", "CORPORATE"),
+                link(individualId, corporateDecision, "ADMITTED", "CORPORATE"),
                 "fk_customer_admission_customer"));
   }
 
@@ -731,11 +710,9 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         .formatted(customerId, countryCode);
   }
 
-  /** Idempotent like the customer fixture, since setUp runs per test and these rows persist. */
   private static String nationality(String customerId, String countryCode) {
     return """
         INSERT INTO customer.customer_nationality VALUES ('%s', 'INDIVIDUAL', '%s')
-        ON CONFLICT DO NOTHING
         """
         .formatted(customerId, countryCode);
   }
@@ -773,7 +750,31 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         .formatted(customerId, decisionId, outcome, subjectType);
   }
 
-  private static String individual(UUID id, String number, String email, String middleName) {
+  private static String individual(UUID id, String middleName) {
+    return individualRow(id, mintCustomerNumber(), mintEmail(), middleName);
+  }
+
+  private static String corporate(UUID id) {
+    return corporateRow(id, mintCustomerNumber(), mintEmail(), "'ONBOARDING'", "NULL", "CORPORATE");
+  }
+
+  private static String corporate(UUID id, String status, String activatedAt) {
+    return corporateRow(id, mintCustomerNumber(), mintEmail(), status, activatedAt, "CORPORATE");
+  }
+
+  private static String corporateWithKind(UUID id, String kind) {
+    return corporateRow(id, mintCustomerNumber(), mintEmail(), "'ONBOARDING'", "NULL", kind);
+  }
+
+  private static String corporateWithEmail(UUID id, String email) {
+    return corporateRow(id, mintCustomerNumber(), email, "'ONBOARDING'", "NULL", "CORPORATE");
+  }
+
+  private static String corporateWithNumber(UUID id, String number) {
+    return corporateRow(id, number, mintEmail(), "'ONBOARDING'", "NULL", "CORPORATE");
+  }
+
+  private static String individualRow(UUID id, String number, String email, String middleName) {
     return """
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, kind,
@@ -784,20 +785,7 @@ class CustomerSchemaConstraintsTest extends AbstractCustomerContainerTest {
         .formatted(id, number, email, middleName == null ? "NULL" : "'" + middleName + "'");
   }
 
-  private static String corporate(UUID id, String number, String email) {
-    return corporate(id, number, email, "'ONBOARDING'", "NULL");
-  }
-
-  private static String corporate(
-      UUID id, String number, String email, String status, String activatedAt) {
-    return corporate(id, number, email, status, activatedAt, "CORPORATE");
-  }
-
-  private static String corporateWithKind(UUID id, String number, String email, String kind) {
-    return corporate(id, number, email, "'ONBOARDING'", "NULL", kind);
-  }
-
-  private static String corporate(
+  private static String corporateRow(
       UUID id, String number, String email, String status, String activatedAt, String kind) {
     return """
         INSERT INTO customer.customer

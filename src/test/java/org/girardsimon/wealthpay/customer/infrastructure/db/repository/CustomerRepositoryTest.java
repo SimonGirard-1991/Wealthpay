@@ -2,6 +2,8 @@ package org.girardsimon.wealthpay.customer.infrastructure.db.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerFixtures.mintCustomerNumber;
+import static org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerFixtures.mintEmail;
 import static org.girardsimon.wealthpay.customer.jooq.tables.AdmissionDecision.ADMISSION_DECISION;
 import static org.girardsimon.wealthpay.customer.jooq.tables.CustomerAdmission.CUSTOMER_ADMISSION;
 import static org.girardsimon.wealthpay.customer.jooq.tables.CustomerStatusTransition.CUSTOMER_STATUS_TRANSITION;
@@ -258,7 +260,7 @@ class CustomerRepositoryTest extends AbstractCustomerContainerTest {
   void a_taken_email_is_reported_as_client_fixable() {
     // Arrange
     Customer first = insertAndLoad(register(INDIVIDUAL)).customer();
-    Customer other = register(nextCustomerNumber(), first.getEmail().value(), INDIVIDUAL);
+    Customer other = register(mintCustomerNumber(), first.getEmail().value(), INDIVIDUAL);
     AdmissionDecisionId decisionId = admittedDecision(CustomerType.INDIVIDUAL);
 
     // Act + Assert
@@ -270,7 +272,7 @@ class CustomerRepositoryTest extends AbstractCustomerContainerTest {
   void a_taken_customer_number_is_reported_as_a_minted_identifier_collision() {
     // Arrange
     Customer first = insertAndLoad(register(INDIVIDUAL)).customer();
-    Customer other = register(first.getNumber().value(), nextEmail(), INDIVIDUAL);
+    Customer other = register(first.getNumber().value(), mintEmail(), INDIVIDUAL);
     AdmissionDecisionId decisionId = admittedDecision(CustomerType.INDIVIDUAL);
 
     // Act + Assert
@@ -317,43 +319,7 @@ class CustomerRepositoryTest extends AbstractCustomerContainerTest {
   }
 
   private static Customer register(CustomerDetails details) {
-    return register(nextCustomerNumber(), nextEmail(), details);
-  }
-
-  /**
-   * Minted, never shared. Container tests run against one database for the whole JVM and the
-   * classes that commit outside a transaction cannot clean up, so any fixture written as a literal
-   * has to be kept clear of every other class's literals by hand - and silently breaks whenever
-   * execution order changes. Drawing from a UUID needs no such agreement.
-   *
-   * <p>The leading zero is deliberate: it is the shape the generator emits, and the digit a column
-   * typed as a number would eat.
-   */
-  private static String nextCustomerNumber() {
-    long body = Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 100_000_000L);
-    return withLuhnCheckDigit("0%08d".formatted(body));
-  }
-
-  private static String nextEmail() {
-    return "customer-%s@example.test".formatted(UUID.randomUUID());
-  }
-
-  private static String withLuhnCheckDigit(String body) {
-    int sum = 0;
-    // The body's last digit lands in a doubled position once the check digit is appended.
-    boolean doubled = true;
-    for (int i = body.length() - 1; i >= 0; i--) {
-      int digit = body.charAt(i) - '0';
-      if (doubled) {
-        digit *= 2;
-        if (digit > 9) {
-          digit -= 9;
-        }
-      }
-      sum += digit;
-      doubled = !doubled;
-    }
-    return body + (10 - sum % 10) % 10;
+    return register(mintCustomerNumber(), mintEmail(), details);
   }
 
   private static Customer register(String number, String email, CustomerDetails details) {

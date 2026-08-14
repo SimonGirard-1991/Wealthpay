@@ -9,10 +9,10 @@ _**Item 15 was taken BEFORE the rest of item 6, inverting the order this header 
 ports all serve the registration path, which is additionally blocked on item 7 and item 14. Building
 them first would have added three more ports with no caller — the exact condition that produced item
 5's 🔴 — and would first have required paying item 6's fixture-minting debt, which a mocked-port use
-case does not touch. **Order from here: the fixture-minting hoist (owed before a fourth
-container-committing test class) → finish item 6 → item 14 (`evaluate`) → item 8 (observability) →
-item 7 (FPE) → items 10, 11, 13.** Item 14 still has no dependencies and may be pulled earlier, but
-must precede increment 5 item 1._
+case does not touch. **The fixture-minting hoist that gated further item 6 work is done (2026-08-14,
+see item 6). Order from here: finish item 6's three remaining adapters → item 14 (`evaluate`) →
+item 8 (observability) → item 7 (FPE) → items 10, 11, 13.** Item 14 still has no dependencies and
+may be pulled earlier, but must precede increment 5 item 1._
 
 > # 🔴 THIS FILE MUST NOT REACH `main`. DELETING IT IS PART OF THE MERGE.
 >
@@ -2268,17 +2268,53 @@ someone, and in several regimes the refusal itself is reportable.
        numeric range clear of the siblings' literals; that is still coordination — it encodes one
        test file's knowledge of another's constants, and it decays the moment someone adds a fixture.
        Minted values need no agreement between files.
-     - **🔴 Owed, and NOT done here: the two sibling classes are still hand-coordinated.** Counted,
-       because a first pass undercounted it threefold by grepping only the SQL `'literals'` and
-       missing the ones passed as Java `"arguments"`: **`CustomerSchemaConstraintsTest` holds 23
-       distinct numbers and 23 distinct emails (~48 sites), `CustomerAuditAppendOnlyTest` one of
-       each**, plus `INDIVIDUAL_ID` / `CORPORATE_ID`, two hardcoded UUIDs across 12 usages — the
-       standing rule covers ids too. So this is a half-day on the file that guards the schema's
-       constraints, not an afternoon, which is why it was kept out of the adapter commit rather than
-       bundled into it. They pass today (verified: per-method runs, `reversealphabetical`, and three
-       `random` orders), so it is latent rather than broken. Take it **before the remaining three
-       adapters add a fourth committing class**, and hoist the minting into shared test support at
-       that point rather than copying it a third time.
+     - ✅ **DONE 2026-08-14 — the minting is hoisted and no container test holds a literal
+       fixture.** `CustomerFixtures.mintCustomerNumber()` / `mintEmail()` are the one home; a fourth
+       class costs a static import rather than a fourth copy. What it covered:
+       `CustomerSchemaConstraintsTest`'s 24 numbers and 24 emails plus `INDIVIDUAL_ID` /
+       `CORPORATE_ID`, `CustomerAuditAppendOnlyTest`'s pair plus its three UUIDs, and
+       `CustomerRepositoryTest`'s private copies of the minter.
+       - **🔴 Only TWO of the three classes actually commit, and the distinction is the whole
+         hazard.** `CustomerSchemaConstraintsTest` and `CustomerAuditAppendOnlyTest` drive
+         `SchemaProbe`, which opens its own connections from the `DataSource` and so escapes the
+         managed transaction. `CustomerRepositoryTest` is `@JooqTest`, which is meta-annotated
+         `@Transactional` and rolls back. An earlier revision of this entry called all three
+         "committing"; it was wrong in the safe direction, but the entry's whole job is to name which
+         classes are dangerous.
+       - **Proven, not assumed** — the standing rule demands the run that reshuffles order:
+         **536 tests green in five class orders** (default, `reversealphabetical`, three `random`),
+         **plus two runs with JUnit method order randomised**
+         (`-Djunit.jupiter.testmethod.order.default=…MethodOrderer$Random`). *The method-order axis
+         is the one this change created and the one `surefire.runOrder` does not reach — that flag
+         shuffles classes only, while the fixtures moved from effectively per-class to genuinely
+         per-method. Confirm the randomiser engaged by diffing `testcase name=` order across the
+         surefire XMLs; a green run proves nothing if the order never changed.*
+       - **The ids are minted per test, not per class, which retired every `ON CONFLICT DO
+         NOTHING` in both setups.** Those clauses existed only because static ids made the second
+         `@BeforeEach` collide with the first. With minted ids they are unreachable, and a
+         `DO NOTHING` that can never fire is one that would hide a defect leaving a row absent.
+       - **🔴 Three call sites are load-bearing and must not be "cleaned up" into plain mints:** the
+         non-canonical-email test needs an uppercased address, and the distinct-constraints test
+         needs the setUp individual's *email* and *number* respectively. They are wired through
+         `corporateWithEmail` / `corporateWithNumber` for exactly that reason. The build catches a
+         mistake here — `SchemaProbe.expectViolation` fails when the database accepts the row — so a
+         green suite is evidence these still trip their constraints.
+       - **`CustomerFixturesTest` pins the minter against the production VO.** The check digit is
+         computed in test code and verified by `CustomerNumber`; the schema tests insert the result
+         as raw SQL, so a disagreement would pass every column `CHECK` and surface only as rows the
+         aggregate cannot read back. *Distinctness is asserted over two draws, not a large sample:
+         the body is eight digits, so a thousand draws collide about once in two hundred runs — that
+         is a flaky test, not a control. Two draws still catch a minter that stopped varying.*
+       - **🔴 STANDING RULE the volume increase creates: any new assertion over these tables must be
+         scoped by a minted id, never a global count.** Per-method minting removed the accidental
+         per-class deduplication, so `CustomerAuditAppendOnlyTest` now commits 23 customers, 23
+         transitions, 46 decisions, 23 matches and 23 links per JVM run instead of one of each, and
+         none of it is cleanable. Every count assertion in the tree is id-scoped or a catalog query
+         today; a `SELECT count(*)` over a whole audit table would be green now and wrong later.
+       - **Residual, accepted:** CI still runs a bare `mvn clean install`, so nothing *enforces*
+         order-independence. `-Dsurefire.runOrder=random` with the seed logged is the lever, and the
+         method-order flag above belongs with it; pinning `alphabetical` is the wrong answer, because
+         it hides these rather than surfacing them.
      - **Prove it, do not assume it:** `-Dsurefire.runOrder=reversealphabetical` is the run that puts
        a new class *after* the committing ones, and `random` is the one that finds what neither
        fixed order does. *(Detection is still missing in CI, which runs a bare `mvn clean install`.
@@ -2838,6 +2874,26 @@ someone, and in several regimes the refusal itself is reportable.
 ---
 
 ## Backlog (unscheduled)
+
+- **B-17 — 🔴 the ACCOUNT BC fails under method-order randomisation, and it is the same defect the
+  customer standing rule exists to prevent.** Found 2026-08-14 while proving the customer hoist, and
+  **measured on a clean tree at `9468951` so it is pre-existing, not caused by that change**:
+  ```
+  mvn test -Dsurefire.runOrder=random \
+      -Djunit.jupiter.testmethod.order.default='org.junit.jupiter.api.MethodOrderer$Random'
+  ```
+  - `AccountEventRepositoryTest` — **4 errors**, `duplicate key value violates unique constraint
+    "idx_event_store_event_id"` and a spurious `OptimisticLockingFailure`. Hardcoded event ids and
+    versions shared across methods, exactly the literal-fixture problem customer just hoisted away.
+  - `OutboxCleanupObserverTest.gauges_should_be_registered_at_construction_time` — passes alone,
+    fails in the full suite, so this one is **cross-class shared state** (a `MeterRegistry` outliving
+    a test) rather than method order. Different bug, same symptom; do not fix them as one.
+  - **Why it is worth a ticket rather than a shrug:** these pass today only because JUnit's default
+    method order is deterministic. Any JUnit upgrade, class rename or parallelisation flips them, and
+    the failure will look like a flaky database rather than a fixture defect — which is precisely how
+    the customer version of this cost half a day. The customer fix is the template:
+    `CustomerFixtures` plus per-method minting.
+  - **Do not "fix" it by pinning an order.** That hides the class of defect instead of removing it.
 
 - **B-1 — KYC status axis.** Unblocks `suspend`/`reinstate`/`close` and the **transition** reason
   axis — distinct from ALT-5's admission `Restriction`/`ConnectingFactor`, which are settled; do not

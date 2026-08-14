@@ -1,7 +1,10 @@
 package org.girardsimon.wealthpay.customer.infrastructure.db.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerFixtures.mintCustomerNumber;
+import static org.girardsimon.wealthpay.customer.infrastructure.db.repository.CustomerFixtures.mintEmail;
 
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,13 +30,12 @@ import org.springframework.boot.jooq.test.autoconfigure.JooqTest;
 @JooqTest
 class CustomerAuditAppendOnlyTest extends AbstractCustomerContainerTest {
 
-  private static final String CUSTOMER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-  private static final String REFUSED_DECISION_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
-  private static final String ADMITTED_DECISION_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-
   @Autowired private DataSource dataSource;
 
   private SchemaProbe probe;
+  private String customerId;
+  private String refusedDecisionId;
+  private String admittedDecisionId;
 
   /**
    * A row per table is required, not incidental: a row-level {@code BEFORE UPDATE} trigger does not
@@ -43,6 +45,9 @@ class CustomerAuditAppendOnlyTest extends AbstractCustomerContainerTest {
   @BeforeEach
   void setUp() {
     probe = new SchemaProbe(dataSource);
+    customerId = UUID.randomUUID().toString();
+    refusedDecisionId = UUID.randomUUID().toString();
+    admittedDecisionId = UUID.randomUUID().toString();
     // One transaction, because the decision and its match rows are only consistent together: a
     // REFUSED
     // decision with no match yet is a state the deferred constraint trigger correctly rejects.
@@ -51,33 +56,29 @@ class CustomerAuditAppendOnlyTest extends AbstractCustomerContainerTest {
         INSERT INTO customer.customer
           (id, customer_number, email, status, registered_at, activated_at, kind,
            registered_name, registration_number, country_of_incorporation)
-        VALUES ('%s', '0000000208', 'audit@example.com', 'ACTIVE', '2026-01-01T00:00:00Z',
+        VALUES ('%s', '%s', '%s', 'ACTIVE', '2026-01-01T00:00:00Z',
                 '2026-02-01T00:00:00Z', 'CORPORATE', 'Audited SA', 'RCS-9', 'FR')
-        ON CONFLICT DO NOTHING
         """
-            .formatted(CUSTOMER_ID),
+            .formatted(customerId, mintCustomerNumber(), mintEmail()),
         """
         INSERT INTO customer.customer_status_transition
           (customer_id, sequence_no, from_status, to_status, occurred_at, actor)
         VALUES ('%s', 1, 'ONBOARDING', 'ACTIVE', '2026-02-01T00:00:00Z', 'SYSTEM')
-        ON CONFLICT DO NOTHING
         """
-            .formatted(CUSTOMER_ID),
+            .formatted(customerId),
         """
         INSERT INTO customer.admission_decision
           (id, idempotency_key, policy_version, outcome, subject_type,
            country_of_incorporation, decided_at)
         VALUES ('%s', 'audit-refused', 1, 'REFUSED', 'CORPORATE', 'FR', '2026-01-01T00:00:00Z')
-        ON CONFLICT DO NOTHING
         """
-            .formatted(REFUSED_DECISION_ID),
+            .formatted(refusedDecisionId),
         """
         INSERT INTO customer.admission_decision_match
           (decision_id, ordinal, restriction, connecting_factor, triggering_country)
         VALUES ('%s', 0, 'RESTRICTED_PERSON', 'INCORPORATION', 'US')
-        ON CONFLICT DO NOTHING
         """
-            .formatted(REFUSED_DECISION_ID),
+            .formatted(refusedDecisionId),
         // A SECOND, admitted decision, because only an admitted one may be anchored to a customer.
         // The
         // first version of this fixture linked the refused decision above -- and that it committed
@@ -88,15 +89,13 @@ class CustomerAuditAppendOnlyTest extends AbstractCustomerContainerTest {
           (id, idempotency_key, policy_version, outcome, subject_type,
            country_of_incorporation, decided_at)
         VALUES ('%s', 'audit-admitted', 1, 'ADMITTED', 'CORPORATE', 'FR', '2026-01-01T00:00:00Z')
-        ON CONFLICT DO NOTHING
         """
-            .formatted(ADMITTED_DECISION_ID),
+            .formatted(admittedDecisionId),
         """
         INSERT INTO customer.customer_admission (customer_id, decision_id, outcome, subject_type)
         VALUES ('%s', '%s', 'ADMITTED', 'CORPORATE')
-        ON CONFLICT DO NOTHING
         """
-            .formatted(CUSTOMER_ID, ADMITTED_DECISION_ID));
+            .formatted(customerId, admittedDecisionId));
   }
 
   /** Assigning a column to itself is enough: a {@code BEFORE UPDATE} trigger fires on any match. */
@@ -257,7 +256,7 @@ class CustomerAuditAppendOnlyTest extends AbstractCustomerContainerTest {
   @Test
   void a_customer_cannot_be_deleted_by_the_application() {
     // Arrange
-    String sql = "DELETE FROM customer.customer WHERE id = '%s'".formatted(CUSTOMER_ID);
+    String sql = "DELETE FROM customer.customer WHERE id = '%s'".formatted(customerId);
 
     // Act / Assert
     probe.expectRaisedRejection(sql, "may not be deleted by the application");
@@ -277,7 +276,7 @@ class CustomerAuditAppendOnlyTest extends AbstractCustomerContainerTest {
   void even_with_the_parent_guard_suspended_the_audit_trail_holds() {
     // Arrange
     String suspend = SchemaProbe.disableTrigger("customer", "trg_customer_no_delete");
-    String delete = "DELETE FROM customer.customer WHERE id = '%s'".formatted(CUSTOMER_ID);
+    String delete = "DELETE FROM customer.customer WHERE id = '%s'".formatted(customerId);
 
     // Act / Assert
     probe.expectViolationInTransaction("fk_customer_status_transition_customer", suspend, delete);
